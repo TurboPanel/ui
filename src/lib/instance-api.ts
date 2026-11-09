@@ -1041,8 +1041,19 @@ function normalizeOrgServer<T extends OrgServerRecord>(server: T): T {
   }
 }
 
-export async function fetchOrgServers(): Promise<{ servers: OrgServerRecord[] }> {
-  const body = await apiFetch<{ servers: OrgServerRecord[] }>(`${CLIENT_API}/servers`)
+/**
+ * The organization's servers. `organizationId` names the organization when the
+ * caller sits outside the organization pages (the account screens), where the
+ * active one is not the one being asked about.
+ */
+export async function fetchOrgServers(
+  organizationId?: string | null
+): Promise<{ servers: OrgServerRecord[] }> {
+  const body = await apiFetch<{ servers: OrgServerRecord[] }>(
+    `${CLIENT_API}/servers`,
+    undefined,
+    organizationId
+  )
   return { servers: body.servers.map((server) => normalizeOrgServer(server)) }
 }
 
@@ -4510,20 +4521,24 @@ export async function deleteWorkspace(id: string): Promise<{ ok: true }> {
   })
 }
 
+/** `organizationId` names the organization for a caller outside the organization pages. */
 export async function fetchVisibleEnvironments(
-  projectId?: string
+  projectId?: string,
+  organizationId?: string | null
 ): Promise<{ environments: EnvironmentRecord[] }> {
   const params = projectId ? new URLSearchParams({ projectId }) : null
   const suffix = params ? `?${params.toString()}` : ''
-  return await apiFetch(`${CLIENT_API}/environments${suffix}`)
+  return await apiFetch(`${CLIENT_API}/environments${suffix}`, undefined, organizationId)
 }
 
+/** `organizationId` names the organization for a caller outside the organization pages. */
 export async function fetchVisibleProjects(
-  workspaceId?: string
+  workspaceId?: string,
+  organizationId?: string | null
 ): Promise<{ projects: ProjectRecord[] }> {
   const params = workspaceId ? new URLSearchParams({ workspaceId }) : null
   const suffix = params ? `?${params.toString()}` : ''
-  return await apiFetch(`${CLIENT_API}/projects${suffix}`)
+  return await apiFetch(`${CLIENT_API}/projects${suffix}`, undefined, organizationId)
 }
 
 export async function fetchProjectCatalog(): Promise<{ catalog: CatalogSummary[] }> {
@@ -12315,7 +12330,9 @@ export type NotificationUnsubscribeResult =
 /**
  * The one-click unsubscribe the email link opens. No session needed: the
  * token is the authority. A 400 (unknown or expired token) is an answer, not
- * an error, so the page can say so in words.
+ * an error, so the page can say so in words. Any other failure is rethrown
+ * with the status only: the request path holds the token, and an error
+ * message can end up on screen or in a log.
  */
 export async function postNotificationUnsubscribe(
   token: string
@@ -12334,7 +12351,8 @@ export async function postNotificationUnsubscribe(
     }
   } catch (err) {
     if (isHttpStatusError(err, 400)) return { ok: false, reason: 'invalid_or_expired' }
-    throw err
+    const status = err instanceof Error ? /HTTP \d{3}/.exec(err.message)?.[0] : undefined
+    throw new Error(`The unsubscribe request failed${status ? `: ${status}` : ''}`)
   }
 }
 

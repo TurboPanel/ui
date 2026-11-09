@@ -95,7 +95,7 @@ export function useOrgServers(
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.list,
-    queryFn: fetchOrgServers,
+    queryFn: () => fetchOrgServers(),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
     staleTime: options?.staleTime,
     refetchInterval: options?.refetchInterval,

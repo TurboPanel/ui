@@ -29,7 +29,8 @@ vi.mock('@/lib/queries/notifications', () => ({
   useNotificationsQuery: vi.fn(),
 }))
 
-const { emptyInboxCopy, notificationHref } = await import('@/components/notifications-panel-body')
+const { emptyInboxCopy, notificationHref, turnOnNotificationsHref } =
+  await import('@/components/notifications-panel-body')
 
 function row(patch: Partial<NotificationRecord>): NotificationRecord {
   return {
@@ -74,5 +75,15 @@ describe('the empty bell', () => {
   it('says nothing is turned on when that is why it is empty', () => {
     expect(emptyInboxCopy(true).title).toBe('Nothing is turned on')
     expect(emptyInboxCopy(false).title).toBe('No notifications yet')
+  })
+})
+
+describe('the empty bell: where Turn On Notifications leads', () => {
+  it('opens the settings of the organization in view', () => {
+    expect(turnOnNotificationsHref('org-1')).toBe('/org-1/manage?tab=notifications')
+  })
+
+  it('opens the account page when no organization is in view', () => {
+    expect(turnOnNotificationsHref(null)).toBe('/account/notifications')
   })
 })

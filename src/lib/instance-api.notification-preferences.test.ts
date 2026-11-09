@@ -5,6 +5,9 @@ import {
   deleteNotificationPreference,
   fetchEffectiveNotificationLevels,
   fetchNotificationPreferences,
+  fetchOrgServers,
+  fetchVisibleEnvironments,
+  fetchVisibleProjects,
   postNotificationUnsubscribe,
   putNotificationPreference,
   updateNotificationSettings,
@@ -107,5 +110,33 @@ describe('notification preference wrappers', () => {
       reason: 'invalid_or_expired',
     })
     await expect(postNotificationUnsubscribe('t')).rejects.toThrow(/HTTP 500/)
+  })
+
+  it('unsubscribe: a failure never carries the token', async () => {
+    const token = 'sealed-token-0123456789'
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ ok: false, error: 'unavailable' }, 503))
+      .mockRejectedValueOnce(new TypeError(`Failed to fetch /notification-unsubscribe/${token}`))
+    const refused = await postNotificationUnsubscribe(token).catch((err: unknown) => err)
+    expect(refused).toBeInstanceOf(Error)
+    expect((refused as Error).message).toBe('The unsubscribe request failed: HTTP 503')
+    const unreachable = await postNotificationUnsubscribe(token).catch((err: unknown) => err)
+    expect((unreachable as Error).message).toBe('The unsubscribe request failed')
+    expect(String(refused) + String(unreachable)).not.toContain(token)
+  })
+
+  it('names the organization itself when the caller sits outside the organization pages', async () => {
+    setActiveOrganizationId('00000000-0000-4000-8000-0000000000ff')
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(jsonResponse({ projects: [], environments: [], servers: [] }))
+    )
+    await fetchVisibleProjects(undefined, ORG)
+    await fetchVisibleEnvironments(undefined, ORG)
+    await fetchOrgServers(ORG)
+    const headersOf = (i: number) => (initOf(i)?.headers ?? {}) as Record<string, string>
+    for (const i of [0, 1, 2]) expect(Object.values(headersOf(i))).toContain(ORG)
+    // Without one, the organization in view is used, as before.
+    await fetchOrgServers()
+    expect(Object.values(headersOf(3))).not.toContain(ORG)
   })
 })

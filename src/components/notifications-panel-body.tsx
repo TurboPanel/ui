@@ -1,10 +1,12 @@
+import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
 import { StatusDot, TextLink, type StatusTone } from '@/components/ui'
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
-import { unreadBadgeLabel } from '@/lib/notification-preferences'
+import { nothingTurnedOn, unreadBadgeLabel } from '@/lib/notification-preferences'
 import { getActiveOrganizationId } from '@/lib/org-context'
+import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { useNotificationPreferencesQuery } from '@/lib/queries/notification-preferences'
 import type { NotificationRecord, NotificationSeverity } from '@/lib/instance-api'
 import {
@@ -32,6 +34,17 @@ export function notificationHref(row: NotificationRecord): string | null {
   }
   if (row.organizationId) return `/${row.organizationId}/overview`
   return null
+}
+
+/**
+ * Where the empty bell's "Turn On Notifications" leads: the settings of the
+ * organization in view, since that is what the bell just judged; the account
+ * page when no organization is in view.
+ */
+export function turnOnNotificationsHref(organizationId: string | null): string {
+  return organizationId
+    ? orgSettingsTabHref(organizationId, 'notifications')
+    : '/account/notifications'
 }
 
 /** The empty bell's words: nothing yet, or nothing turned on at all. */
@@ -134,7 +147,7 @@ function NotificationInboxRows({
 
 /**
  * The bell's list: the newest inbox rows for the signed-in person, unread
- * first by weight of the dot, with **Mark all read** and a link to the
+ * first by weight of the dot, with **Mark All Read** and a link to the
  * preferences screen. Shared by the web header bell and the native account
  * sheet. Rows come from `GET /notifications`; a row that names a server
  * opens that server.
@@ -147,11 +160,16 @@ export function NotificationsPanelBody({ onNavigate }: Readonly<{ onNavigate?: (
   const rows = query.data?.notifications ?? []
   const unread = query.data?.unread ?? 0
   // An empty bell asks whether anything is turned on at all (nothing is by
-  // default), for the organization in view plus the person's global rows.
-  const preferences = useNotificationPreferencesQuery(getActiveOrganizationId(), {
-    enabled: query.isSuccess && rows.length === 0,
+  // default) for the organization in view: its settings plus the ones for
+  // every organization. With no organization in view the other organizations'
+  // settings are unknown, so the bell makes no such claim.
+  const organizationId = getActiveOrganizationId()
+  const [nowMs] = useState(() => Date.now())
+  const preferences = useNotificationPreferencesQuery(organizationId, {
+    enabled: organizationId !== null && query.isSuccess && rows.length === 0,
   })
-  const nothingOn = preferences.data?.effective.inbox.level === 'none'
+  const nothingOn =
+    organizationId !== null && nothingTurnedOn(preferences.data, organizationId, nowMs)
 
   const go = (href: string) => {
     onNavigate?.()
@@ -168,7 +186,7 @@ export function NotificationsPanelBody({ onNavigate }: Readonly<{ onNavigate?: (
           <Pressable
             onPress={() => void markRead.run([])}
             accessibilityRole="button"
-            accessibilityLabel="Mark all read"
+            accessibilityLabel="Mark All Read"
             style={webPointer}
           >
             <Text style={styles.headingAction}>Mark All Read</Text>
@@ -180,7 +198,7 @@ export function NotificationsPanelBody({ onNavigate }: Readonly<{ onNavigate?: (
         isLoading={query.isLoading}
         nothingOn={nothingOn}
         rows={rows}
-        onOpenSettings={() => go('/account/notifications')}
+        onOpenSettings={() => go(turnOnNotificationsHref(organizationId))}
         onOpen={(row) => {
           if (row.readAt === null) void markRead.run([row.id])
           const href = notificationHref(row)
@@ -200,7 +218,7 @@ export function NotificationsPanelBody({ onNavigate }: Readonly<{ onNavigate?: (
         ]}
         onPress={() => go('/account/notifications')}
         accessibilityRole="menuitem"
-        accessibilityLabel="Notification settings"
+        accessibilityLabel="Notification Settings"
       >
         <Text style={headerMenuGroupStyles.menuActionLabel}>Notification Settings</Text>
       </Pressable>

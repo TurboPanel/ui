@@ -63,8 +63,10 @@ import {
   NotificationOverridesList,
   OrganizationNotificationPreferences,
 } from '@/components/account/notification-preferences-section'
+import { preferencesRoutesAbsent } from '@/lib/notification-preferences'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { useOrganizationsQuery } from '@/lib/queries/auth'
+import { useNotificationPreferencesQuery } from '@/lib/queries/notification-preferences'
 import { colors, spacing, webPointer } from '@/lib/theme'
 
 const KIND_OPTIONS: readonly SegmentedOption<NotificationChannelKind>[] =
@@ -252,7 +254,7 @@ function ChannelHead({ channel }: Readonly<{ channel: NotificationChannel }>) {
         />
         {channel.signed ? <Badge tone="info" label="Signed" /> : null}
         {disabled ? <Badge tone="pending" label="Paused" /> : null}
-        {awaitingConfirmation ? <Badge tone="pending" label="Awaiting confirmation" /> : null}
+        {awaitingConfirmation ? <Badge tone="pending" label="Awaiting Confirmation" /> : null}
       </View>
       <Text style={panelStyles.muted}>{channel.address}</Text>
       {summary ? <Text style={panelStyles.muted}>{summary}</Text> : null}
@@ -275,20 +277,20 @@ function ChannelRow({
   channel,
   events,
   scope,
+  hasRules,
   organizationId,
 }: Readonly<{
   channel: NotificationChannel
   events: readonly NotificationEventInfo[]
   scope: 'user' | 'organization'
+  /** The channel is routed by its own rules, not by the person's notification settings. */
+  hasRules: boolean
   organizationId: string | null
 }>) {
   const update = useUpdateNotificationChannel(scope, organizationId)
   const remove = useDeleteNotificationChannel(scope, organizationId)
   const resend = useResendChannelVerification(organizationId)
   const awaitingConfirmation = channelAwaitsConfirmation(channel)
-  // Personal channels follow the person's notification settings; only an
-  // organization channel is routed by rules.
-  const hasRules = scope === 'organization'
   const primary = channel.isPrimary === true
   const [draft, setDraft] = useState(() => draftFromRules(channel.rules))
   const [dirty, setDirty] = useState(false)
@@ -401,10 +403,12 @@ function ChannelRow({
 function AddChannelForm({
   events,
   scope,
+  hasRules,
   organizationId,
 }: Readonly<{
   events: readonly NotificationEventInfo[]
   scope: 'user' | 'organization'
+  hasRules: boolean
   organizationId: string | null
 }>) {
   const create = useCreateNotificationChannel(scope, organizationId)
@@ -430,7 +434,7 @@ function AddChannelForm({
         label: label.trim(),
         address: address.trim(),
         ...(kind === 'webhook' && signingSecret ? { signingSecret } : {}),
-        ...(scope === 'organization' ? { rules: rulesFromDraft(draft) } : {}),
+        ...(hasRules ? { rules: rulesFromDraft(draft) } : {}),
       })
       .then((result) => {
         if (result.ok) {
@@ -443,7 +447,7 @@ function AddChannelForm({
           setMessage(channelErrorCopy(result.error))
         }
       })
-  }, [address, create, draft, kind, label, scope, signingSecret])
+  }, [address, create, draft, hasRules, kind, label, signingSecret])
 
   return (
     <View style={styles.addCard}>
@@ -481,7 +485,7 @@ function AddChannelForm({
           editable={!create.isPending}
         />
       ) : null}
-      {scope === 'organization' ? (
+      {hasRules ? (
         <RulesEditor
           events={events}
           draft={draft}
@@ -516,6 +520,7 @@ function ChannelsList({
   channels,
   events,
   scope,
+  hasRules,
   organizationId,
 }: Readonly<{
   isLoading: boolean
@@ -524,6 +529,7 @@ function ChannelsList({
   channels: readonly NotificationChannel[]
   events: readonly NotificationEventInfo[]
   scope: 'user' | 'organization'
+  hasRules: boolean
   organizationId: string | null
 }>) {
   if (isLoading) return <LoadingState label="Loading channels…" />
@@ -551,6 +557,7 @@ function ChannelsList({
       channel={channel}
       events={events}
       scope={scope}
+      hasRules={hasRules}
       organizationId={organizationId}
     />
   ))
@@ -567,6 +574,20 @@ function ChannelsPanel({
 }>) {
   const query = useNotificationChannelsQuery(scope, { organizationId })
   const forbidden = query.data === null
+  // An organization channel is routed by its rules. A personal channel
+  // follows the person's notification settings, unless the control plane
+  // predates those settings (its preference read answers 404): there a
+  // personal channel is still routed by rules and one created without any
+  // would receive nothing, so the rules editor stays for it.
+  const personal = scope === 'user'
+  const settings = useNotificationPreferencesQuery(null, { enabled: personal })
+  const settingsAbsent = personal && preferencesRoutesAbsent(settings.error)
+  const hasRules = !personal || settingsAbsent
+  const allEvents = useNotificationEventsQuery({ enabled: settingsAbsent })
+  const ruleEvents = settingsAbsent ? (allEvents.data ?? []) : events
+  // Until the settings read answers, it is not known which of the two a new
+  // personal channel needs, so the add form waits for it.
+  const undecided = personal && settings.isLoading
   // The built-in Account Email channel always comes first.
   const channels = [...(query.data ?? [])].sort(
     (a, b) => Number(b.isPrimary === true) - Number(a.isPrimary === true)
@@ -578,12 +599,24 @@ function ChannelsPanel({
         isError={query.isError}
         forbidden={forbidden}
         channels={channels}
-        events={events}
+        events={ruleEvents}
         scope={scope}
+        hasRules={hasRules}
         organizationId={organizationId}
       />
-      {forbidden || query.isLoading ? null : (
-        <AddChannelForm events={events} scope={scope} organizationId={organizationId} />
+      {settingsAbsent ? (
+        <Text style={panelStyles.muted}>
+          This control plane is older than this web interface: each of your channels is sent what
+          its own rules choose.
+        </Text>
+      ) : null}
+      {forbidden || query.isLoading || undecided ? null : (
+        <AddChannelForm
+          events={ruleEvents}
+          scope={scope}
+          hasRules={hasRules}
+          organizationId={organizationId}
+        />
       )}
     </View>
   )

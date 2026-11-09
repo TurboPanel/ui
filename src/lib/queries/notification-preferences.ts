@@ -4,6 +4,9 @@ import {
   deleteNotificationPreference,
   fetchEffectiveNotificationLevels,
   fetchNotificationPreferences,
+  fetchOrgServers,
+  fetchVisibleEnvironments,
+  fetchVisibleProjects,
   postNotificationUnsubscribe,
   putNotificationPreference,
   updateNotificationSettings,
@@ -55,26 +58,109 @@ export function useEffectiveNotificationLevels(
   })
 }
 
-async function invalidatePreferences(queryClient: QueryClient): Promise<void> {
-  await queryClient.invalidateQueries({ queryKey: queryKeys.notifications.preferencesAll })
+export type NotificationScopeNames = {
+  projects: Map<string, string>
+  environments: Map<string, string>
+  servers: Map<string, string>
+}
+
+function settled<T>(result: PromiseSettledResult<T>): T | null {
+  return result.status === 'fulfilled' ? result.value : null
+}
+
+/**
+ * Project, environment and server names of one organization, so the account
+ * page's override list can say which one a row is about. The account page
+ * sits outside the organization pages, so each read names the organization
+ * itself. A list the person may not read (or that fails) just leaves its
+ * names out: the row then shows the plain word, and a 403 here never reaches
+ * the session handler. Read only for organizations whose rows name one.
+ */
+export function useNotificationScopeNames(
+  organizationId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.notifications.scopeNames(organizationId),
+    queryFn: async (): Promise<NotificationScopeNames> => {
+      const [projects, environments, servers] = await Promise.allSettled([
+        fetchVisibleProjects(undefined, organizationId),
+        fetchVisibleEnvironments(undefined, organizationId),
+        fetchOrgServers(organizationId),
+      ])
+      const named = (items: readonly { id: string; name?: string | null }[] | undefined) =>
+        new Map(
+          (items ?? []).flatMap((item): [string, string][] =>
+            item.name ? [[item.id, item.name]] : []
+          )
+        )
+      return {
+        projects: named(settled(projects)?.projects),
+        environments: named(settled(environments)?.environments),
+        servers: named(settled(servers)?.servers),
+      }
+    },
+    enabled: (options?.enabled ?? true) && organizationId.length > 0,
+    staleTime: 60_000,
+    retry: false,
+  })
+}
+
+/**
+ * The narrowest correct refresh after a write. A row inside one organization
+ * changes that organization's reads only (its rows and its effective levels).
+ * A row for every organization (`null`) is repeated in every organization's
+ * read and moves their effective levels, so everything is refreshed.
+ */
+async function invalidatePreferences(
+  queryClient: QueryClient,
+  organizationId: string | null
+): Promise<void> {
+  await queryClient.invalidateQueries({
+    queryKey:
+      organizationId === null
+        ? queryKeys.notifications.preferencesAll
+        : queryKeys.notifications.preferences(organizationId),
+  })
 }
 
 export function usePutNotificationPreference() {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (body: NotificationPreferenceWrite) => putNotificationPreference(body),
-    onSuccess: async () => {
-      await invalidatePreferences(queryClient)
+    onSuccess: async (_data, body) => {
+      await invalidatePreferences(queryClient, body.organizationId ?? null)
     },
   })
 }
 
+/** The row to remove, with the organization it sits in (`null` = every organization). */
+export type NotificationPreferenceRemoval = { id: string; organizationId: string | null }
+
 export function useDeleteNotificationPreference() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (id: string) => deleteNotificationPreference(id),
-    onSuccess: async () => {
-      await invalidatePreferences(queryClient)
+    mutationFn: ({ id }: NotificationPreferenceRemoval) => deleteNotificationPreference(id),
+    onSuccess: async (_data, { organizationId }) => {
+      await invalidatePreferences(queryClient, organizationId)
+    },
+  })
+}
+
+/**
+ * Remove several rows of one organization as one action (Reset All on a
+ * project, environment or server): one after another, stopping at the first
+ * failure, then one refresh whether or not all of them went, so the screen
+ * shows what is left.
+ */
+export function useDeleteNotificationPreferences() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: async ({ ids }: { ids: readonly string[]; organizationId: string | null }) => {
+      for (const id of ids) await deleteNotificationPreference(id)
+    },
+    onSettled: async (_data, _error, { organizationId }) => {
+      await invalidatePreferences(queryClient, organizationId)
     },
   })
 }
@@ -89,19 +175,22 @@ export function useApplyNotificationPreset() {
       organizationId: string | null
       preset: NotificationPresetId
     }) => applyNotificationPreset(organizationId, preset),
-    onSuccess: async () => {
-      await invalidatePreferences(queryClient)
+    onSuccess: async (_data, { organizationId }) => {
+      await invalidatePreferences(queryClient, organizationId)
     },
   })
 }
 
-/** Administrators: "Hear Every Organization". */
+/**
+ * Administrators: "Hear Every Organization". The answer is part of every
+ * preference read, so all of them are refreshed.
+ */
 export function useUpdateNotificationSettings() {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: (allOrganizations: boolean) => updateNotificationSettings(allOrganizations),
     onSuccess: async () => {
-      await invalidatePreferences(queryClient)
+      await invalidatePreferences(queryClient, null)
     },
   })
 }

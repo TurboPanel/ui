@@ -2,6 +2,11 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import {
+  CategoryLevels,
+  OtherSettings,
+  PreferenceRowLine,
+} from '@/components/account/notification-category-levels'
+import {
   Button,
   ButtonRow,
   InlineNotice,
@@ -26,17 +31,20 @@ import type {
 import {
   activePreset,
   availableKinds,
-  categoryRowAt,
+  categoryPictures,
   effectiveFromLabel,
   groupOverrides,
   kindRowAt,
   LEVEL_LABEL,
   LEVEL_OPTIONS,
+  noLevelsSet,
   nothingTurnedOn,
+  otherRowsAt,
   overrideScopes,
   overrideSummary,
   preferenceErrorCopy,
   PREFERENCE_KIND_LABEL,
+  preferencesLoadFailureCopy,
   PRESET_OPTIONS,
   rowIsAtScope,
   rowScopeWords,
@@ -44,6 +52,7 @@ import {
   scopeKey,
   SCOPE_WORD,
   scopeSource,
+  type OverrideGroup,
   type PreferenceNames,
 } from '@/lib/notification-preferences'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
@@ -52,9 +61,11 @@ import { useEnvironments } from '@/lib/queries/environments'
 import {
   useApplyNotificationPreset,
   useDeleteNotificationPreference,
+  useDeleteNotificationPreferences,
   useEffectiveNotificationLevels,
   useNotificationPreferencesForOrganizations,
   useNotificationPreferencesQuery,
+  useNotificationScopeNames,
   usePutNotificationPreference,
   useUpdateNotificationSettings,
 } from '@/lib/queries/notification-preferences'
@@ -119,27 +130,36 @@ function KindLevels({
   scope,
   rows,
   effective,
+  failed = false,
   kinds,
 }: Readonly<{
   scope: NotificationPreferenceScope
   rows: readonly NotificationPreferenceRow[]
   effective: NotificationEffectiveLevels | undefined
+  /** The read of the effective levels failed: say so instead of loading for ever. */
+  failed?: boolean
   kinds: readonly SettableNotificationKind[]
 }>) {
   const put = usePutNotificationPreference()
   const remove = useDeleteNotificationPreference()
   const [message, setMessage] = useState<string | null>(null)
   const here = scopeSource(scope)
+  const organizationId = scope.organizationId ?? null
   const busy = put.isPending || remove.isPending
+  if (failed) {
+    return (
+      <Text style={panelStyles.error}>
+        Could not load the levels. Reload the page to try again.
+      </Text>
+    )
+  }
   if (!effective) return <LoadingState label="Loading levels…" />
 
   const setLevel = (kind: SettableNotificationKind, level: NotificationLevel) => {
     setMessage(null)
-    void put
-      .run({ ...scope, organizationId: scope.organizationId ?? null, kind, level })
-      .then((result) => {
-        if (!result.ok) setMessage(preferenceErrorCopy(result.cause))
-      })
+    void put.run({ ...scope, organizationId, kind, level }).then((result) => {
+      if (!result.ok) setMessage(preferenceErrorCopy(result.cause))
+    })
   }
 
   return (
@@ -147,11 +167,12 @@ function KindLevels({
       {kinds.map((kind) => {
         const own = kindRowAt(rows, scope, kind)
         const level = effective[kind]
+        const from = effectiveFromLabel(level, here)
         return (
           <View key={kind} style={styles.kindRow}>
             <View style={styles.kindHead}>
               <Text style={styles.kindLabel}>{PREFERENCE_KIND_LABEL[kind]}</Text>
-              <Text style={panelStyles.muted}>{effectiveFromLabel(level, here)}</Text>
+              <Text style={panelStyles.muted}>{from}</Text>
               {own ? (
                 <TextLink
                   label="Reset"
@@ -160,7 +181,7 @@ function KindLevels({
                   accessibilityLabel={`Reset ${PREFERENCE_KIND_LABEL[kind]} to inherited`}
                   onPress={() => {
                     setMessage(null)
-                    void remove.run(own.id).then((result) => {
+                    void remove.run({ id: own.id, organizationId }).then((result) => {
                       if (!result.ok) setMessage(preferenceErrorCopy(result.cause))
                     })
                   }}
@@ -172,69 +193,9 @@ function KindLevels({
               value={level.level}
               onChange={(next) => setLevel(kind, next)}
               disabled={busy}
-              accessibilityLabel={`${PREFERENCE_KIND_LABEL[kind]} level`}
+              accessibilityLabel={`${PREFERENCE_KIND_LABEL[kind]} level, ${from}`}
             />
           </View>
-        )
-      })}
-      {message ? <Text style={panelStyles.error}>{message}</Text> : null}
-    </View>
-  )
-}
-
-/** Organization-level overrides per category, for every channel kind at once. */
-function CategoryLevels({
-  organizationId,
-  rows,
-  categories,
-}: Readonly<{
-  organizationId: string
-  rows: readonly NotificationPreferenceRow[]
-  categories: readonly { code: string; name: string }[]
-}>) {
-  const put = usePutNotificationPreference()
-  const remove = useDeleteNotificationPreference()
-  const [message, setMessage] = useState<string | null>(null)
-  const scope = { organizationId }
-  const options: SelectOption[] = LEVEL_OPTIONS.map((o) => ({ value: o.value, label: o.label }))
-  const busy = put.isPending || remove.isPending
-  return (
-    <View style={styles.block}>
-      <Text style={styles.subheading}>Categories</Text>
-      <Text style={panelStyles.muted}>
-        A category set here wins over the levels above for every channel in this organization.
-      </Text>
-      {categories.map((category) => {
-        const own = categoryRowAt(rows, scope, category.code)
-        return (
-          <SettingRow key={category.code} label={category.name}>
-            <Select
-              value={own?.level ?? null}
-              options={options}
-              placeholder="Same as Above"
-              noneLabel="Same as Above"
-              disabled={busy}
-              accessibilityLabel={`${category.name} level`}
-              onChange={(next) => {
-                setMessage(null)
-                const done = (result: { ok: boolean; cause?: unknown }) => {
-                  if (!result.ok) setMessage(preferenceErrorCopy(result.cause))
-                }
-                if (next === null) {
-                  if (own) void remove.run(own.id).then(done)
-                  return
-                }
-                void put
-                  .run({
-                    organizationId,
-                    categoryCode: category.code,
-                    kind: null,
-                    level: next as NotificationLevel,
-                  })
-                  .then(done)
-              }}
-            />
-          </SettingRow>
         )
       })}
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
@@ -248,50 +209,79 @@ type OverrideTarget = {
   scope: NotificationPreferenceScope & { organizationId: string }
 }
 
-/** One project, environment or server: closed it costs nothing; open it reads its levels. */
+/**
+ * One project, environment or server. Closed it costs nothing; open it reads
+ * its levels. A setting here that is not a plain level (an email unsubscribe
+ * for a project writes one) is listed without opening the card.
+ */
 function ScopeOverrideCard({
   target,
   rows,
   kinds,
+  names,
   initiallyOpen,
 }: Readonly<{
   target: OverrideTarget
   rows: readonly NotificationPreferenceRow[]
   kinds: readonly SettableNotificationKind[]
+  names: PreferenceNames
   initiallyOpen: boolean
 }>) {
   const [open, setOpen] = useState(initiallyOpen)
-  const remove = useDeleteNotificationPreference()
+  const reset = useDeleteNotificationPreferences()
+  const [message, setMessage] = useState<string | null>(null)
   const effective = useEffectiveNotificationLevels(target.scope, { enabled: open })
   const own = rows.filter((r) => rowIsAtScope(r, target.scope))
-  const summary = overrideSummary(own)
+  const others = otherRowsAt(rows, target.scope, { kinds })
   return (
     <View style={styles.card}>
       <View style={styles.kindHead}>
         <Text style={styles.kindLabel}>{target.label}</Text>
-        <Text style={panelStyles.muted}>{summary}</Text>
+        <Text style={panelStyles.muted}>{overrideSummary(own, names)}</Text>
       </View>
       <ButtonRow>
         <TextLink
           label={open ? 'Hide Levels' : 'Show Levels'}
           size="sm"
           expanded={open}
+          accessibilityLabel={`${open ? 'Hide' : 'Show'} the levels for ${target.label}`}
           onPress={() => setOpen((v) => !v)}
         />
         {own.length > 0 ? (
           <TextLink
             label="Reset All"
             size="sm"
-            disabled={remove.isPending}
+            disabled={reset.isPending}
             accessibilityLabel={`Reset every setting for ${target.label}`}
             onPress={() => {
-              void Promise.all(own.map((r) => remove.run(r.id)))
+              setMessage(null)
+              void reset
+                .run({ ids: own.map((r) => r.id), organizationId: target.scope.organizationId })
+                .then((result) => {
+                  if (!result.ok) {
+                    setMessage('Not every setting could be reset. Try again.')
+                  }
+                })
             }}
           />
         ) : null}
       </ButtonRow>
+      {message ? <Text style={panelStyles.error}>{message}</Text> : null}
+      {others.map((row) => (
+        <PreferenceRowLine
+          key={row.id}
+          row={row}
+          title={`${rowSubjectWords(row, names)}: ${LEVEL_LABEL[row.level]}`}
+        />
+      ))}
       {open ? (
-        <KindLevels scope={target.scope} rows={rows} effective={effective.data} kinds={kinds} />
+        <KindLevels
+          scope={target.scope}
+          rows={rows}
+          effective={effective.data}
+          failed={effective.isError}
+          kinds={kinds}
+        />
       ) : null}
     </View>
   )
@@ -302,15 +292,19 @@ function ScopeOverrides({
   organizationId,
   rows,
   kinds,
+  names,
 }: Readonly<{
   organizationId: string
   rows: readonly NotificationPreferenceRow[]
   kinds: readonly SettableNotificationKind[]
+  names: PreferenceNames
 }>) {
   const projects = useProjects(organizationId)
   const environments = useEnvironments(organizationId)
   const servers = useOrgServers(organizationId)
   const [added, setAdded] = useState<string[]>([])
+  // Until all three lists are in, a missing name only means "not loaded yet".
+  const listsLoaded = !projects.isLoading && !environments.isLoading && !servers.isLoading
 
   const targets = useMemo(() => {
     const map = new Map<string, OverrideTarget>()
@@ -353,7 +347,9 @@ function ScopeOverrides({
   for (const s of existing) {
     const target = targets.get(s.key) ?? {
       key: s.key,
-      label: `${SCOPE_WORD[s.source]} (deleted or not visible to you)`,
+      label: listsLoaded
+        ? `${SCOPE_WORD[s.source]} (deleted or not visible to you)`
+        : SCOPE_WORD[s.source],
       scope: { ...s.scope, organizationId },
     }
     shown.push({ target, fresh: false })
@@ -377,6 +373,11 @@ function ScopeOverrides({
         A project, environment or server set here wins over the organization levels. The most
         specific one decides.
       </Text>
+      <Text style={panelStyles.muted}>
+        A project or environment override applies only to events that name that project or
+        environment. Today&apos;s events name a server or only the organization, so those two wait
+        for events that do.
+      </Text>
       {shown.length === 0 ? (
         <Text style={panelStyles.muted}>No overrides yet.</Text>
       ) : (
@@ -386,6 +387,7 @@ function ScopeOverrides({
             target={target}
             rows={rows}
             kinds={kinds}
+            names={names}
             initiallyOpen={fresh}
           />
         ))
@@ -406,45 +408,75 @@ function ScopeOverrides({
   )
 }
 
+/** Category, event and channel names from one preference read, for the row words. */
+function catalogNames(data: NotificationPreferences | undefined): PreferenceNames {
+  return {
+    categories: new Map((data?.catalog.categories ?? []).map((c) => [c.code, c.name])),
+    topics: new Map((data?.catalog.topics ?? []).map((t) => [t.code, t.name])),
+    channels: new Map((data?.channels ?? []).map((c) => [c.id, c.label])),
+  }
+}
+
+function LoadFailure({
+  error,
+  where,
+}: Readonly<{ error: unknown; where: 'account' | 'organization' }>) {
+  const copy = preferencesLoadFailureCopy(error, where)
+  return <InlineNotice tone="warning" title={copy.title} body={copy.body} />
+}
+
+/** What one person hears from one organization, once its read is in. */
+function OrganizationPreferencesBody({
+  orgId,
+  data,
+}: Readonly<{ orgId: string; data: NotificationPreferences }>) {
+  // One clock reading per mount: a setting with an end time is judged against it.
+  const [nowMs] = useState(() => Date.now())
+  const kinds = useMemo(() => availableKinds(data.channels), [data.channels])
+  const names = useMemo(() => catalogNames(data), [data])
+  const scope = { organizationId: orgId }
+  const pictures = categoryPictures({
+    rows: data.rows,
+    organizationId: orgId,
+    categories: data.catalog.categories,
+    kinds,
+    effective: data.effective,
+    nowMs,
+  })
+  const others = otherRowsAt(data.rows, scope, {
+    kinds,
+    categories: data.catalog.categories.map((c) => c.code),
+  })
+  return (
+    <>
+      {nothingTurnedOn(data, orgId, nowMs) ? (
+        <InlineNotice
+          tone="warning"
+          title="Nothing is turned on"
+          body="You will not hear anything from this organization, not even in the bell, until you choose a preset or a level below."
+        />
+      ) : null}
+      <PresetPicker organizationId={orgId} rows={data.rows} presets={data.presets} />
+      <KindLevels scope={scope} rows={data.rows} effective={data.effective} kinds={kinds} />
+      <CategoryLevels organizationId={orgId} pictures={pictures} names={names} />
+      <OtherSettings title="Other Settings Here" rows={others} names={names} />
+      <ScopeOverrides organizationId={orgId} rows={data.rows} kinds={kinds} names={names} />
+    </>
+  )
+}
+
 /**
  * Organization Settings › Notifications, "Your Notifications": what this
  * person hears from this organization. Every member can use it.
  */
 export function OrganizationNotificationPreferences({ orgId }: Readonly<{ orgId: string }>) {
   const query = useNotificationPreferencesQuery(orgId)
-  const data = query.data
-  const kinds = useMemo(() => availableKinds(data?.channels ?? []), [data?.channels])
-  const scope = { organizationId: orgId }
   let body: ReactNode
   if (query.isLoading) body = <LoadingState label="Loading your notification settings…" />
-  else if (query.isError || !data) {
-    body = (
-      <InlineNotice
-        tone="warning"
-        title="Could not load your notification settings"
-        body="Reload the page to try again."
-      />
-    )
+  else if (query.isError || !query.data) {
+    body = <LoadFailure error={query.error} where="organization" />
   } else {
-    body = (
-      <>
-        {nothingTurnedOn(data.effective, kinds) ? (
-          <InlineNotice
-            tone="warning"
-            title="Nothing is turned on"
-            body="You will not hear anything from this organization, not even in the bell, until you choose a preset or a level below."
-          />
-        ) : null}
-        <PresetPicker organizationId={orgId} rows={data.rows} presets={data.presets} />
-        <KindLevels scope={scope} rows={data.rows} effective={data.effective} kinds={kinds} />
-        <CategoryLevels
-          organizationId={orgId}
-          rows={data.rows}
-          categories={data.catalog.categories}
-        />
-        <ScopeOverrides organizationId={orgId} rows={data.rows} kinds={kinds} />
-      </>
-    )
+    body = <OrganizationPreferencesBody orgId={orgId} data={query.data} />
   }
   return (
     <SectionPanel
@@ -456,88 +488,110 @@ export function OrganizationNotificationPreferences({ orgId }: Readonly<{ orgId:
   )
 }
 
-/** Account › Notifications: the global levels (every organization) and the administrator switch. */
+/** Administrators only: hear organizations they do not belong to as well. */
+function HearEveryOrganization({ value }: Readonly<{ value: boolean }>) {
+  const settings = useUpdateNotificationSettings()
+  const [message, setMessage] = useState<string | null>(null)
+  return (
+    <View style={styles.block}>
+      <SettingRow
+        label="Hear Every Organization"
+        description="As an administrator you only hear the organizations you belong to. Turn this on to hear every organization on this control plane."
+      >
+        <Toggle
+          value={value}
+          busy={settings.isPending}
+          onValueChange={(next) => {
+            setMessage(null)
+            void settings.run(next).then((result) => {
+              if (!result.ok) setMessage(preferenceErrorCopy(result.cause))
+            })
+          }}
+          accessibilityLabel="Hear Every Organization"
+        />
+      </SettingRow>
+      {message ? <Text style={panelStyles.error}>{message}</Text> : null}
+    </View>
+  )
+}
+
+/** Account › Notifications: the levels for every organization, and the administrator switch. */
 export function GlobalNotificationPreferences() {
   const query = useNotificationPreferencesQuery(null)
-  const settings = useUpdateNotificationSettings()
   const data = query.data
   const kinds = useMemo(() => availableKinds(data?.channels ?? []), [data?.channels])
   let body: ReactNode
   if (query.isLoading) body = <LoadingState label="Loading your notification settings…" />
   else if (query.isError || !data) {
-    body = (
-      <InlineNotice
-        tone="warning"
-        title="Could not load your notification settings"
-        body="Reload the page to try again."
-      />
-    )
+    body = <LoadFailure error={query.error} where="account" />
   } else {
     body = (
       <>
-        {nothingTurnedOn(data.effective, kinds) ? (
+        {noLevelsSet(data.effective, kinds) ? (
           <InlineNotice
             tone="warning"
-            title="No global levels set"
+            title="No levels are set for every organization"
             body="Organizations you have set one by one still apply. Choose a preset here to hear every organization you belong to."
           />
         ) : null}
         <PresetPicker organizationId={null} rows={data.rows} presets={data.presets} />
         <KindLevels scope={{}} rows={data.rows} effective={data.effective} kinds={kinds} />
-        {data.administrator ? (
-          <SettingRow
-            label="Hear Every Organization"
-            description="As an administrator you only hear the organizations you belong to. Turn this on to hear every organization on this control plane."
-          >
-            <Toggle
-              value={data.allOrganizations}
-              busy={settings.isPending}
-              onValueChange={(next) => void settings.run(next)}
-              accessibilityLabel="Hear every organization"
-            />
-          </SettingRow>
-        ) : null}
+        {data.administrator ? <HearEveryOrganization value={data.allOrganizations} /> : null}
       </>
     )
   }
   return (
     <SectionPanel
-      title="Global Notifications"
-      hint="Every organization you belong to. An organization's own settings win over these."
+      title="Every Organization"
+      hint="The levels for every organization you belong to. An organization's own settings win over these."
     >
       <View style={styles.stack}>{body}</View>
     </SectionPanel>
   )
 }
 
-function OverrideRow({
-  row,
+/** One organization's rows (or the rows for every organization) in the override list. */
+function OverrideGroupBlock({
+  group,
   names,
-}: Readonly<{ row: NotificationPreferenceRow; names: PreferenceNames }>) {
-  const remove = useDeleteNotificationPreference()
-  const [message, setMessage] = useState<string | null>(null)
+  onOpen,
+}: Readonly<{
+  group: OverrideGroup
+  names: PreferenceNames
+  onOpen: (organizationId: string) => void
+}>) {
+  const organizationId = group.organizationId
+  // Names are read only for an organization whose rows name a project,
+  // environment or server; the rest cost nothing.
+  const needsNames = group.rows.some((r) => r.projectId || r.environmentId || r.serverId)
+  const scopeNames = useNotificationScopeNames(organizationId ?? '', { enabled: needsNames })
+  const rowNames: PreferenceNames = {
+    ...names,
+    projects: scopeNames.data?.projects,
+    environments: scopeNames.data?.environments,
+    servers: scopeNames.data?.servers,
+  }
   return (
-    <View style={styles.overrideRow}>
-      <View style={styles.overrideText}>
-        <Text style={styles.overrideTitle}>
-          {rowScopeWords(row, names)}: {LEVEL_LABEL[row.level]}
-        </Text>
-        <Text style={panelStyles.muted}>{rowSubjectWords(row, names)}</Text>
-        {message ? <Text style={panelStyles.error}>{message}</Text> : null}
+    <View style={styles.block}>
+      <View style={styles.kindHead}>
+        <Text style={styles.subheading}>{group.title}</Text>
+        {organizationId ? (
+          <TextLink
+            label="Open Settings"
+            size="sm"
+            accessibilityLabel={`Open the notification settings of ${group.title}`}
+            onPress={() => onOpen(organizationId)}
+          />
+        ) : null}
       </View>
-      <Button
-        label="Remove"
-        size="sm"
-        variant="ghost"
-        busy={remove.isPending}
-        accessibilityLabel={`Remove ${rowScopeWords(row, names)} ${rowSubjectWords(row, names)}`}
-        onPress={() => {
-          setMessage(null)
-          void remove.run(row.id).then((result) => {
-            if (!result.ok) setMessage(preferenceErrorCopy(result.cause))
-          })
-        }}
-      />
+      {group.rows.map((row) => (
+        <PreferenceRowLine
+          key={row.id}
+          row={row}
+          title={`${rowScopeWords(row, rowNames)}: ${LEVEL_LABEL[row.level]}`}
+          detail={rowSubjectWords(row, rowNames)}
+        />
+      ))}
     </View>
   )
 }
@@ -558,41 +612,42 @@ export function NotificationOverridesList() {
   )
   const reads = [globalQuery.data?.rows ?? [], ...orgQueries.map((q) => q.data?.rows ?? [])]
   const groups = groupOverrides(reads, organizationNames)
-  const catalog = globalQuery.data?.catalog
   const names: PreferenceNames = {
+    ...catalogNames(globalQuery.data),
     organizations: organizationNames,
-    categories: new Map((catalog?.categories ?? []).map((c) => [c.code, c.name])),
-    topics: new Map((catalog?.topics ?? []).map((t) => [t.code, t.name])),
-    channels: new Map((globalQuery.data?.channels ?? []).map((c) => [c.id, c.label])),
   }
   const loading = globalQuery.isLoading || orgQueries.some((q) => q.isLoading)
-  const openOrganization = (organizationId: string | null) => {
-    if (organizationId) router.push(orgSettingsTabHref(organizationId, 'notifications') as Href)
-  }
+  const failedRead = globalQuery.isError ? globalQuery : orgQueries.find((q) => q.isError)
 
   let body: ReactNode
   if (loading) body = <LoadingState label="Loading your overrides…" />
-  else if (groups.length === 0) {
-    body = <Text style={panelStyles.muted}>You have not set anything yet.</Text>
-  } else {
-    body = groups.map((group) => (
-      <View key={group.organizationId ?? 'global'} style={styles.block}>
-        <View style={styles.kindHead}>
-          <Text style={styles.subheading}>{group.title}</Text>
-          {group.organizationId ? (
-            <TextLink
-              label="Open Settings"
-              size="sm"
-              accessibilityLabel={`Open the notification settings of ${group.title}`}
-              onPress={() => openOrganization(group.organizationId)}
-            />
-          ) : null}
-        </View>
-        {group.rows.map((row) => (
-          <OverrideRow key={row.id} row={row} names={names} />
+  else {
+    // A read that failed is said, never passed off as "nothing set".
+    body = (
+      <>
+        {failedRead ? (
+          <>
+            <LoadFailure error={failedRead.error} where="account" />
+            {groups.length > 0 ? (
+              <Text style={panelStyles.muted}>The list below may be incomplete.</Text>
+            ) : null}
+          </>
+        ) : null}
+        {groups.length === 0 && !failedRead ? (
+          <Text style={panelStyles.muted}>You have not set anything yet.</Text>
+        ) : null}
+        {groups.map((group) => (
+          <OverrideGroupBlock
+            key={group.organizationId ?? 'every-organization'}
+            group={group}
+            names={names}
+            onOpen={(organizationId) =>
+              router.push(orgSettingsTabHref(organizationId, 'notifications') as Href)
+            }
+          />
         ))}
-      </View>
-    ))
+      </>
+    )
   }
   return (
     <SectionPanel
@@ -639,21 +694,5 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: 12,
-  },
-  overrideRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-  },
-  overrideText: {
-    flex: 1,
-    gap: 2,
-  },
-  overrideTitle: {
-    color: colors.textBody,
-    fontSize: 13,
   },
 })

@@ -1,7 +1,9 @@
+import { isHttpStatusError } from '@/lib/fetch-error-detail'
 import type {
   NotificationEffectiveLevel,
   NotificationEffectiveLevels,
   NotificationLevel,
+  NotificationPreferenceKind,
   NotificationPreferenceRow,
   NotificationPreferenceScope,
   NotificationPreferenceSource,
@@ -13,9 +15,10 @@ import type {
 
 /**
  * The pure half of the notification settings screens: level and kind words,
- * "effective from" labels, which quick preset a scope matches, and the
- * override list. Nothing arrives until a person turns something on, so the
- * words here say so plainly.
+ * "effective from" labels, which quick preset a scope matches, the override
+ * list, and the same most-specific-row rule the control plane resolves with,
+ * so a screen never shows a level the control plane would not apply. Nothing
+ * arrives until a person turns something on, so the words here say so plainly.
  */
 
 export const LEVEL_OPTIONS: readonly { value: NotificationLevel; label: string }[] = [
@@ -42,7 +45,7 @@ export const PREFERENCE_KIND_LABEL: Record<SettableNotificationKind, string> = {
 /** Scope words, as a heading or a label names them. */
 export const SCOPE_WORD: Record<NotificationPreferenceSource, string> = {
   default: 'Nothing Set',
-  global: 'Global',
+  global: 'Every Organization',
   organization: 'Organization',
   project: 'Project',
   environment: 'Environment',
@@ -193,13 +196,286 @@ export function activePreset(
   return match?.id ?? null
 }
 
-/** True when every kind shown is off at this scope: the screen says nothing is turned on. */
-export function nothingTurnedOn(
+/**
+ * What a row sets, as the screens sort it: `kind` is a level for one channel
+ * kind and every event (the level pickers); `category` is one category for
+ * every channel (the Categories picker); `category-target` is one category
+ * for one channel kind or one personal channel (what an email unsubscribe
+ * writes); `other` is anything else the API accepts (one event, one channel
+ * for every event, every kind at once, phone push).
+ */
+export type PreferenceRowShape = 'kind' | 'category' | 'category-target' | 'other'
+
+export function rowShape(row: NotificationPreferenceRow): PreferenceRowShape {
+  if (row.topicCode !== null || row.kind === 'push') return 'other'
+  if (row.categoryCode === null) {
+    return row.kind !== null && row.channelId === null ? 'kind' : 'other'
+  }
+  return row.kind === null && row.channelId === null ? 'category' : 'category-target'
+}
+
+/** True when a row's end time has passed: the control plane ignores it. */
+export function rowHasEnded(
+  row: Pick<NotificationPreferenceRow, 'endsAt'>,
+  nowMs: number
+): boolean {
+  return row.endsAt !== null && Date.parse(row.endsAt) <= nowMs
+}
+
+function scopeRank(row: NotificationPreferenceRow): number {
+  if (row.serviceId || row.serverId || row.destinationId) return 5
+  if (row.environmentId) return 4
+  if (row.projectId) return 3
+  if (row.organizationId) return 2
+  return 1
+}
+
+function subjectRank(row: NotificationPreferenceRow): number {
+  if (row.topicCode) return 3
+  if (row.categoryCode) return 2
+  return 1
+}
+
+function targetRank(row: NotificationPreferenceRow): number {
+  if (row.channelId) return 3
+  if (row.kind) return 2
+  return 1
+}
+
+const SCOPE_ID_KEYS = [
+  'organizationId',
+  'projectId',
+  'environmentId',
+  'serviceId',
+  'serverId',
+  'destinationId',
+] as const
+
+/** Where something happened and what it was, as far as preferences are concerned. */
+export type PreferenceEvent = NotificationPreferenceScope & {
+  topicCode?: string | null
+  categoryCode?: string | null
+}
+
+/** The copy being decided: a channel kind, and the personal channel when there is one. */
+export type PreferenceTarget = { kind: NotificationPreferenceKind; channelId?: string | null }
+
+function allows(rowValue: string | null, value: string | null | undefined): boolean {
+  return rowValue === null || rowValue === (value ?? null)
+}
+
+function rowApplies(
+  row: NotificationPreferenceRow,
+  event: PreferenceEvent,
+  target: PreferenceTarget,
+  nowMs: number
+): boolean {
+  if (rowHasEnded(row, nowMs)) return false
+  if (!SCOPE_ID_KEYS.every((key) => allows(row[key], event[key]))) return false
+  if (!allows(row.topicCode, event.topicCode) || !allows(row.categoryCode, event.categoryCode)) {
+    return false
+  }
+  return allows(row.channelId, target.channelId) && allows(row.kind, target.kind)
+}
+
+/**
+ * The row that decides one copy of one event, by the control plane's own rule
+ * (its `resolveLevel`): the most specific row wins, compared by scope first
+ * (a server, service or backup target, then environment, project,
+ * organization, every organization), then subject (one event, one category,
+ * every event), then target (one channel, one channel kind, every kind). A
+ * row whose end time has passed is ignored; no row means Off. Keep the three
+ * ranks in step with the control plane, or a screen shows a level it will not
+ * apply.
+ */
+export function resolvePreferenceLevel(
+  rows: readonly NotificationPreferenceRow[],
+  event: PreferenceEvent,
+  target: PreferenceTarget,
+  nowMs: number
+): { level: NotificationLevel; row: NotificationPreferenceRow | null } {
+  let best: NotificationPreferenceRow | null = null
+  let bestRank = -1
+  for (const row of rows) {
+    if (!rowApplies(row, event, target, nowMs)) continue
+    const rank = scopeRank(row) * 100 + subjectRank(row) * 10 + targetRank(row)
+    if (rank > bestRank) {
+      best = row
+      bestRank = rank
+    }
+  }
+  return best ? { level: best.level, row: best } : { level: 'none', row: null }
+}
+
+export type CategoryKindLevel = {
+  kind: SettableNotificationKind
+  /** What the control plane applies to this category's events for this kind in the organization. */
+  level: NotificationLevel
+  source: NotificationPreferenceSource
+  /** True when that is not what the category picker (or, unset, the level above it) says. */
+  differs: boolean
+}
+
+export type CategoryPicture = {
+  code: string
+  name: string
+  /** The row the picker edits: this category, every channel. */
+  own: NotificationPreferenceRow | undefined
+  /** Rows here for this category and one channel kind or one channel: each wins over `own`. */
+  targeted: NotificationPreferenceRow[]
+  inEffect: CategoryKindLevel[]
+  differs: boolean
+}
+
+/**
+ * Each category on an organization's Notifications tab: the row its picker
+ * edits, the rows that name the category together with a channel kind or one
+ * channel (an email unsubscribe writes one), and the level in effect per kind.
+ * The picker alone is wrong whenever one of those rows, or one set for every
+ * organization, decides instead; `differs` says so.
+ */
+export function categoryPictures(
+  input: Readonly<{
+    rows: readonly NotificationPreferenceRow[]
+    organizationId: string
+    categories: readonly { code: string; name: string }[]
+    kinds: readonly SettableNotificationKind[]
+    effective: Partial<NotificationEffectiveLevels>
+    nowMs: number
+  }>
+): CategoryPicture[] {
+  const { rows, organizationId, categories, kinds, effective, nowMs } = input
+  const scope = { organizationId }
+  // As the control plane's effective read does: a row naming one event is an
+  // override below the category, so it is not part of the category's level.
+  const candidates = rows.filter((r) => r.topicCode === null)
+  return categories.map((category) => {
+    const here = rows.filter((r) => rowIsAtScope(r, scope) && r.categoryCode === category.code)
+    const own = here.find((r) => rowShape(r) === 'category')
+    const targeted = here
+      .filter((r) => rowShape(r) === 'category-target')
+      .sort((a, b) => targetRank(a) - targetRank(b) || a.id.localeCompare(b.id))
+    const ownLevel = own && !rowHasEnded(own, nowMs) ? own.level : null
+    const inEffect = kinds.map((kind): CategoryKindLevel => {
+      const decided = resolvePreferenceLevel(
+        candidates,
+        { organizationId, categoryCode: category.code },
+        { kind },
+        nowMs
+      )
+      const shown = ownLevel ?? effective[kind]?.level ?? 'none'
+      return {
+        kind,
+        level: decided.level,
+        source: decided.row ? scopeSource(rowScope(decided.row)) : 'default',
+        differs: decided.level !== shown,
+      }
+    })
+    return {
+      code: category.code,
+      name: category.name,
+      own,
+      targeted,
+      inEffect,
+      differs: inEffect.some((k) => k.differs),
+    }
+  })
+}
+
+/** The levels in effect for a category, in words; a kind the picker gets wrong says where its level comes from. */
+export function categoryInEffectWords(picture: Pick<CategoryPicture, 'inEffect'>): string {
+  return picture.inEffect
+    .map((k) => {
+      const words = `${PREFERENCE_KIND_LABEL[k.kind]}: ${LEVEL_LABEL[k.level]}`
+      return k.differs ? `${words} (${effectiveFromLabel(k, 'organization')})` : words
+    })
+    .join(' · ')
+}
+
+/**
+ * The rows at exactly this scope that no control there shows: everything but
+ * the level pickers' rows (for the kinds on screen) and, where the Categories
+ * block is drawn (`categories`), the rows it lists. Drawn as a plain list with
+ * Remove, so every row a person has at a scope on screen can be seen and
+ * removed there.
+ */
+export function otherRowsAt(
+  rows: readonly NotificationPreferenceRow[],
+  scope: NotificationPreferenceScope,
+  shown: Readonly<{
+    kinds: readonly SettableNotificationKind[]
+    categories?: readonly string[]
+  }>
+): NotificationPreferenceRow[] {
+  return rows.filter((row) => {
+    if (!rowIsAtScope(row, scope)) return false
+    const shape = rowShape(row)
+    if (shape === 'kind') return !shown.kinds.includes(row.kind as SettableNotificationKind)
+    if (shape === 'other') return true
+    return !(shown.categories ?? []).includes(row.categoryCode ?? '')
+  })
+}
+
+/** True when no row decides any kind at this scope: the person has not chosen a level yet. */
+export function noLevelsSet(
   effective: Partial<NotificationEffectiveLevels> | undefined,
   kinds: readonly SettableNotificationKind[]
 ): boolean {
   if (!effective) return false
-  return kinds.every((kind) => (effective[kind]?.level ?? 'none') === 'none')
+  return kinds.every((kind) => (effective[kind]?.source ?? 'default') === 'default')
+}
+
+type PreferencePicture = Pick<NotificationPreferences, 'rows' | 'channels' | 'catalog'>
+
+/**
+ * True when at least one event could reach the person in this organization:
+ * some event, channel kind (or personal channel) and scope the rows name
+ * resolves to a level other than Off.
+ */
+export function somethingResolvesOn(
+  data: PreferencePicture,
+  organizationId: string,
+  nowMs: number
+): boolean {
+  if (!data.rows.some((r) => r.level !== 'none' && !rowHasEnded(r, nowMs))) return false
+  const scopes: NotificationPreferenceScope[] = [
+    { organizationId },
+    ...overrideScopes(data.rows, organizationId).map((s) => s.scope),
+  ]
+  const targets: PreferenceTarget[] = availableKinds(data.channels).map((kind) => ({ kind }))
+  for (const channel of data.channels) {
+    const kind = channelPreferenceKind(channel.kind)
+    if (kind) targets.push({ kind, channelId: channel.id })
+  }
+  const subjects: Pick<PreferenceEvent, 'topicCode' | 'categoryCode'>[] =
+    data.catalog.topics.length > 0
+      ? data.catalog.topics.map((t) => ({ topicCode: t.code, categoryCode: t.categoryCode }))
+      : [{}]
+  return scopes.some((scope) =>
+    subjects.some((subject) =>
+      targets.some(
+        (target) =>
+          resolvePreferenceLevel(data.rows, { ...scope, ...subject }, target, nowMs).level !==
+          'none'
+      )
+    )
+  )
+}
+
+/**
+ * True when the person has chosen nothing for this organization and nothing
+ * reaches them from it: no level row decides any kind (so a deliberate Nothing
+ * preset does not count) and no category, project, environment or server
+ * setting turns anything on either.
+ */
+export function nothingTurnedOn(
+  data: (PreferencePicture & Pick<NotificationPreferences, 'effective'>) | undefined,
+  organizationId: string,
+  nowMs: number
+): boolean {
+  if (!data) return false
+  if (!noLevelsSet(data.effective, availableKinds(data.channels))) return false
+  return !somethingResolvesOn(data, organizationId, nowMs)
 }
 
 /** A stable key for one scope (query keys, list keys). */
@@ -249,20 +525,6 @@ export function overrideScopes(
   return [...seen.values()].sort((a, b) => SCOPE_DEPTH[a.source] - SCOPE_DEPTH[b.source])
 }
 
-/** One line for a closed override card: "Bell: All · Email: Off", or a count, or that it inherits. */
-export function overrideSummary(own: readonly NotificationPreferenceRow[]): string {
-  if (own.length === 0) return 'Inherits the organization levels'
-  const levels = own
-    .filter(
-      (r) => r.kind !== null && r.kind !== 'push' && r.categoryCode === null && r.topicCode === null
-    )
-    .map(
-      (r) => `${PREFERENCE_KIND_LABEL[r.kind as SettableNotificationKind]}: ${LEVEL_LABEL[r.level]}`
-    )
-  if (levels.length > 0) return levels.join(' · ')
-  return own.length === 1 ? '1 setting' : `${own.length} settings`
-}
-
 /** Names the override list can put beside a scope word; missing names fall back to the word. */
 export type PreferenceNames = {
   organizations?: ReadonlyMap<string, string>
@@ -281,18 +543,29 @@ function named(word: string, id: string | null, names: ReadonlyMap<string, strin
 
 /** Where a row applies, in words: "Project Checkout › Environment production". */
 export function rowScopeWords(row: NotificationPreferenceRow, names: PreferenceNames = {}): string {
-  if (row.organizationId === null) return 'Every organization'
+  if (row.organizationId === null) return SCOPE_WORD.global
   const parts: string[] = []
   if (row.projectId) parts.push(named('Project', row.projectId, names.projects))
   if (row.environmentId) parts.push(named('Environment', row.environmentId, names.environments))
   if (row.serverId) parts.push(named('Server', row.serverId, names.servers))
   if (row.serviceId) parts.push('Service')
-  if (row.destinationId) parts.push('Backup target')
-  if (parts.length === 0) return 'Whole organization'
+  if (row.destinationId) parts.push(SCOPE_WORD.destination)
+  if (parts.length === 0) return 'Whole Organization'
   return parts.join(' › ')
 }
 
-/** What a row is about and where it goes: "Servers · Email", "Everything · Every channel". */
+/** Where a row's copies go: one personal channel by name, one channel kind, or every channel. */
+export function rowTargetWords(
+  row: NotificationPreferenceRow,
+  names: PreferenceNames = {}
+): string {
+  if (row.channelId) return names.channels?.get(row.channelId) ?? 'One Channel'
+  if (row.kind === 'push') return 'Push'
+  if (row.kind) return PREFERENCE_KIND_LABEL[row.kind]
+  return 'Every Channel'
+}
+
+/** What a row is about and where it goes: "Servers · Email", "Everything · Every Channel". */
 export function rowSubjectWords(
   row: NotificationPreferenceRow,
   names: PreferenceNames = {}
@@ -300,11 +573,29 @@ export function rowSubjectWords(
   let subject = 'Everything'
   if (row.categoryCode) subject = names.categories?.get(row.categoryCode) ?? row.categoryCode
   else if (row.topicCode) subject = names.topics?.get(row.topicCode) ?? row.topicCode
-  let target = 'Every channel'
-  if (row.channelId) target = names.channels?.get(row.channelId) ?? 'One channel'
-  else if (row.kind && row.kind !== 'push') target = PREFERENCE_KIND_LABEL[row.kind]
-  else if (row.kind === 'push') target = 'Push'
-  return `${subject} · ${target}`
+  return `${subject} · ${rowTargetWords(row, names)}`
+}
+
+/** One line for a closed override card: "Bell: All · Email: Off · Servers · Email: Off", or that it inherits. */
+export function overrideSummary(
+  own: readonly NotificationPreferenceRow[],
+  names: PreferenceNames = {}
+): string {
+  if (own.length === 0) return 'Inherits the organization levels'
+  const kindLevels: string[] = []
+  const others: string[] = []
+  for (const row of own) {
+    if (rowShape(row) === 'kind') {
+      kindLevels.push(
+        `${PREFERENCE_KIND_LABEL[row.kind as SettableNotificationKind]}: ${LEVEL_LABEL[row.level]}`
+      )
+    } else {
+      others.push(`${rowSubjectWords(row, names)}: ${LEVEL_LABEL[row.level]}`)
+    }
+  }
+  const parts = [...kindLevels, ...others]
+  if (parts.length <= 3) return parts.join(' · ')
+  return `${parts.slice(0, 3).join(' · ')} · and ${parts.length - 3} more`
 }
 
 export type OverrideGroup = {
@@ -316,8 +607,9 @@ export type OverrideGroup = {
 
 /**
  * Every row the person has, across the reads (one per organization, each
- * repeating the global rows, plus the global read), grouped: Global first,
- * then each organization by name; inside a group the widest scope first.
+ * repeating the rows for every organization, plus the read of those alone),
+ * grouped: Every Organization first, then each organization by name; inside a
+ * group the widest scope first.
  */
 export function groupOverrides(
   reads: readonly (readonly NotificationPreferenceRow[])[],
@@ -332,11 +624,6 @@ export function groupOverrides(
     groups.set(row.organizationId, list)
   }
   const depth = (r: NotificationPreferenceRow) => SCOPE_DEPTH[scopeSource(rowScope(r))]
-  const subjectRank = (r: NotificationPreferenceRow) => {
-    if (r.topicCode) return 2
-    if (r.categoryCode) return 1
-    return 0
-  }
   const out: OverrideGroup[] = []
   for (const [organizationId, rows] of groups) {
     rows.sort(
@@ -350,7 +637,7 @@ export function groupOverrides(
       organizationId,
       title:
         organizationId === null
-          ? 'Global'
+          ? SCOPE_WORD.global
           : (organizationNames.get(organizationId) ?? 'Organization'),
       rows,
     })
@@ -388,7 +675,62 @@ export function preferenceErrorCopy(err: unknown): string {
   return 'The setting could not be saved. Try again.'
 }
 
-/** What the unsubscribe page says after the button press. */
+/** True when the control plane has no preference routes at all (it predates them). */
+export function preferencesRoutesAbsent(error: unknown): boolean {
+  return isHttpStatusError(error, 404)
+}
+
+/**
+ * What a failed preference read says. On the account page a 404 can only mean
+ * the control plane predates these settings; on an organization's tab it may
+ * also mean the organization cannot be opened, so the words stay general.
+ */
+export function preferencesLoadFailureCopy(
+  error: unknown,
+  where: 'account' | 'organization'
+): { title: string; body: string } {
+  if (preferencesRoutesAbsent(error)) {
+    if (where === 'account') {
+      return {
+        title: 'This control plane has no notification settings yet',
+        body: 'It is older than this web interface. Until it is updated, each of your channels keeps its own rules.',
+      }
+    }
+    return {
+      title: 'Could not load your notification settings',
+      body: 'Reload the page to try again. If it keeps happening, the control plane may be older than this web interface.',
+    }
+  }
+  return {
+    title: 'Could not load your notification settings',
+    body: 'Reload the page to try again.',
+  }
+}
+
+/**
+ * Category names for the unsubscribe page, which is often opened signed out
+ * and so cannot read the catalog; the control plane answers with the code
+ * only. An unknown code falls back to "These emails".
+ */
+const UNSUBSCRIBE_CATEGORY_NAMES: ReadonlyMap<string, string> = new Map([
+  ['servers', 'Servers'],
+  ['security', 'Security'],
+  ['access', 'Access'],
+  ['certificates', 'Certificates'],
+  ['backups', 'Backups'],
+  ['billing', 'Billing'],
+  ['platform', 'Control Plane'],
+])
+
+export function unsubscribeCategoryName(code: string | null | undefined): string | null {
+  return (code ? UNSUBSCRIBE_CATEGORY_NAMES.get(code) : undefined) ?? null
+}
+
+/**
+ * What the unsubscribe page says after the button press. The undo sentence
+ * names what to look for: an unsubscribe for one category is a setting with
+ * its own Remove; one without a category turns the Email level itself off.
+ */
 export function unsubscribeResultCopy(
   result: NotificationUnsubscribeResult,
   categoryName?: string | null
@@ -396,10 +738,13 @@ export function unsubscribeResultCopy(
   if (result.ok) {
     const what = categoryName ? `${categoryName} emails` : 'These emails'
     const where = result.organizationId ? ' for this organization' : ''
+    const undo = result.categoryCode
+      ? `remove the ${categoryName ?? 'category'} setting that says Off`
+      : 'set Email to a level other than Off'
     return {
       tone: 'info',
       title: 'You are unsubscribed',
-      body: `${what} are turned off${where}. You can turn them back on in your notification settings.`,
+      body: `${what} are turned off${where}. To turn them back on, open your notification settings and ${undo}.`,
     }
   }
   if (result.reason === 'invalid_or_expired') {
