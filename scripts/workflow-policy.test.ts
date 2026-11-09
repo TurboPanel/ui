@@ -135,6 +135,24 @@ describe('Verify concurrency', () => {
     )
     expect(text('promote-prs.yml')).toContain('  cancel-in-progress: false\n  queue: max\n')
   })
+
+  it('runs one Promote OK recheck at a time, queued, none dropped', () => {
+    expect(text('promote-ok-recheck.yml')).toContain(
+      [
+        'concurrency:',
+        '  group: promote-ok-recheck',
+        '  cancel-in-progress: false',
+        '  queue: max',
+        '',
+      ].join('\n')
+    )
+  })
+
+  it('titles each canary run with the commit it builds, for the recheck', () => {
+    expect(text('canary.yml')).toMatch(
+      /^run-name: Canary \$\{\{ github\.event\.workflow_run\.head_sha \}\}$/m
+    )
+  })
 })
 
 describe('ci-ok', () => {
