@@ -156,9 +156,11 @@ export function useDeleteNotificationPreference() {
 export function useDeleteNotificationPreferences() {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: async ({ ids }: { ids: readonly string[]; organizationId: string | null }) => {
-      for (const id of ids) await deleteNotificationPreference(id)
-    },
+    mutationFn: ({ ids }: { ids: readonly string[]; organizationId: string | null }) =>
+      ids.reduce<Promise<unknown>>(
+        (done, id) => done.then(() => deleteNotificationPreference(id)),
+        Promise.resolve()
+      ),
     onSettled: async (_data, _error, { organizationId }) => {
       await invalidatePreferences(queryClient, organizationId)
     },

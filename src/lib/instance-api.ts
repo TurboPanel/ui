@@ -12352,7 +12352,8 @@ export async function postNotificationUnsubscribe(
   } catch (err) {
     if (isHttpStatusError(err, 400)) return { ok: false, reason: 'invalid_or_expired' }
     const status = err instanceof Error ? /HTTP \d{3}/.exec(err.message)?.[0] : undefined
-    throw new Error(`The unsubscribe request failed${status ? `: ${status}` : ''}`)
+    const suffix = status ? `: ${status}` : ''
+    throw new Error(`The unsubscribe request failed${suffix}`)
   }
 }
 
