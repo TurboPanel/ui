@@ -77,6 +77,7 @@ function ChoiceRow<T extends string>({
             accessibilityRole="radio"
             accessibilityLabel={choice.name ?? choice.label}
             accessibilityState={{ checked }}
+            aria-checked={checked}
             // Web hover tooltip and one tab stop per group; native ignores both.
             {...({
               title: choice.hint ?? choice.name ?? choice.label,
