@@ -43,6 +43,7 @@ import {
   formatBytes,
   formatBytesPerSecond,
   formatCount,
+  processesTile,
   formatQueueDepth,
   formatCoveragePercent,
   formatDurationSeconds,
@@ -528,6 +529,8 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
       },
     ],
     yFormat: (v) => formatCount(v),
+    // Not kept in the stored history (left out of both metrics stores).
+    hideWhenEmpty: true,
   },
   {
     id: 'memory-breakdown',
@@ -1246,7 +1249,14 @@ const HOST_CHART_DEFINITIONS: readonly ChartDefinition[] = [
   ...V12_CHART_DEFINITIONS,
 ]
 
-/** Every host canonical id referenced by `HOST_CHART_DEFINITIONS` above — the single request list for the host series query. */
+/**
+ * The CPU Utilization tile reads `host.cpu.busyPercent`, which no chart draws
+ * (the CPU chart stacks the modes). Registered here so the request asks for it;
+ * without it the tile could only ever show a dash.
+ */
+const CPU_BUSY_READ = hostMetric('host.cpu', 'busyPercent')
+
+/** Every host canonical id referenced by `HOST_CHART_DEFINITIONS` above (and the tiles) — the single request list for the host series query. */
 const HOST_METRIC_IDS: readonly string[] = [...HOST_METRIC_ID_SET]
 
 // ---------------------------------------------------------------------------
@@ -2947,16 +2957,6 @@ function CollapsibleChartGroup({
   )
 }
 
-function processOverviewLabel(
-  processCount: number | null,
-  procsRunning: number | null,
-  procsBlocked: number | null
-): string {
-  if (processCount != null) return formatCount(processCount)
-  if (procsRunning == null && procsBlocked == null) return '—'
-  return `${formatCount(procsRunning)} / ${formatCount(procsBlocked ?? 0)}`
-}
-
 function latestReadValue(points: GridPoint[], read: PointValueReader): number | null {
   for (let index = points.length - 1; index >= 0; index -= 1) {
     const value = read(points[index]!)
@@ -3019,8 +3019,7 @@ function MetricsOverviewTiles({
   server: OrgServerRecord | null
   uptimeSeconds: number | null
 }>) {
-  const cpuBusyId = formatEntityMetricId({ scope: 'host.cpu', field: 'busyPercent' })
-  const cpuBusy = cpuBusyPercent(latestReadValue(hostPoints, metric(cpuBusyId)))
+  const cpuBusy = cpuBusyPercent(latestReadValue(hostPoints, CPU_BUSY_READ))
   const cpuCores = server ? serverInventoryCpuCores(server) : null
   const cpuModel = server?.resources?.cpus?.[0]?.name ?? null
   const cpuHardwareLabel = [
@@ -3067,12 +3066,7 @@ function MetricsOverviewTiles({
     hostPoints,
     metric(formatEntityMetricId({ scope: 'host.cpu', field: 'procsBlocked' }))
   )
-  const processesLabel = processOverviewLabel(processCount, procsRunning, procsBlocked)
-  const processesTileLabel = processCount != null ? 'PROCESSES' : 'RUNNING / BLOCKED'
-  const processesA11y =
-    processCount != null
-      ? `${processesLabel} processes, ${formatCount(procsRunning)} runnable, ${formatCount(procsBlocked ?? 0)} blocked`
-      : `${processesLabel} running / blocked processes`
+  const processes = processesTile(processCount, procsRunning, procsBlocked)
 
   return (
     <>
@@ -3100,13 +3094,9 @@ function MetricsOverviewTiles({
             label: 'HOSTING STORAGE USED',
             accessibilityLabel: `Hosting storage used ${formatPercent(hostingUsed)}`,
           },
-          {
-            key: 'processes',
-            icon: ProcsMetricIcon,
-            value: processesLabel,
-            label: processesTileLabel,
-            accessibilityLabel: processesA11y,
-          },
+          // Process counts are not kept in the stored history, so the tile
+          // shows only when a sample carries them.
+          ...(processes ? [{ key: 'processes', icon: ProcsMetricIcon, ...processes }] : []),
           {
             key: 'uptime',
             icon: UptimeMetricIcon,
