@@ -3,6 +3,7 @@ import {
   createEnvironment,
   deleteEnvironment,
   fetchEnvironmentDeletePreview,
+  fetchEnvironmentDataVolumes,
   deployEnvironment,
   fetchDeployPreview,
   fetchEnvironment,
@@ -14,6 +15,7 @@ import {
   stopEnvironment,
   cancelDeployment,
   updateEnvironment,
+  type DestroyDataOptions,
   type EnvironmentLifecycleAction,
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
@@ -179,10 +181,25 @@ export function useDeployEnvironment(orgId: string, environmentId: string) {
   })
 }
 
+/** The data volumes a Destroy can delete; only fetched while the choice is shown. */
+export function useEnvironmentDataVolumes(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).environments.dataVolumes(environmentId),
+    queryFn: () => fetchEnvironmentDataVolumes(environmentId),
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+  })
+}
+
+/** Destroy; pass `DestroyDataOptions` to also delete the data volumes. */
 export function useStopEnvironment(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: () => stopEnvironment(environmentId),
+    mutationFn: (options?: DestroyDataOptions) =>
+      options ? stopEnvironment(environmentId, options) : stopEnvironment(environmentId),
     onSuccess: async () => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
       await queryClient.invalidateQueries({
@@ -206,11 +223,14 @@ export function useCancelDeployment(orgId: string, environmentId: string) {
   })
 }
 
-/** Stop any environment by id (e.g. project delete wizard). */
-export function useStopEnvironmentMutation(orgId: string) {
+/**
+ * Stop any environment by id without removing anything (the lifecycle stop,
+ * like the toolbar's Stop). Not Destroy: that is {@link useStopEnvironment}.
+ */
+export function useLifecycleStopMutation(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: stopEnvironment,
+    mutationFn: (environmentId: string) => runEnvironmentLifecycle(environmentId, 'stop'),
     onSuccess: async (_data, environmentId) => {
       await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
       await queryClient.invalidateQueries({
