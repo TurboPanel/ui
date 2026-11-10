@@ -13,6 +13,7 @@ import { useCan } from '@/lib/query-client'
 import { looksLikeSecretVariable, SECRET_LOOKING_VARIABLE_HINT } from '@/lib/variable-secret-hint'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
+import { NO_AUTOFILL, secretAutoComplete } from '@/lib/field-autofill'
 
 /** Secret values are write-only end to end — never rendered, even masked with real characters. */
 const HIDDEN_VALUE_LABEL = '***HIDDEN***'
@@ -288,6 +289,7 @@ function VariableValueCell({
         autoCorrect={false}
         editable={!secretSaving}
         secureTextEntry
+        autoComplete={secretAutoComplete()}
       />
     )
   }
@@ -636,6 +638,7 @@ function NewVariableRow({
           autoCorrect={false}
           editable={!adding}
           secureTextEntry={newIsSecret}
+          autoComplete={newIsSecret ? secretAutoComplete() : NO_AUTOFILL}
           multiline
         />
       </View>

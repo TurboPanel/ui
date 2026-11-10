@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native'
+import { secretAutoComplete } from '@/lib/field-autofill'
 import { chrome, colors, spacing } from '@/lib/theme'
 
 /**
@@ -49,6 +50,8 @@ export function FormField({
 /**
  * Standard console text input inside a {@link FormField}. Accent focus
  * border, radius 8, 16px text, min height 44. `mono` for IDs / PEM / code.
+ * A `secureTextEntry` box without its own `autoComplete` never takes the
+ * browser's saved sign-in (`secretAutoComplete`).
  */
 export function TextField({
   label,
@@ -83,6 +86,10 @@ export function TextField({
         <View style={leading ? styles.leadingInput : undefined}>
           <TextInput
             {...inputProps}
+            autoComplete={
+              inputProps.autoComplete ??
+              (inputProps.secureTextEntry ? secretAutoComplete() : undefined)
+            }
             placeholderTextColor={colors.textDim}
             onFocus={(e) => {
               setFocused(true)

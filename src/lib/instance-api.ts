@@ -6049,10 +6049,22 @@ export class UpdateCheckTooSoonError extends Error {
 }
 
 /**
+ * Check Now could not reach the release server (503 `release_unreachable`),
+ * the same refusal Update Now gives, so the screen says it the same way.
+ */
+export class ReleaseUnreachableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ReleaseUnreachableError'
+  }
+}
+
+/**
  * Check Now: read the channel manifests again and answer the same body as
  * `GET /instance/updates`. Only a refresh; it never starts an update (the
  * next scheduled check does). A 429 `check_too_soon` throws
- * `UpdateCheckTooSoonError`.
+ * `UpdateCheckTooSoonError`; a 503 `release_unreachable` throws
+ * `ReleaseUnreachableError`.
  */
 export async function checkForUpdates(consoleCommit?: string): Promise<InstanceUpdates> {
   const query = consoleCommit ? `?consoleCommit=${encodeURIComponent(consoleCommit)}` : ''
@@ -7109,6 +7121,9 @@ async function adminJson<T>(path: string, init: RequestInit): Promise<T> {
     if (body?.error === 'check_too_soon') {
       const wait = typeof body.retryAfterSeconds === 'number' ? body.retryAfterSeconds : 60
       throw new UpdateCheckTooSoonError(`${path} failed: ${detail}`, wait)
+    }
+    if (body?.error === 'release_unreachable') {
+      throw new ReleaseUnreachableError(`${path} failed: ${detail}`)
     }
     const invalid = Array.isArray(body?.invalid)
       ? body.invalid.filter((item): item is string => typeof item === 'string')

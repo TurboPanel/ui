@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { UpdateCheckTooSoonError } from './instance-api'
+import { ReleaseUnreachableError, UpdateCheckTooSoonError } from './instance-api'
 import {
   CHECK_NOW_HELP,
   checkCadence,
@@ -16,6 +16,7 @@ import {
   pausedByLabel,
   pausedSinceText,
   SERVER_UPDATES_AUTOMATIC_COPY,
+  UPDATE_NOW_UNREACHABLE,
   UPDATE_WAITING_COPY,
   waitingSentence,
 } from './update-automation'
@@ -155,6 +156,16 @@ describe('Check Now words', () => {
       text: 'Checked a moment ago. Try again in 1 second.',
       clearAfterMs: 1000,
     })
+  })
+
+  it('says the release server could not be reached, as Update Now does', () => {
+    expect(checkNowRefusal(new ReleaseUnreachableError('x'))).toEqual({
+      text: UPDATE_NOW_UNREACHABLE,
+      clearAfterMs: null,
+    })
+    expect(UPDATE_NOW_UNREACHABLE).toBe(
+      'The release server could not be reached. Try again in a few minutes.'
+    )
   })
 
   it('falls back to the plain error for anything else, which stays', () => {

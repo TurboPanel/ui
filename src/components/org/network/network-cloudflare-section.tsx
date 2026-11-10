@@ -43,6 +43,7 @@ import {
   zoneProblem,
 } from '@/lib/tunnels'
 import { NetworkOriginCertificates } from './network-origin-certificates'
+import { NO_AUTOFILL, secretAutoComplete } from '@/lib/field-autofill'
 
 function missingLine(missing: readonly string[]): string {
   return `This API Token still needs: ${missing.join(', ')}.`
@@ -90,6 +91,7 @@ function TokenFields({
         placeholder="e.g. Production tunnels"
         value={label}
         onChangeText={onLabel}
+        autoComplete={NO_AUTOFILL}
         editable={!disabled}
         accessibilityLabel="API Token label"
       />
@@ -104,6 +106,7 @@ function TokenFields({
         autoCapitalize="none"
         autoCorrect={false}
         secureTextEntry
+        autoComplete={secretAutoComplete()}
         mono
       />
     </>

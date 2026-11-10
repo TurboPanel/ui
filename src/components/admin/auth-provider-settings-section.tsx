@@ -7,6 +7,7 @@ import type { EmailSettingSource, EmailSettingsResponse } from '@/lib/instance-a
 import { useAuthProviderSettings, useSaveAuthProviderSettings } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
+import { NO_AUTOFILL, secretAutoComplete } from '@/lib/field-autofill'
 
 function LockIcon() {
   return (
@@ -230,7 +231,7 @@ export function AuthProviderSettingsSection() {
           placeholderTextColor={colors.textDim}
           autoCapitalize="none"
           autoCorrect={false}
-          autoComplete="off"
+          autoComplete={isSecret ? secretAutoComplete() : NO_AUTOFILL}
           secureTextEntry={isSecret}
           style={styles.input}
           editable={!saveMutation.isPending}

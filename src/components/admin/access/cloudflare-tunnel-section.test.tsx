@@ -91,6 +91,14 @@ describe('AddAccountForm', () => {
     )
   })
 
+  it('keeps the saved sign-in out of the form: the token is masked and neither box autofills', () => {
+    render(<AddAccountForm />)
+    const token = screen.getByLabelText('Token')
+    expect(token.getAttribute('type')).toBe('password')
+    expect(token.getAttribute('autocomplete')).toBe('new-password')
+    expect(screen.getByLabelText('Label').getAttribute('autocomplete')).toBe('off')
+  })
+
   it('clears the token on submit and never renders it', async () => {
     mocks.add.run.mockResolvedValue({
       ok: true,

@@ -43,9 +43,11 @@ vi.mock('@/components/ui', async () => ({
       {children}
     </section>
   ),
-  TextField: ({ label, value, onChangeText }: Props) => (
+  TextField: ({ label, value, onChangeText, secureTextEntry, autoComplete }: Props) => (
     <input
       aria-label={label as string}
+      type={secureTextEntry ? 'password' : undefined}
+      autoComplete={autoComplete as string | undefined}
       value={value as string}
       onChange={(e) => (onChangeText as (v: string) => void)(e.target.value)}
     />
@@ -172,6 +174,20 @@ describe('NetworkCloudflareSection API Tokens', () => {
     expect(alert.textContent).toContain('the tunnel web')
     expect(alert.textContent).toContain('the hostname blog.example.org (example.org)')
     expect(alert.textContent).toContain('and 5 more')
+  })
+
+  it('keeps the saved sign-in out of the token form: masked, and neither box autofills', () => {
+    render(<NetworkCloudflareSection orgId="o1" />)
+    fireEvent.click(screen.getByText('Add API Token'))
+    const tokens = screen.getAllByLabelText('API Token')
+    expect(tokens.length).toBeGreaterThan(0)
+    for (const token of tokens) {
+      expect(token.getAttribute('type')).toBe('password')
+      expect(token.getAttribute('autocomplete')).toBe('new-password')
+    }
+    for (const label of screen.getAllByLabelText('Label')) {
+      expect(label.getAttribute('autocomplete')).toBe('off')
+    }
   })
 
   it('sends the zone named while adding a token', async () => {

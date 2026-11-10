@@ -67,16 +67,22 @@ function StubTextField({
   hint,
   value,
   onChangeText,
+  secureTextEntry,
+  autoComplete,
 }: Readonly<{
   label: string
   hint?: string
   value?: string
   onChangeText?: (value: string) => void
+  secureTextEntry?: boolean
+  autoComplete?: string
 }>) {
   return (
     <input
       aria-label={label}
       data-hint={hint}
+      type={secureTextEntry ? 'password' : undefined}
+      autoComplete={autoComplete}
       value={value ?? ''}
       onChange={(event) => onChangeText?.(event.target.value)}
     />
