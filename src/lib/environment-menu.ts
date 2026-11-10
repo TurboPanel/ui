@@ -21,6 +21,12 @@ export const DESTROY_VOLUMES_HEADING = 'These volumes and everything in them are
 
 export const DESTROY_KEPT_HEADING = 'These stay:'
 
+/** Where a copy of a volume stays because the Destroy does not go to that server. */
+export function destroyStaysOnCopy(names: readonly string[]): string | null {
+  if (names.length === 0) return null
+  return `A copy on ${names.join(', ')} stays.`
+}
+
 /** Why data cannot be deleted yet, naming the servers; null when every daemon can. */
 export function destroyOutdatedServersCopy(names: readonly string[]): string | null {
   if (names.length === 0) return null
@@ -28,7 +34,7 @@ export function destroyOutdatedServersCopy(names: readonly string[]): string | n
 }
 
 /**
- * Whether Confirm destroy may be pressed: always for a plain Destroy; with
+ * Whether Confirm Destroy may be pressed: always for a plain Destroy; with
  * data deletion, only once the list is loaded, every daemon can remove
  * volumes and the typed name matches exactly.
  */

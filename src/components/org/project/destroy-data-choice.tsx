@@ -10,6 +10,7 @@ import {
   DESTROY_VOLUMES_HEADING,
   destroyConfirmNameHint,
   destroyOutdatedServersCopy,
+  destroyStaysOnCopy,
 } from '@/lib/environment-menu'
 import { colors, spacing } from '@/lib/theme'
 
@@ -22,11 +23,15 @@ function DataVolumeList({ data }: Readonly<{ data: EnvironmentDataVolumesRespons
       ) : (
         <>
           <Text style={styles.hint}>{DESTROY_VOLUMES_HEADING}</Text>
-          {data.volumes.map((volume) => (
-            <MonoText key={volume.storageId} style={styles.item}>
-              {volume.name}
-            </MonoText>
-          ))}
+          {data.volumes.map((volume) => {
+            const stays = destroyStaysOnCopy(volume.staysOn.map((entry) => entry.name))
+            return (
+              <Text key={volume.storageId} style={styles.hint}>
+                <MonoText style={styles.item}>{volume.name}</MonoText>
+                {stays ? ` ${stays}` : null}
+              </Text>
+            )
+          })}
         </>
       )}
       {data.kept.length > 0 ? (

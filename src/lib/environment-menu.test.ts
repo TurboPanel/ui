@@ -6,6 +6,7 @@ import {
   destroyConfirmNameHint,
   destroyConfirmReady,
   destroyOutdatedServersCopy,
+  destroyStaysOnCopy,
   LAST_ENVIRONMENT_REASON,
   PRIMARY_ENVIRONMENT_REASON,
   NO_LINUX_USER_REASON,
@@ -134,6 +135,8 @@ describe('destroy copy', () => {
       'Update the daemon on web-1, web-2 before deleting data volumes.'
     )
     expect(destroyConfirmNameHint('staging')).toContain('Type staging')
+    expect(destroyStaysOnCopy([])).toBeNull()
+    expect(destroyStaysOnCopy(['old-web'])).toBe('A copy on old-web stays.')
   })
 })
 

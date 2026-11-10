@@ -190,6 +190,9 @@ export function useEnvironmentDataVolumes(
   return useQuery({
     queryKey: queryKeys.org(orgId).environments.dataVolumes(environmentId),
     queryFn: () => fetchEnvironmentDataVolumes(environmentId),
+    // Always read afresh when the box is ticked: the list decides what is deleted.
+    staleTime: 0,
+    refetchOnMount: 'always',
     enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
   })
 }

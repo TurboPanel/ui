@@ -403,8 +403,8 @@ function LifecycleToolbar({ model }: Readonly<{ model: OverviewEnvironmentsPanel
     return (
       <View style={styles.actionsRow}>
         <QuietButton
-          label={destroyBusy ? 'Destroying…' : 'Confirm destroy'}
-          accessibilityLabel={destroyBusy ? 'Destroying environment' : 'Confirm destroy'}
+          label={destroyBusy ? 'Destroying…' : 'Confirm Destroy'}
+          accessibilityLabel={destroyBusy ? 'Destroying environment' : 'Confirm Destroy'}
           tooltip={DESTROY_EXPLANATION}
           tone="danger"
           disabled={destroyBusy || !destroyReady}
@@ -769,7 +769,7 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   busy: boolean
   destroyArmed: boolean
   destroyBusy: boolean
-  /** Confirm destroy may be pressed (always, unless deleting data is ticked and not yet confirmed). */
+  /** Confirm Destroy may be pressed (always, unless deleting data is ticked and not yet confirmed). */
   destroyReady: boolean
   destroyData: DestroyDataState
   containerError: string | null
@@ -823,7 +823,11 @@ function useDestroyDataState(
   environment: EnvironmentRecord | null,
   armed: boolean,
   canOwn: boolean
-): DestroyDataState & { ready: boolean; options: DestroyDataOptions | undefined } {
+): DestroyDataState & {
+  ready: boolean
+  options: DestroyDataOptions | undefined
+  refetch: () => void
+} {
   const [checked, setChecked] = useState(false)
   const [typedName, setTypedName] = useState('')
   useEffect(() => {
@@ -855,7 +859,17 @@ function useDestroyDataState(
     error:
       wanted && query.error ? userErrorMessage(query.error, 'Failed to load the volumes') : null,
     ready,
-    options: wanted ? { deleteVolumes: true, confirmName: typedName } : undefined,
+    options:
+      wanted && query.data
+        ? {
+            deleteVolumes: true,
+            confirmName: typedName,
+            volumeIds: query.data.volumes.map((volume) => volume.storageId),
+          }
+        : undefined,
+    refetch: () => {
+      ignorePromise(query.refetch())
+    },
   }
 }
 
@@ -1114,6 +1128,8 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     setActionError(null)
     const result = await stopEnvironmentMutation.run(destroyData.options)
     if (!result.ok) {
+      // A refused data delete (changed list, older daemon) shows the list afresh.
+      if (destroyData.options) destroyData.refetch()
       if (stopEnvironmentMutation.actionError) {
         setActionError(stopEnvironmentMutation.actionError)
       }

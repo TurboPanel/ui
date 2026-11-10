@@ -424,10 +424,11 @@ describe('environments query hooks', () => {
     const { result } = renderHook(() => useStopEnvironment(orgId, environmentId), {
       wrapper: createWrapper(),
     })
-    await result.current.run({ deleteVolumes: true, confirmName: 'staging' })
+    await result.current.run({ deleteVolumes: true, confirmName: 'staging', volumeIds: ['v1'] })
     expect(stopEnvironment).toHaveBeenLastCalledWith(environmentId, {
       deleteVolumes: true,
       confirmName: 'staging',
+      volumeIds: ['v1'],
     })
   })
 })

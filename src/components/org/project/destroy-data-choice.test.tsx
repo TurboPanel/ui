@@ -23,7 +23,10 @@ vi.mock('@/components/ui', () => ({
 afterEach(() => cleanup())
 
 const data = {
-  volumes: [{ storageId: 'a', name: 'db_data' }],
+  volumes: [
+    { storageId: 'a', name: 'db_data', staysOn: [] },
+    { storageId: 'c', name: 'cache', staysOn: [{ serverId: 'old', name: 'old-web' }] },
+  ],
   kept: [
     {
       storageId: 'b',
@@ -65,6 +68,7 @@ describe('DestroyDataChoice', () => {
     const props = renderChoice()
     expect(screen.getByText('db_data')).toBeTruthy()
     expect(screen.getByText('shared_files')).toBeTruthy()
+    expect(screen.getByText(/A copy on old-web stays\./)).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Environment Name'), { target: { value: 'staging' } })
     expect(props.onTypedName).toHaveBeenCalledWith('staging')
   })
