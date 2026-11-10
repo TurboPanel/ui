@@ -32,6 +32,8 @@ import {
   type CommandProgress,
   type CommandStatus,
   type CommandStatusRecord,
+  type DestroyDataOptions,
+  type EnvironmentDataVolumesResponse,
   type EnvironmentRecord,
 } from '@/lib/instance-api'
 import {
@@ -42,6 +44,7 @@ import {
   useContainersByProject,
   useDeleteEnvironment,
   useDeployEnvironment,
+  useEnvironmentDataVolumes,
   useOrgServers,
   useProjectPrincipals,
   useRunEnvironmentLifecycle,
@@ -58,9 +61,11 @@ import {
   environmentDeletePrompt,
   type EnvironmentDeleteFailure,
 } from '@/lib/environment-delete'
+import { DestroyDataChoice } from '@/components/org/project/destroy-data-choice'
 import {
   DESTROY_ARMED_HINT,
   DESTROY_EXPLANATION,
+  destroyConfirmReady,
   environmentActionItems,
   type EnvironmentActionId,
 } from '@/lib/environment-menu'
@@ -389,6 +394,7 @@ function LifecycleToolbar({ model }: Readonly<{ model: OverviewEnvironmentsPanel
     busy,
     destroyArmed,
     destroyBusy,
+    destroyReady,
   } = model
   const actionDisabled = !hasServer || busy
   const deployDisabled = actionDisabled || needsPrincipal
@@ -397,11 +403,11 @@ function LifecycleToolbar({ model }: Readonly<{ model: OverviewEnvironmentsPanel
     return (
       <View style={styles.actionsRow}>
         <QuietButton
-          label={destroyBusy ? 'Destroying…' : 'Confirm destroy'}
-          accessibilityLabel={destroyBusy ? 'Destroying environment' : 'Confirm destroy'}
+          label={destroyBusy ? 'Destroying…' : 'Confirm Destroy'}
+          accessibilityLabel={destroyBusy ? 'Destroying environment' : 'Confirm Destroy'}
           tooltip={DESTROY_EXPLANATION}
           tone="danger"
-          disabled={destroyBusy}
+          disabled={destroyBusy || !destroyReady}
           onPress={() => ignorePromise(model.handleDestroy())}
         />
         <QuietButton
@@ -763,6 +769,9 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   busy: boolean
   destroyArmed: boolean
   destroyBusy: boolean
+  /** Confirm Destroy may be pressed (always, unless deleting data is ticked and not yet confirmed). */
+  destroyReady: boolean
+  destroyData: DestroyDataState
   containerError: string | null
   actionError: string | null
   commandError: string | null
@@ -794,6 +803,76 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   refetchAllContainers: () => Promise<unknown>
 }>
 
+/** The armed Destroy's "Also Delete the Data Volumes" choice. */
+type DestroyDataState = Readonly<{
+  /** Only someone who could delete the environment may delete its data. */
+  available: boolean
+  checked: boolean
+  toggle: () => void
+  typedName: string
+  setTypedName: (value: string) => void
+  expectedName: string
+  data: EnvironmentDataVolumesResponse | undefined
+  loading: boolean
+  error: string | null
+}>
+
+/** Holds the choice, resets it whenever Destroy is disarmed, and reads the list only while ticked. */
+function useDestroyDataState(
+  orgId: string,
+  environment: EnvironmentRecord | null,
+  armed: boolean,
+  canOwn: boolean
+): DestroyDataState & {
+  ready: boolean
+  options: DestroyDataOptions | undefined
+  refetch: () => void
+} {
+  const [checked, setChecked] = useState(false)
+  const [typedName, setTypedName] = useState('')
+  useEffect(() => {
+    if (armed) return
+    setChecked(false)
+    setTypedName('')
+  }, [armed])
+  const available = canOwn && environment != null
+  const wanted = available && armed && checked
+  const query = useEnvironmentDataVolumes(orgId, environment?.id ?? '', { enabled: wanted })
+  const expectedName = environment ? environmentConfirmName(environment) : ''
+  const ready = destroyConfirmReady({
+    deleteVolumes: wanted,
+    typedName,
+    expectedName,
+    // Never confirm against a list that is still being refreshed.
+    volumesLoaded: query.isSuccess && !query.isFetching,
+    outdatedServerCount: query.data?.outdatedServers.length ?? 0,
+  })
+  return {
+    available,
+    checked: wanted,
+    toggle: () => setChecked((current) => !current),
+    typedName,
+    setTypedName,
+    expectedName,
+    data: wanted ? query.data : undefined,
+    loading: wanted && query.isLoading,
+    error:
+      wanted && query.error ? userErrorMessage(query.error, 'Failed to load the volumes') : null,
+    ready,
+    options:
+      wanted && query.data
+        ? {
+            deleteVolumes: true,
+            confirmName: typedName,
+            volumeIds: query.data.volumes.map((volume) => volume.storageId),
+          }
+        : undefined,
+    refetch: () => {
+      ignorePromise(query.refetch())
+    },
+  }
+}
+
 function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const {
     orgId,
@@ -806,6 +885,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     invalidateEnvironments,
     isSystemProject,
     canManage,
+    canOwn,
     projectAllowsMutations,
   } = useProjectContext()
 
@@ -833,6 +913,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const deployEnvironmentMutation = useDeployEnvironment(orgId, selectedEnvironment?.id ?? '')
   const lifecycleMutation = useRunEnvironmentLifecycle(orgId, selectedEnvironment?.id ?? '')
   const stopEnvironmentMutation = useStopEnvironment(orgId, selectedEnvironment?.id ?? '')
+  const destroyData = useDestroyDataState(orgId, selectedEnvironment, destroyArmed, canOwn)
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
   const commandMetaRef = useRef(commandMeta)
   const refetchOneRef = useRef(containersQuery.refetchOne)
@@ -1045,8 +1126,10 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const handleDestroy = async () => {
     if (!selectedEnvironment) return
     setActionError(null)
-    const result = await stopEnvironmentMutation.run()
+    const result = await stopEnvironmentMutation.run(destroyData.options)
     if (!result.ok) {
+      // A refused data delete (changed list, older daemon) shows the list afresh.
+      if (destroyData.options) destroyData.refetch()
       if (stopEnvironmentMutation.actionError) {
         setActionError(stopEnvironmentMutation.actionError)
       }
@@ -1131,6 +1214,8 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     busy,
     destroyArmed,
     destroyBusy,
+    destroyReady: destroyData.ready,
+    destroyData,
     containerError,
     actionError,
     commandError,
@@ -1255,6 +1340,19 @@ export function EnvironmentLifecycleNotices() {
   return (
     <View style={styles.root}>
       {model.destroyArmed ? <Text style={styles.hintInline}>{DESTROY_ARMED_HINT}</Text> : null}
+      {model.destroyArmed && model.destroyData.available ? (
+        <DestroyDataChoice
+          checked={model.destroyData.checked}
+          onToggle={model.destroyData.toggle}
+          typedName={model.destroyData.typedName}
+          onTypedName={model.destroyData.setTypedName}
+          expectedName={model.destroyData.expectedName}
+          data={model.destroyData.data}
+          loading={model.destroyData.loading}
+          error={model.destroyData.error}
+          disabled={model.destroyBusy}
+        />
+      ) : null}
 
       <LifecycleErrorMessages
         containerError={model.containerError}

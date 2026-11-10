@@ -31,6 +31,8 @@ function isStepUpMethod(value: unknown): value is StepUpMethod {
 const ACTION_LABELS: Readonly<Record<string, string>> = {
   'project.delete': 'delete this project',
   'environment.delete': 'delete this environment',
+  'environment.stop': 'destroy this environment',
+  'environment.data.delete': 'destroy this environment and delete its data volumes',
   'server.delete': 'delete this server',
   'server.daemon_key.revoke': "revoke this server's key",
   'license.revoke': 'revoke this license key',

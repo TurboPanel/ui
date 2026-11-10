@@ -268,6 +268,9 @@ export const queryKeys = {
         /** What deleting the environment removes and keeps. */
         deletePreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'delete-preview'] as const,
+        /** The data volumes a Destroy can delete, and the ones it keeps. */
+        dataVolumes: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'data-volumes'] as const,
         deployPreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deploy-preview'] as const,
         /** Effective configuration and changes from the Base (no interval; invalidated by every config save). */

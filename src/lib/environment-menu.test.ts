@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   BUSY_REASON,
+  DESTROY_DELETE_VOLUMES_LABEL,
   DESTROY_EXPLANATION,
+  destroyConfirmNameHint,
+  destroyConfirmReady,
+  destroyOutdatedServersCopy,
+  destroyStaysOnCopy,
   LAST_ENVIRONMENT_REASON,
   PRIMARY_ENVIRONMENT_REASON,
   NO_LINUX_USER_REASON,
@@ -119,5 +124,41 @@ describe('destroy copy', () => {
   it('says what destroy keeps and what removes it', () => {
     expect(DESTROY_EXPLANATION).toContain('The environment and its settings stay')
     expect(DESTROY_EXPLANATION).toContain('Delete Environment')
+    // A plain Destroy keeps the registered data volumes.
+    expect(DESTROY_EXPLANATION).toContain('data volumes stay')
+    expect(DESTROY_DELETE_VOLUMES_LABEL).toBe('Also Delete the Data Volumes')
+  })
+
+  it('names the servers that need a daemon update', () => {
+    expect(destroyOutdatedServersCopy([])).toBeNull()
+    expect(destroyOutdatedServersCopy(['web-1', 'web-2'])).toBe(
+      'Update the daemon on web-1, web-2 before deleting data volumes.'
+    )
+    expect(destroyConfirmNameHint('staging')).toContain('Type staging')
+    expect(destroyStaysOnCopy([])).toBeNull()
+    expect(destroyStaysOnCopy(['old-web'])).toBe('A copy on old-web stays.')
+  })
+})
+
+describe('destroyConfirmReady', () => {
+  const ready = {
+    deleteVolumes: true,
+    typedName: 'staging',
+    expectedName: 'staging',
+    volumesLoaded: true,
+    outdatedServerCount: 0,
+  }
+
+  it('lets a plain Destroy through', () => {
+    expect(destroyConfirmReady({ ...ready, deleteVolumes: false, typedName: '' })).toBe(true)
+  })
+
+  it('needs the exact name, the list and current daemons to delete data', () => {
+    expect(destroyConfirmReady(ready)).toBe(true)
+    expect(destroyConfirmReady({ ...ready, typedName: 'Staging' })).toBe(false)
+    expect(destroyConfirmReady({ ...ready, typedName: 'staging ' })).toBe(false)
+    expect(destroyConfirmReady({ ...ready, volumesLoaded: false })).toBe(false)
+    expect(destroyConfirmReady({ ...ready, outdatedServerCount: 1 })).toBe(false)
+    expect(destroyConfirmReady({ ...ready, expectedName: '', typedName: '' })).toBe(false)
   })
 })
