@@ -16,7 +16,7 @@ import {
   useCreateEnvironment,
   useDeleteEnvironment,
   useEnvironments,
-  useStopEnvironmentMutation,
+  useLifecycleStopMutation,
   useUpdateEnvironment,
 } from '@/lib/queries'
 import type { EnvironmentRecord } from '@/lib/instance-api'
@@ -233,7 +233,8 @@ function useEnvironmentDeleteFlow(
   setError: (message: string | null) => void
 ) {
   const deleteEnvironment = useDeleteEnvironment(orgId)
-  const stopEnvironment = useStopEnvironmentMutation(orgId)
+  // The delete refusal asks for a stop, not a Destroy: stop the containers and keep everything.
+  const stopEnvironment = useLifecycleStopMutation(orgId)
   const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
   const [nameStep, setNameStep] = useState<{ error: string | null } | null>(null)
 

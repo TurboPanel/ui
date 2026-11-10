@@ -9647,11 +9647,64 @@ export async function cancelDeployment(
   )
 }
 
-export async function stopEnvironment(environmentId: string): Promise<CommandEnqueueResponse> {
+/**
+ * Destroy also deletes the data volumes: the environment name typed exactly.
+ * The control plane answers 400 `confirm_name_required` without it, 403 for
+ * someone who could not delete the environment, and 409
+ * `delete_volumes_needs_daemon_update` when a server runs an older daemon.
+ */
+export type DestroyDataOptions = {
+  deleteVolumes: true
+  confirmName: string
+  /** The storage ids the dialog showed; a list that changed since answers 409 `data_volumes_changed`. */
+  volumeIds: string[]
+}
+
+/**
+ * Destroy (`POST /environments/:id/stop`): removes the containers and keeps
+ * every registered data volume, unless `options` asks to delete them.
+ */
+export async function stopEnvironment(
+  environmentId: string,
+  options?: DestroyDataOptions
+): Promise<CommandEnqueueResponse> {
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/stop`, {
     method: 'POST',
-    body: JSON.stringify({}),
+    body: JSON.stringify(
+      options
+        ? { deleteVolumes: true, confirmName: options.confirmName, volumeIds: options.volumeIds }
+        : {}
+    ),
   })
+}
+
+/** A server, by the name people know it by. */
+export type NamedServer = { serverId: string; name: string }
+
+/** One registered Docker volume, by the name people know it by. */
+export type EnvironmentDataVolume = { storageId: string; name: string }
+
+/** A volume deleting data removes, and the servers where a copy stays (the Destroy does not go there). */
+export type RemovableEnvironmentDataVolume = EnvironmentDataVolume & { staysOn: NamedServer[] }
+
+/** A volume deleting data keeps, and why. */
+export type KeptEnvironmentDataVolume = EnvironmentDataVolume & {
+  reason: 'common' | 'shared' | 'external' | 'renamed'
+  message: string
+}
+
+/** `GET /environments/:id/data-volumes`: what "Also Delete the Data Volumes" removes and keeps. */
+export type EnvironmentDataVolumesResponse = {
+  volumes: RemovableEnvironmentDataVolume[]
+  kept: KeptEnvironmentDataVolume[]
+  /** Servers whose daemon must be updated before data can be deleted. */
+  outdatedServers: NamedServer[]
+}
+
+export async function fetchEnvironmentDataVolumes(
+  environmentId: string
+): Promise<EnvironmentDataVolumesResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/data-volumes`)
 }
 
 export type MetricsBackendKind = 'disabled' | 'analytics-engine' | 'duckdb'

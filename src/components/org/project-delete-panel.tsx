@@ -227,7 +227,7 @@ function projectDeleteWarning(managedProject: boolean): string {
   if (managedProject) {
     return 'This is permanent and cannot be undone. Destroying a database removes its containers and data volumes on the server, then deletes the project.'
   }
-  return 'This is permanent and cannot be undone. Deleting stops every environment, then removes its services, domains, variables and folders on your servers, and the Hosting Accounts nothing else uses. Volumes set to keep their data stay.'
+  return 'This is permanent and cannot be undone. Deleting stops every environment, then removes its services, domains, variables and folders on your servers, and the Hosting Accounts nothing else uses. Volume folders set to keep their data stay. Docker volumes stay on your servers; to delete them, Destroy each environment with Also Delete the Data Volumes first.'
 }
 
 function DeletePanelBody({
