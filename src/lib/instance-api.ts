@@ -6630,6 +6630,11 @@ export type PreparedKeysetStatement = {
   approverCredentialIds: string[]
   /** Credential ids of passkeys being marked: each must prove possession. */
   possessionCredentialIds: string[]
+  /**
+   * How many different marked passkeys approve: 2 for an emergency revoke
+   * (the old key cannot sign it), else 1. An older control plane omits it.
+   */
+  approvalsNeeded?: number
 }
 
 /** Superadmin, step-up. Builds the statement bytes and the WebAuthn challenge. */

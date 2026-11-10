@@ -6,8 +6,11 @@ import {
   checkPreparedStatement,
   readStatementFacts,
   assertionRequestOptions,
+  allowedForStep,
+  approveHint,
   assertionSteps,
   passkeyKindLabel,
+  SECOND_PASSKEY_MISSING,
   rotationLinkRequest,
   statementKindLabel,
 } from './key-rotation'
@@ -60,6 +63,39 @@ describe('key rotation ceremonies', () => {
       userVerification: 'required',
       timeout: 300_000,
     })
+  })
+
+  it('an emergency revoke asks two different marked passkeys, one after the other', () => {
+    const steps = assertionSteps(
+      prepared({ kind: 'revoke', approvalsNeeded: 2, approverCredentialIds: ['m1', 'm2'] })
+    )
+    expect(steps).toEqual([
+      { purpose: 'approve', allowCredentials: ['m1', 'm2'] },
+      { purpose: 'approve', allowCredentials: ['m1', 'm2'] },
+    ])
+    // The second ceremony leaves out the passkey that answered first.
+    expect(allowedForStep(steps[1]!, new Set(['m1']))).toEqual({
+      purpose: 'approve',
+      allowCredentials: ['m2'],
+    })
+    expect(() => allowedForStep(steps[1]!, new Set(['m1', 'm2']))).toThrow(SECOND_PASSKEY_MISSING)
+    // A proof of possession is never narrowed.
+    const proof = { purpose: 'possession', allowCredentials: ['n'] } as const
+    expect(allowedForStep(proof, new Set(['n']))).toBe(proof)
+  })
+
+  it('the approve line says how many passkeys the browser will ask for', () => {
+    expect(approveHint(prepared({ kind: 'revoke', approvalsNeeded: 2 }))).toContain(
+      'two different marked passkeys'
+    )
+    expect(approveHint(prepared({ kind: 'rotate' }))).toContain('a marked passkey.')
+    expect(approveHint(prepared())).toBe('Your browser asks for each passkey this change needs.')
+  })
+
+  it('an older control plane without approvalsNeeded gets one approval', () => {
+    expect(assertionSteps(prepared({ kind: 'revoke', approverCredentialIds: ['m1'] }))).toEqual([
+      { purpose: 'approve', allowCredentials: ['m1'] },
+    ])
   })
 
   it('an assertion becomes an approval, and an incomplete one is refused', () => {

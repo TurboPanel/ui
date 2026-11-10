@@ -20,6 +20,7 @@ import type {
 import { fetchKeysetStatement } from '@/lib/instance-api'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
+  approveHint,
   CANCEL_WAITING_HELP,
   HA_ROTATE_HELP,
   MARK_ONLY_OWN_HELP,
@@ -118,11 +119,7 @@ function PreparedChange({
       <FingerprintLine label="Key Set" value={String(prepared.keyset)} copy={false} />
       <FingerprintLine label="Current Key" value={prepared.oldFingerprint} />
       {keyChanges ? <FingerprintLine label="New Key" value={prepared.newFingerprint} /> : null}
-      <Text style={panelStyles.muted}>
-        {keyChanges
-          ? 'Check the new key before you approve. Your browser then asks for a marked passkey.'
-          : 'Your browser asks for each passkey this change needs.'}
-      </Text>
+      <Text style={panelStyles.muted}>{approveHint(prepared)}</Text>
       <ButtonRow>
         <Button
           label="Approve with Passkey"
