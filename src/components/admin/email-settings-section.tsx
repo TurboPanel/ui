@@ -20,6 +20,7 @@ import { useEmailSettings, useSaveEmailSettings } from '@/lib/queries/admin'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
+import { NO_AUTOFILL, secretAutoComplete } from '@/lib/field-autofill'
 
 function LockIcon() {
   return (
@@ -357,7 +358,7 @@ export function EmailSettingsSection() {
           placeholderTextColor={colors.textDim}
           autoCapitalize="none"
           autoCorrect={false}
-          autoComplete="off"
+          autoComplete={isSecret ? secretAutoComplete() : NO_AUTOFILL}
           secureTextEntry={isSecret}
           style={styles.input}
           editable={!saveMutation.isPending}

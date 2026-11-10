@@ -4,6 +4,7 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, ButtonRow, InlineNotice, SectionPanel, TextField } from '@/components/ui'
 import { useSetInstanceTunnelToken } from '@/lib/queries/admin'
 import { colors } from '@/lib/theme'
+import { secretAutoComplete } from '@/lib/field-autofill'
 
 /**
  * The pasted run token for a tunnel made by hand. Write-only: the control
@@ -53,6 +54,7 @@ export function TunnelTokenPanel() {
           setError(null)
         }}
         secureTextEntry
+        autoComplete={secretAutoComplete()}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!mutation.isPending}

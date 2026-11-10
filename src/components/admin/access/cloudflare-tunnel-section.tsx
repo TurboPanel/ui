@@ -21,6 +21,7 @@ import { useAddIngressAccount, useIngressAccounts } from '@/lib/queries/ingress'
 import { useInstanceHostnames } from '@/lib/queries/admin'
 import { colors, spacing } from '@/lib/theme'
 import { TUNNEL_PROVIDER_LABEL } from '@/lib/tunnel-status'
+import { NO_AUTOFILL, secretAutoComplete } from '@/lib/field-autofill'
 
 export const CONNECTOR_NOTICE =
   'The tunnel connector runs on the control plane host only. Other servers never receive the tunnel token.'
@@ -125,6 +126,7 @@ export function AddAccountForm() {
         label="Label"
         value={label}
         onChangeText={setLabel}
+        autoComplete={NO_AUTOFILL}
         editable={!mutation.isPending}
       />
       <TextField
@@ -136,6 +138,7 @@ export function AddAccountForm() {
           setAdded(false)
         }}
         secureTextEntry
+        autoComplete={secretAutoComplete()}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!mutation.isPending}

@@ -30,3 +30,32 @@ describe('TextField leading', () => {
     expect(JSON.parse(wrap.dataset.style ?? '{}')).not.toMatchObject({ flexDirection: 'row' })
   })
 })
+
+describe('TextField autofill', () => {
+  it('keeps the saved sign-in out of a secret box', () => {
+    render(<TextField label="Token" value="" accessibilityLabel="Token" secureTextEntry />)
+    const input = screen.getByLabelText('Token')
+    expect(input.getAttribute('type')).toBe('password')
+    expect(input.getAttribute('autocomplete')).toBe('new-password')
+  })
+
+  it("keeps the caller's own value", () => {
+    render(
+      <TextField
+        label="Password"
+        value=""
+        accessibilityLabel="Password"
+        secureTextEntry
+        autoComplete="current-password"
+      />
+    )
+    expect(screen.getByLabelText('Password').getAttribute('autocomplete')).toBe('current-password')
+  })
+
+  it('leaves a plain box alone', () => {
+    render(<TextField label="Name" value="" accessibilityLabel="Name" />)
+    const input = screen.getByLabelText('Name')
+    expect(input.getAttribute('type')).toBeNull()
+    expect(input.getAttribute('autocomplete')).toBeNull()
+  })
+})

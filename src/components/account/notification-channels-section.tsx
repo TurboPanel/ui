@@ -68,6 +68,7 @@ import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { useOrganizationsQuery } from '@/lib/queries/auth'
 import { useNotificationPreferencesQuery } from '@/lib/queries/notification-preferences'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { NO_AUTOFILL } from '@/lib/field-autofill'
 
 const KIND_OPTIONS: readonly SegmentedOption<NotificationChannelKind>[] =
   NOTIFICATION_CHANNEL_KINDS.map((value) => ({ value, label: KIND_LABEL[value] }))
@@ -462,6 +463,7 @@ function AddChannelForm({
         hint="How this channel is listed — “Ops Slack”, “my phone”."
         value={label}
         onChangeText={setLabel}
+        autoComplete={NO_AUTOFILL}
         editable={!create.isPending}
       />
       <TextField

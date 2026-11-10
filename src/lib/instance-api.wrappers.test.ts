@@ -24,6 +24,7 @@ import {
   resumeUpdates,
   saveUpgradeSettings,
   updateNotificationChannel,
+  ReleaseUnreachableError,
   UpdateCheckTooSoonError,
 } from './instance-api'
 
@@ -218,6 +219,17 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'check_too_soon' }, 429))
     const noWait = await checkForUpdates().catch((err: unknown) => err)
     expect((noWait as UpdateCheckTooSoonError).retryAfterSeconds).toBe(60)
+  })
+
+  it('Check Now with the release server unreachable throws the same refusal as Update Now', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'release_unreachable' }, 503))
+    const down = await checkForUpdates().catch((err: unknown) => err)
+    expect(down).toBeInstanceOf(ReleaseUnreachableError)
+    expect((down as Error).message).toContain('HTTP 503: release_unreachable')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'Database unavailable' }, 503))
+    const other = await checkForUpdates().catch((err: unknown) => err)
+    expect(other).not.toBeInstanceOf(ReleaseUnreachableError)
   })
 
   it('notification reads default missing fields and pass the paging params', async () => {

@@ -111,6 +111,9 @@ export const reactNativeStub = {
       ...aria(props),
       value: props.value as string | undefined,
       placeholder: props.placeholder as string | undefined,
+      // As React Native Web: a secure box is a password input, autoComplete is the attribute.
+      type: props.secureTextEntry === true && props.multiline !== true ? 'password' : undefined,
+      autoComplete: props.autoComplete as string | undefined,
       disabled: props.editable === false,
       onChange: (event: { target: { value: string } }) =>
         (props.onChangeText as ((text: string) => void) | undefined)?.(event.target.value),

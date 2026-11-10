@@ -1,5 +1,6 @@
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import {
+  ReleaseUnreachableError,
   UpdateCheckTooSoonError,
   UpdateNowRefusedError,
   type InstanceUpdates,
@@ -115,7 +116,7 @@ export const UPDATE_NOW_UP_TO_DATE = 'Already up to date.'
 /** Update Now refused because an update is already going. */
 export const UPDATE_NOW_RUN_ACTIVE = 'An update is already running.'
 
-/** Update Now could not reach the release server. */
+/** Update Now or Check Now could not reach the release server. */
 export const UPDATE_NOW_UNREACHABLE =
   'The release server could not be reached. Try again in a few minutes.'
 
@@ -168,7 +169,8 @@ export function updatesCadenceText(
 /**
  * Why Check Now did not run, in plain words, and when that line should go
  * away: a check too soon after the last one clears once the wait has passed;
- * any other error stays until the next try.
+ * an unreachable release server reads as it does for Update Now; any other
+ * error stays until the next try.
  */
 export function checkNowRefusal(
   err: unknown
@@ -179,6 +181,9 @@ export function checkNowRefusal(
       text: `Checked a moment ago. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`,
       clearAfterMs: seconds * 1000,
     }
+  }
+  if (err instanceof ReleaseUnreachableError) {
+    return { text: UPDATE_NOW_UNREACHABLE, clearAfterMs: null }
   }
   return { text: userErrorMessage(err, 'Could not check for updates'), clearAfterMs: null }
 }
