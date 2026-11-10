@@ -166,6 +166,15 @@ export function assertionSteps(prepared: PreparedKeysetStatement): AssertionStep
   return [...approvals, ...steps]
 }
 
+/** The line above Approve with Passkey: what the browser is about to ask for. */
+export function approveHint(prepared: PreparedKeysetStatement): string {
+  if (prepared.kind === 'passkeys') return 'Your browser asks for each passkey this change needs.'
+  if ((prepared.approvalsNeeded ?? 1) > 1) {
+    return 'Check the new key before you approve. Your browser then asks for two different marked passkeys, one after the other.'
+  }
+  return 'Check the new key before you approve. Your browser then asks for a marked passkey.'
+}
+
 export const SECOND_PASSKEY_MISSING =
   'An emergency revoke needs a second marked passkey, and no other one is left to ask. Mark another passkey first, or have its owner approve on this device.'
 export const SAME_PASSKEY_TWICE =

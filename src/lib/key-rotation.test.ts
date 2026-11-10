@@ -7,6 +7,7 @@ import {
   readStatementFacts,
   assertionRequestOptions,
   allowedForStep,
+  approveHint,
   assertionSteps,
   passkeyKindLabel,
   SECOND_PASSKEY_MISSING,
@@ -81,6 +82,14 @@ describe('key rotation ceremonies', () => {
     // A proof of possession is never narrowed.
     const proof = { purpose: 'possession', allowCredentials: ['n'] } as const
     expect(allowedForStep(proof, new Set(['n']))).toBe(proof)
+  })
+
+  it('the approve line says how many passkeys the browser will ask for', () => {
+    expect(approveHint(prepared({ kind: 'revoke', approvalsNeeded: 2 }))).toContain(
+      'two different marked passkeys'
+    )
+    expect(approveHint(prepared({ kind: 'rotate' }))).toContain('a marked passkey.')
+    expect(approveHint(prepared())).toBe('Your browser asks for each passkey this change needs.')
   })
 
   it('an older control plane without approvalsNeeded gets one approval', () => {
