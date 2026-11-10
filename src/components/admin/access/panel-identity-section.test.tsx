@@ -20,7 +20,11 @@ vi.mock('@/lib/auth-context', () => ({
 }))
 vi.mock('@/lib/queries/admin', () => ({
   useInstanceIdentity,
-  useSaveInstanceIdentityNext: () => ({ run: vi.fn(), isPending: false }),
+}))
+vi.mock('@/components/admin/access/key-rotation-panel', () => ({
+  KeyRotationPanel: ({ notRotatable }: { notRotatable: string[] }) => (
+    <section>{`Key Rotation Panel${notRotatable.length > 0 ? ` Not Rotatable Yet: ${notRotatable.join(', ')}` : ''}`}</section>
+  ),
 }))
 // The real components are React Native; only their text matters here.
 vi.mock('@/components/ui', () => {
@@ -93,37 +97,48 @@ function setup(data: InstanceIdentity | undefined, role = 'superadmin', runtime 
 describe('PanelIdentitySection', () => {
   afterEach(cleanup)
 
-  it('shows both fingerprints, the key set and the install address', () => {
+  it('shows the current and sealing fingerprints, the key set and the install address', () => {
     setup(identity())
     expect(screen.getByText(CURRENT)).toBeTruthy()
-    expect(screen.getByText(NEXT)).toBeTruthy()
+    expect(screen.queryByText(NEXT)).toBeNull()
     expect(screen.getByText(SEAL)).toBeTruthy()
     expect(screen.getByText('3')).toBeTruthy()
     expect(screen.getByText('https://cp.example.com')).toBeTruthy()
   })
 
-  it('says Not set when there is no next key', () => {
-    setup(identity({ next: null }))
-    expect(screen.getByText('Not set')).toBeTruthy()
-    expect(screen.queryByText('Clear Next Key')).toBeNull()
+  it('shows rotation passkeys to a superadmin on both runtimes, and no next key editor', () => {
+    for (const runtime of ['deno', 'workers']) {
+      setup(identity(), 'superadmin', runtime)
+      expect(screen.getByText(/Key Rotation Panel/)).toBeTruthy()
+      expect(screen.queryByText('Save Next Key')).toBeNull()
+      cleanup()
+    }
   })
 
-  it('lets a superadmin change the next key', () => {
-    setup(identity())
-    expect(screen.getByText('Save Next Key')).toBeTruthy()
-    expect(screen.getByText('Clear Next Key')).toBeTruthy()
-  })
-
-  it('hides the edit controls from another admin', () => {
+  it('hides rotation passkeys from another admin', () => {
     setup(identity(), 'admin')
-    expect(screen.queryByText('Save Next Key')).toBeNull()
+    expect(screen.queryByText(/Key Rotation Panel/)).toBeNull()
     expect(screen.getByText(/Only the superadmin can change these settings/)).toBeTruthy()
   })
 
-  it('hides the edit controls on High Availability', () => {
-    setup(identity(), 'superadmin', 'workers')
-    expect(screen.queryByText('Save Next Key')).toBeNull()
-    expect(screen.getByText(CURRENT)).toBeTruthy()
+  it('lists servers that have not learned the rotation passkeys', () => {
+    setup(
+      identity({
+        servers: [
+          { id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: 'install', pinPasskeys: '' },
+          {
+            id: 's2',
+            name: 'omicron',
+            organizationId: 'o1',
+            pinnedBy: 'install',
+            pinPasskeys: 'H'.repeat(43),
+          },
+          { id: 's3', name: 'lambda', organizationId: 'o1', pinnedBy: 'install' },
+          { id: 's4', name: 'sigma', organizationId: 'o1', pinnedBy: 'upgrade', pinPasskeys: null },
+        ],
+      })
+    )
+    expect(screen.getByText(/Not Rotatable Yet: kappa, sigma$/)).toBeTruthy()
   })
 
   it('warns about servers whose signed pin names another key, and only those', () => {

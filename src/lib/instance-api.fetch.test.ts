@@ -60,7 +60,11 @@ import {
   pingDaemon,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
   rebootServer,
-  saveInstanceIdentityNext,
+  approveKeysetStatement,
+  fetchKeyRotation,
+  cancelWaitingKeyChange,
+  fetchKeysetStatement,
+  prepareKeysetStatement,
   fetchSealedSecrets,
   clearServerSealingKey,
   resolveResourceId,
@@ -881,17 +885,33 @@ describe('instance-api fetch wrappers', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/admin/v1/instance/identity')
   })
 
-  it('saveInstanceIdentityNext puts the fingerprint, or null to clear it', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, next: null }))
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, next: null }))
-    await saveInstanceIdentityNext('N'.repeat(43))
-    await saveInstanceIdentityNext(null)
-    const [url, init] = fetchMock.mock.calls[0] ?? []
-    expect(String(url)).toContain('/api/admin/v1/instance/identity/next')
-    expect((init as RequestInit).method).toBe('PUT')
-    expect(JSON.parse(String((init as RequestInit).body))).toEqual({ fingerprint: 'N'.repeat(43) })
-    expect(JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body))).toEqual({
-      fingerprint: null,
+  it('a key change is prepared, approved, downloaded and cancelled on the identity routes', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, statement: 'AA', challenge: 'BB' }))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, keyset: 3, kind: 'rotate', state: 'live' })
+    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, runtime: 'deno', statements: [] }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ statement: 'AA', approvals: [] }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, keyset: 3, cancelled: true }))
+    await prepareKeysetStatement({ kind: 'passkeys', mark: ['pk-1'] })
+    await approveKeysetStatement({ statement: 'AA', approvals: [] })
+    await fetchKeyRotation()
+    await fetchKeysetStatement(3)
+    await cancelWaitingKeyChange(3)
+    const calls = fetchMock.mock.calls.map(([url, init]) => [
+      String(url).replace(/^.*\/api\/admin\/v1/, ''),
+      (init as RequestInit | undefined)?.method ?? 'GET',
+    ])
+    expect(calls).toEqual([
+      ['/instance/identity/statements/prepare', 'POST'],
+      ['/instance/identity/statements', 'POST'],
+      ['/instance/identity/rotation', 'GET'],
+      ['/instance/identity/statements/3', 'GET'],
+      ['/instance/identity/statements/3', 'DELETE'],
+    ])
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual({
+      kind: 'passkeys',
+      mark: ['pk-1'],
     })
   })
 

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { StepUpPasswordField } from '@/components/account/step-up-password-field'
 import {
+  Badge,
   Button,
   ButtonRow,
   DataTable,
@@ -33,6 +34,7 @@ import {
   passkeyDeviceLabel,
   passkeyDisplayName,
   resolvePasskeyName,
+  ROTATION_PASSKEY_DELETE_HELP,
 } from '@/lib/security-display'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -142,9 +144,12 @@ function PasskeyList({
     body = passkeys.map((passkey, index) => (
       <DataTableRow key={passkey.id} alt={index % 2 === 1} last={index === passkeys.length - 1}>
         <DataTableCell column={COLUMNS[0]}>
-          <Text style={styles.name} numberOfLines={1}>
-            {passkeyDisplayName(passkey)}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              {passkeyDisplayName(passkey)}
+            </Text>
+            {passkey.isRotation ? <Badge label="Rotation" tone="info" /> : null}
+          </View>
         </DataTableCell>
         <DataTableCell column={COLUMNS[1]}>
           <Text style={panelStyles.muted}>{passkeyDeviceLabel(passkey)}</Text>
@@ -153,7 +158,10 @@ function PasskeyList({
           <Text style={panelStyles.muted}>{passkeyCreatedLabel(passkey)}</Text>
         </DataTableCell>
         <DataTableCell column={COLUMNS[3]}>
-          {readOnly ? null : (
+          {passkey.isRotation && !readOnly ? (
+            <Text style={panelStyles.muted}>{ROTATION_PASSKEY_DELETE_HELP}</Text>
+          ) : null}
+          {readOnly || passkey.isRotation ? null : (
             <TypeNameDeleteButton
               label="Remove"
               thing="Passkey"
@@ -279,5 +287,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
     fontWeight: '600',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
 })
