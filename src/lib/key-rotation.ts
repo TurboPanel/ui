@@ -22,7 +22,7 @@ export const ROTATE_HELP =
   'Approving with a passkey lets every server trust the new key. The old key stops working on each server as soon as it sees this change.'
 
 export const REVOKE_HELP =
-  "Use this when the current key may be in someone else's hands. Servers drop the old key at once. Download the change for any server that cannot reach this control plane."
+  "Use this when the current key may be in someone else's hands. Servers drop the old key at once. The old key cannot sign this change, so two different marked passkeys approve it, one after the other in this browser. Download the change for any server that cannot reach this control plane."
 
 export const HA_ROTATE_HELP =
   'On High Availability the new key comes from the rotation command in your terminal. Run it, then open the link it prints and check that the new fingerprint matches.'
@@ -144,9 +144,11 @@ export type AssertionStep = Readonly<{
 }>
 
 /**
- * The ceremonies a prepared statement needs, in order: one approval from a
- * marked passkey (any of them), then one proof from each passkey being
- * marked. The first marks need only the proofs.
+ * The ceremonies a prepared statement needs, in order: approvals from marked
+ * passkeys (any of them; an emergency revoke needs two different ones), then
+ * one proof from each passkey being marked. The first marks need only the
+ * proofs. A later approval step leaves out the passkeys already used
+ * ({@link allowedForStep}).
  */
 export function assertionSteps(prepared: PreparedKeysetStatement): AssertionStep[] {
   const proving = new Set(prepared.possessionCredentialIds)
@@ -155,8 +157,29 @@ export function assertionSteps(prepared: PreparedKeysetStatement): AssertionStep
     purpose: 'possession',
     allowCredentials: [id],
   }))
-  if (approvers.length > 0) steps.unshift({ purpose: 'approve', allowCredentials: approvers })
-  return steps
+  if (approvers.length === 0) return steps
+  const needed = Math.max(1, prepared.approvalsNeeded ?? 1)
+  const approvals: AssertionStep[] = Array.from({ length: needed }, () => ({
+    purpose: 'approve',
+    allowCredentials: approvers,
+  }))
+  return [...approvals, ...steps]
+}
+
+export const SECOND_PASSKEY_MISSING =
+  'An emergency revoke needs a second marked passkey, and no other one is left to ask. Mark another passkey first, or have its owner approve on this device.'
+export const SAME_PASSKEY_TWICE =
+  'The same passkey answered twice. Approve with a different marked passkey.'
+
+/**
+ * The step with the passkeys already used in this approval left out, so the
+ * second approval of a revoke has to come from another passkey.
+ */
+export function allowedForStep(step: AssertionStep, used: ReadonlySet<string>): AssertionStep {
+  if (step.purpose !== 'approve') return step
+  const allowCredentials = step.allowCredentials.filter((id) => !used.has(id))
+  if (allowCredentials.length === 0) throw new TypeError(SECOND_PASSKEY_MISSING)
+  return { purpose: step.purpose, allowCredentials }
 }
 
 /** What `navigator.credentials.get` gets (base64url fields; the passkey client converts them). */
