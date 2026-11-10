@@ -88,10 +88,12 @@ import {
 } from '@/lib/issuance-settle'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import {
+  allowedForStep,
   approvalFromAssertion,
   assertionRequestOptions,
   assertionSteps,
   checkPreparedStatement,
+  SAME_PASSKEY_TWICE,
 } from '@/lib/key-rotation'
 import { loginWithPasskey } from '@/lib/passkey-client'
 import { PASSKEY_WEB_ONLY_NOTE } from '@/lib/passkey-client-types'
@@ -800,7 +802,8 @@ export function useCancelWaitingKeyChange() {
 
 /**
  * One ceremony after another (the browser shows one passkey prompt at a
- * time), each answer turned into an approval.
+ * time), each answer turned into an approval. A passkey that already answered
+ * is not offered again, and is refused if it answers again anyway.
  */
 function collectKeysetApprovals(
   prepared: PreparedKeysetStatement
@@ -808,9 +811,13 @@ function collectKeysetApprovals(
   return assertionSteps(prepared).reduce<Promise<KeysetApprovalPayload[]>>(
     async (earlier, step) => {
       const approvals = await earlier
-      const result = await loginWithPasskey(assertionRequestOptions(prepared, step))
+      const used = new Set(approvals.map((a) => a.credentialId))
+      const allowed = allowedForStep(step, used)
+      const result = await loginWithPasskey(assertionRequestOptions(prepared, allowed))
       if (!result.supported) throw new Error(PASSKEY_WEB_ONLY_NOTE)
-      return [...approvals, approvalFromAssertion(result.credential)]
+      const approval = approvalFromAssertion(result.credential)
+      if (used.has(approval.credentialId)) throw new TypeError(SAME_PASSKEY_TWICE)
+      return [...approvals, approval]
     },
     Promise.resolve([])
   )

@@ -184,6 +184,59 @@ describe('control plane identity hooks', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.instanceIdentity })
   })
 
+  it('an emergency revoke asks a second, different passkey and refuses the same one twice', async () => {
+    const assertion = (rawId: string) => ({
+      supported: true,
+      credential: {
+        rawId,
+        response: { authenticatorData: 'AD', clientDataJSON: 'CD', signature: 'SG' },
+      },
+    })
+    const revoke = {
+      ok: true as const,
+      statement: 'ST',
+      challenge: 'CH',
+      rpId: 'cp.example.com',
+      keyset: 5,
+      kind: 'revoke' as const,
+      oldFingerprint: 'O'.repeat(43),
+      newFingerprint: 'N'.repeat(43),
+      approverCredentialIds: ['m1', 'm2'],
+      possessionCredentialIds: [],
+      approvalsNeeded: 2,
+    }
+    loginWithPasskey.mockReset()
+    approveKeysetStatement.mockReset()
+    approveKeysetStatement.mockResolvedValue({ ok: true, keyset: 5, kind: 'revoke', state: 'live' })
+    loginWithPasskey.mockResolvedValueOnce(assertion('m2'))
+    loginWithPasskey.mockResolvedValueOnce(assertion('m1'))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useApproveKeysetStatement(), { wrapper })
+    await act(async () => {
+      await result.current.run(revoke)
+    })
+    expect(loginWithPasskey.mock.calls.map(([options]) => options.allowCredentials)).toEqual([
+      [
+        { id: 'm1', type: 'public-key' },
+        { id: 'm2', type: 'public-key' },
+      ],
+      [{ id: 'm1', type: 'public-key' }],
+    ])
+    expect(
+      approveKeysetStatement.mock.calls[0]?.[0].approvals.map(
+        (a: { credentialId: string }) => a.credentialId
+      )
+    ).toEqual(['m2', 'm1'])
+
+    approveKeysetStatement.mockClear()
+    loginWithPasskey.mockResolvedValueOnce(assertion('m1'))
+    loginWithPasskey.mockResolvedValueOnce(assertion('m1'))
+    const again = renderHook(() => useApproveKeysetStatement(), { wrapper })
+    const outcome = await act(async () => await again.result.current.run(revoke))
+    expect(outcome.ok).toBe(false)
+    expect(approveKeysetStatement).not.toHaveBeenCalled()
+  })
+
   it('useSealedSecrets reads the list under its key, and stays idle when disabled', async () => {
     fetchSealedSecrets.mockResolvedValue({ ok: true, receivingPlaintext: 0, servers: [] })
     const { queryClient, wrapper } = setup()

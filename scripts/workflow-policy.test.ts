@@ -124,6 +124,18 @@ describe('Verify concurrency', () => {
     )
   })
 
+  it('has no job named promote-ok, and every Promote OK call grants checks: write', () => {
+    // promote-ok is the check run the evaluation writes; a job with that name
+    // could end skipped, which passes a required check.
+    for (const file of ['promote-ok.yml', 'promote-ok-recheck.yml']) {
+      expect(text(file), file).not.toMatch(/^ {2}promote-ok:$/m)
+      expect(text(file), file).not.toMatch(/^ {4}name: promote-ok$/m)
+    }
+    for (const [file, name] of PROMOTE_OK_JOBS) {
+      expect(jobText(text(file), name), `${file} ${name}`).toContain('      checks: write\n')
+    }
+  })
+
   it('runs one Promote OK evaluation per PR head: a superseded head is never cancelled', () => {
     expect(text('promote-ok.yml')).toContain(
       [
