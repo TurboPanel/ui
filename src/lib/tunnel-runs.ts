@@ -516,9 +516,10 @@ export function rotationStoppedHint(
   names: ReadonlyMap<string, string>
 ): string {
   const old = (rotation.oldTokenServerIds ?? []).map((id) => nameOf(id, names))
+  const verb = old.length === 1 ? 'keeps' : 'keep'
   const stale =
     old.length > 0
-      ? ` Until then ${old.join(', ')} ${old.length === 1 ? 'keeps' : 'keep'} the old token, which cannot reconnect after a restart.`
+      ? ` Until then ${old.join(', ')} ${verb} the old token, which cannot reconnect after a restart.`
       : ''
   return rotation.resumesOnItsOwn
     ? `It carries on by itself once the server can be reached.${stale}`
