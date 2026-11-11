@@ -81,18 +81,22 @@ describe('reach editing', () => {
     ])
   })
 
-  it('limits the choice to one account once a name is chosen', () => {
+  it('refuses a name only when both name an account and the accounts differ', () => {
     const list = [
       { name: 'web', account: 'blog' },
       { name: 'api', account: 'blog' },
       { name: 'shop', account: 'store' },
       { name: 'bare', account: null },
+      { name: 'plain', account: null },
     ]
     expect(reachSelectable(list, [], 'shop')).toBe(true)
     expect(reachSelectable(list, ['web'], 'api')).toBe(true)
     expect(reachSelectable(list, ['web'], 'shop')).toBe(false)
-    expect(reachSelectable(list, ['web'], 'bare')).toBe(false)
     expect(reachSelectable(list, ['web'], 'web')).toBe(true)
+    // No alias means the service's own assigned account, which could be any.
+    expect(reachSelectable(list, ['web'], 'bare')).toBe(true)
+    expect(reachSelectable(list, ['bare'], 'shop')).toBe(true)
+    expect(reachSelectable(list, ['bare'], 'plain')).toBe(true)
     expect(reachSelectable(list, ['gone'], 'shop')).toBe(true)
   })
 

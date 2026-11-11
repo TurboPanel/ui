@@ -18,7 +18,7 @@ export const REACH_HINT =
   'Opens one container port on this server to the sites and apps you choose. They must all run as one Hosting Account. They get TURBOPANEL_HELPER variables with the host and port on the next deploy.'
 
 export const REACH_ONE_ACCOUNT_NOTE =
-  'A helper port opens to one Hosting Account, so once you choose one, only sites and apps of the same account can be added.'
+  "A helper port opens to one Hosting Account. Sites and apps that run as a different named account can't be added."
 
 const DIGITS = /^\d+$/
 
@@ -43,8 +43,11 @@ export function reachCandidates(
 }
 
 /**
- * A helper port opens to one Hosting Account, so once a name is chosen only
- * names under the same account can be added. A chosen name can always be cleared.
+ * A helper port opens to one Hosting Account. A service with a named account
+ * (`x-turbopanel.principal`) runs as that alias; one with none runs as its
+ * single assigned account, which could be any, so it is never refused here.
+ * A name is refused only when it and the first chosen name both name an
+ * account and the two differ. A chosen name can always be cleared.
  */
 export function reachSelectable(
   candidates: readonly ReachCandidate[],
@@ -54,8 +57,7 @@ export function reachSelectable(
   if (chosen.length === 0 || chosen.includes(name)) return true
   const first = candidates.find((candidate) => candidate.name === chosen[0])
   const wanted = candidates.find((candidate) => candidate.name === name)
-  // A chosen name that is no longer a site or app here has no account to compare.
-  if (first === undefined || wanted === undefined) return true
+  if (first?.account == null || wanted?.account == null) return true
   return first.account === wanted.account
 }
 

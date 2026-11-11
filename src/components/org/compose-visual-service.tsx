@@ -1536,7 +1536,7 @@ export function ComposeVisualServiceCard({
   nameDraft,
   saving,
   principalAliases = [],
-  reachableServices = [],
+  reachableServices,
   onDeclarePrincipalAlias,
   hideScheduledJobs = false,
   onNameDraftChange,
@@ -1933,7 +1933,7 @@ export function ComposeVisualServiceCard({
         </>
       ) : null}
 
-      {hostNative ? null : (
+      {hostNative || reachableServices === undefined ? null : (
         <ReachFields
           reach={extension.reach}
           services={reachableServices}

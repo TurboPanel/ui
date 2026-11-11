@@ -25,6 +25,7 @@ export function ComposeBasePanel({
   renderHostingEditor,
   renderReleasesPanel,
   extraPrincipalAliases,
+  hideReach,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
@@ -55,6 +56,8 @@ export function ComposeBasePanel({
    * `ComposeEditorSection`.
    */
   extraPrincipalAliases?: readonly string[]
+  /** Leave out the helper port fields (an environment layer lacks the Base's kinds and accounts). */
+  hideReach?: boolean
 }>) {
   return (
     <View style={styles.root}>
@@ -79,6 +82,7 @@ export function ComposeBasePanel({
         {...(renderHostingEditor ? { renderHostingEditor } : {})}
         {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
         {...(extraPrincipalAliases === undefined ? {} : { extraPrincipalAliases })}
+        {...(hideReach ? { hideReach } : {})}
       />
     </View>
   )

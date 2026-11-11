@@ -591,6 +591,7 @@ export function ComposeEditorSection({
   renderHostingEditor,
   renderReleasesPanel,
   extraPrincipalAliases,
+  hideReach = false,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
@@ -618,6 +619,11 @@ export function ComposeEditorSection({
    * be flagged.
    */
   extraPrincipalAliases?: readonly string[]
+  /**
+   * Leave out a container's helper port fields. An environment layer does not
+   * restate the Base's service kinds or accounts, so reach is edited on the Base.
+   */
+  hideReach?: boolean
   /**
    * When set (and a draft store is present), unsaved edits survive Overview /
    * Compose / Services route remounts for this scope key.
@@ -1191,7 +1197,7 @@ export function ComposeEditorSection({
         nameDraft={serviceNameDrafts[name] ?? name}
         saving={saving}
         principalAliases={principalAliases}
-        reachableServices={reachableServices}
+        {...(hideReach ? {} : { reachableServices })}
         {...(hideSave ? {} : { onDeclarePrincipalAlias: () => declarePrincipalAlias(name) })}
         // Only the create wizard hides Save; scheduled jobs wait until the
         // project exists.

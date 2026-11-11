@@ -37,6 +37,7 @@ const SERVICES = [
   { name: 'web', account: 'blog' },
   { name: 'api', account: 'blog' },
   { name: 'shop', account: 'store' },
+  { name: 'bare', account: null },
 ]
 
 function setup(reach?: { port: number; from: string[] }) {
@@ -82,8 +83,9 @@ describe('ReachFields', () => {
     const { box } = setup({ port: 80, from: ['web'] })
     expect(box('api').disabled).toBe(false)
     expect(box('shop').disabled).toBe(true)
+    expect(box('bare').disabled).toBe(false)
     expect(box('web').disabled).toBe(false)
-    expect(screen.getByText(/only sites and apps of the same account/)).toBeTruthy()
+    expect(screen.getByText(/different named account can't be added/)).toBeTruthy()
   })
 
   it('follows the document when the saved value changes', () => {
