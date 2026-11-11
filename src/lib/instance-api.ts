@@ -11239,6 +11239,116 @@ export async function deleteManagedUser(
   )
 }
 
+/** The admin tools the control plane can run for a Database Cluster. */
+export type ManagedAdminToolId = 'phpmyadmin' | 'adminer' | 'pgadmin'
+
+/** `admin` = Database Admin, `read-only` = Read-Only. */
+export type ManagedAdminToolAccess = 'admin' | 'read-only'
+
+/** One tool of a cluster (`GET …/managed/admin-tools`). Never carries a password. */
+export type ManagedAdminToolRecord = {
+  projectId: string
+  /** The tool's own environment; deploy this one after an add, reset or update. */
+  environmentId: string
+  /** The project name; the name typed to remove the tool. */
+  name: string
+  tool: ManagedAdminToolId
+  label: string
+  hostname: string
+  loginId: string
+  loginName: string
+  access: ManagedAdminToolAccess
+  image: string
+  latestImage: string
+  updateAvailable: boolean
+}
+
+/** The show-once values of an add (`POST …/managed/admin-tools`). */
+export type ManagedAdminToolCreated = {
+  ok: true
+  projectId: string
+  environmentId: string
+  loginName: string
+  loginPassword: string
+  /** pgAdmin only: the web sign-in account. */
+  webEmail?: string
+  webPassword?: string
+  notes?: string[]
+}
+
+/** The show-once values of a reset (`POST …/password`). */
+export type ManagedAdminToolReset = {
+  ok: true
+  loginName: string
+  loginPassword: string
+  webEmail?: string
+  webPassword?: string
+}
+
+export type ManagedAdminToolRemoved = {
+  ok: true
+  /** The tool is gone but the host refused to drop its login; remove it from the Users list. */
+  loginNotRemoved?: { name: string; reason: string }
+}
+
+export async function fetchManagedAdminTools(
+  environmentId: string
+): Promise<{ tools: ManagedAdminToolRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/admin-tools`)
+}
+
+/**
+ * Add a tool with its own login. Both returned passwords are **show-once**;
+ * deploy the returned `environmentId` next. Refusals: 400 `admin_tool_unknown`,
+ * `invalid_hostname`, `admin_tool_access_invalid`, `admin_tool_engine_mismatch`,
+ * `admin_tool_email_invalid`; 409 `admin_tool_needs_database`,
+ * `admin_tool_needs_daemon_update`, `admin_tool_hostname_in_use`,
+ * `hostname_in_use`, `managed_destroy_in_progress`.
+ */
+export async function createManagedAdminTool(
+  environmentId: string,
+  body: { tool: ManagedAdminToolId; hostname: string; access?: ManagedAdminToolAccess }
+): Promise<ManagedAdminToolCreated> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/managed/admin-tools`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** Reset the tool login (and pgAdmin's web password); show-once, then deploy the tool's environment. */
+export async function resetManagedAdminToolPassword(
+  environmentId: string,
+  projectId: string
+): Promise<ManagedAdminToolReset> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/admin-tools/${encodeURIComponent(projectId)}/password`,
+    { method: 'POST', body: JSON.stringify({}) }
+  )
+}
+
+/** Move a tool to the current pinned image; deploy the returned environment next. */
+export async function updateManagedAdminTool(
+  environmentId: string,
+  projectId: string
+): Promise<{ ok: true; environmentId: string }> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/admin-tools/${encodeURIComponent(projectId)}/update`,
+    { method: 'POST', body: JSON.stringify({}) }
+  )
+}
+
+/** `confirmName` is the tool's project name as typed (400 `confirm_name_required` without it). */
+export async function removeManagedAdminTool(
+  environmentId: string,
+  projectId: string,
+  confirmName: string
+): Promise<ManagedAdminToolRemoved> {
+  return await apiFetch(
+    `${CLIENT_API}/environments/${environmentId}/managed/admin-tools/${encodeURIComponent(projectId)}${confirmNameQuery(confirmName)}`,
+    { method: 'DELETE' }
+  )
+}
+
 /** `GET …/managed/backup-login`: the cluster's one backup login, or `null`. */
 export async function fetchManagedBackupLogin(
   environmentId: string

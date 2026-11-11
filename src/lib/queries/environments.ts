@@ -181,6 +181,23 @@ export function useDeployEnvironment(orgId: string, environmentId: string) {
   })
 }
 
+/**
+ * Deploy any environment by id: the admin tool cards deploy a different
+ * environment each, so the id is the call's variable, not the hook's.
+ */
+export function useDeployEnvironmentById(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (environmentId: string) => deployEnvironment(environmentId),
+    onSuccess: async (_result, environmentId) => {
+      await invalidateEnvironmentSubtree(queryClient, orgId, environmentId)
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).commands.all,
+      })
+    },
+  })
+}
+
 /** The data volumes a Destroy can delete; only fetched while the choice is shown. */
 export function useEnvironmentDataVolumes(
   orgId: string,

@@ -1,5 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  AdminToolResetPointer,
+  UsedByAdminToolBadge,
+} from '@/components/org/managed/managed-admin-tool-login'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import {
   AppLoginsButton,
@@ -265,7 +269,10 @@ export function ManagedUsersPanel({
   onReload,
   onCreateAppLogins,
   allDatabasesOff = null,
+  adminToolLoginIds,
 }: Readonly<{
+  /** Logins an admin tool of this cluster signs in with: badged, and reset from the tool's card. */
+  adminToolLoginIds?: ReadonlySet<string>
   /** Which All Databases switch is off, if any; the chip is then disabled. */
   allDatabasesOff?: 'organization' | 'cluster' | null
   orgId: string
@@ -638,6 +645,7 @@ export function ManagedUsersPanel({
                 <LoginDatabaseChips user={user} />
               </View>
               <LoginModeBadges user={user} />
+              <UsedByAdminToolBadge loginId={user.id} adminToolLoginIds={adminToolLoginIds} />
               <LoginAdminBadge user={user} />
               <LoginLimitBadges user={user} />
               <Text style={panelStyles.muted}>
@@ -720,14 +728,18 @@ export function ManagedUsersPanel({
               ) : null}
               {canManage ? (
                 <ButtonRow>
-                  <Button
-                    label="Rotate password"
-                    size="sm"
-                    disabled={disabled}
-                    onPress={() => {
-                      void rotateUser(user.id, user.appliedUsername)
-                    }}
-                  />
+                  {adminToolLoginIds?.has(user.id) ? (
+                    <AdminToolResetPointer />
+                  ) : (
+                    <Button
+                      label="Rotate password"
+                      size="sm"
+                      disabled={disabled}
+                      onPress={() => {
+                        void rotateUser(user.id, user.appliedUsername)
+                      }}
+                    />
+                  )}
                   {deleteBlocked ? (
                     <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
                   ) : (
