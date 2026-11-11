@@ -146,8 +146,8 @@ export function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsRe
       // value instead would freeze it against later org-default changes.
       ssl: form.sslMode ? { mode: form.sslMode } : {},
       engineConfig: form.engineConfig.trim() || undefined,
-      // Sent only when on: the control plane reads a missing key as off.
-      ...(form.allowAllDatabasesLogins ? { allowAllDatabasesLogins: true } : {}),
+      // Always sent: the control plane merges settings, so a missing key would keep a stored true.
+      allowAllDatabasesLogins: form.allowAllDatabasesLogins,
       dockerOptions: {
         restart: form.restart,
         stopGracePeriodSeconds: parseOptionalNumber(form.stopGrace),

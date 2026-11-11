@@ -126,12 +126,12 @@ describe('Base image while the database runs', () => {
 })
 
 describe('All Databases switch in the settings form', () => {
-  it('carries the switch and sends it only when on', async () => {
+  it('carries the switch and always sends it', async () => {
     const { settingsToForm, buildManagedSettingsPayload } = await import('./managed-settings-panel')
     const off = settingsToForm({ ssl: {} }, 'img')
     expect(off.allowAllDatabasesLogins).toBe(false)
     const offResult = buildManagedSettingsPayload(off)
-    expect(offResult.ok && 'allowAllDatabasesLogins' in offResult.settings).toBe(false)
+    expect(offResult.ok && offResult.settings.allowAllDatabasesLogins).toBe(false)
     const on = settingsToForm({ ssl: {}, allowAllDatabasesLogins: true }, 'img')
     expect(on.allowAllDatabasesLogins).toBe(true)
     const onResult = buildManagedSettingsPayload(on)

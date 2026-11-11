@@ -124,6 +124,11 @@ export function LoginAllDatabasesEditor({
         />
       </SettingRow>
       {reason ? <Text style={panelStyles.muted}>{reason}</Text> : null}
+      {!on && user.databases.length === 0 ? (
+        <Text style={panelStyles.muted}>
+          This login will have no databases until you pick some.
+        </Text>
+      ) : null}
     </>
   )
 }
