@@ -604,6 +604,7 @@ export function ManagedEnvironmentReadyPanels({
           orgId={orgId}
           environmentId={environmentId}
           engine={managed.engine}
+          serverId={managed.serverId}
           rootUsername={detail.rootUsername}
           allDatabasesOff={allDatabasesOffSwitch(detail.allowAllDatabasesLogins)}
           databases={databases}
@@ -731,6 +732,7 @@ function ManagedDataPanels({
   orgId,
   environmentId,
   engine,
+  serverId,
   rootUsername,
   allDatabasesOff,
   databases,
@@ -750,6 +752,7 @@ function ManagedDataPanels({
   orgId: string
   environmentId: string
   engine: string | null
+  serverId: string | null
   rootUsername: string | null
   allDatabasesOff: 'organization' | 'cluster' | null
   databases: string[]
@@ -868,6 +871,7 @@ function ManagedDataPanels({
       <ManagedAdminToolsPanel
         orgId={orgId}
         environmentId={environmentId}
+        serverId={serverId}
         engine={engine}
         tools={adminTools?.tools}
         canManage={canManage}

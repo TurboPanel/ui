@@ -13,7 +13,7 @@ import {
   adminToolReveal,
   type AdminToolReveal,
 } from '@/lib/managed-admin-tools'
-import { useDeployEnvironmentById, useEnvironment } from '@/lib/queries/environments'
+import { useDeployEnvironmentById } from '@/lib/queries/environments'
 import {
   useCreateManagedAdminTool,
   useRemoveManagedAdminTool,
@@ -26,11 +26,9 @@ import { spacing } from '@/lib/theme'
 /** A new or reset password on screen, and the environment to deploy once it is closed. */
 type Reveal = Readonly<{ values: AdminToolReveal; environmentId: string }>
 
-/** The name of the server the cluster runs on, for "point this name at …"; `null` while unknown. */
-function useClusterServerName(orgId: string, environmentId: string): string | null {
-  const environment = useEnvironment(orgId, environmentId)
+/** The name of the cluster's primary server, for "point this name at …"; `null` while unknown. */
+function useClusterServerName(orgId: string, serverId: string | null): string | null {
   const servers = useOrgServers(orgId)
-  const serverId = environment.data?.environment.serverId
   const server = servers.data?.servers?.find((row) => row.id === serverId)
   return server?.name?.trim() || null
 }
@@ -105,6 +103,7 @@ function useAdminToolActions(
 export function ManagedAdminToolsPanel({
   orgId,
   environmentId,
+  serverId,
   engine,
   tools,
   canManage,
@@ -112,6 +111,8 @@ export function ManagedAdminToolsPanel({
 }: Readonly<{
   orgId: string
   environmentId: string
+  /** The cluster's primary server: the one the tool runs on. */
+  serverId: string | null
   engine: string | null
   tools: readonly ManagedAdminToolRecord[] | null | undefined
   canManage: boolean
@@ -122,7 +123,7 @@ export function ManagedAdminToolsPanel({
   const [error, setError] = useState<string | null>(null)
   // The show-once password lives only here, until Continue.
   const [reveal, setReveal] = useState<Reveal | null>(null)
-  const serverName = useClusterServerName(orgId, environmentId)
+  const serverName = useClusterServerName(orgId, serverId)
   const actions = useAdminToolActions(orgId, environmentId, setReveal, setError)
 
   if (!tools) return null

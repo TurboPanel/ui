@@ -29,7 +29,6 @@ vi.mock('@/lib/queries/managed', () => ({
 }))
 vi.mock('@/lib/queries/environments', () => ({
   useDeployEnvironmentById: () => ({ run: mocks.deploy }),
-  useEnvironment: () => ({ data: { environment: { serverId: 's1' } } }),
 }))
 vi.mock('@/lib/queries/servers', () => ({
   useOrgServers: () => ({ data: { servers: [{ id: 's1', name: 'omicron' }] } }),
@@ -164,6 +163,7 @@ function renderPanel(props: Partial<Parameters<typeof ManagedAdminToolsPanel>[0]
     <ManagedAdminToolsPanel
       orgId="o1"
       environmentId="e1"
+      serverId="s1"
       engine="mysql"
       tools={[]}
       canManage
