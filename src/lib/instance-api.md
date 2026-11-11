@@ -120,6 +120,7 @@ Authorization helpers:
 - `fetchBackupRuns(environmentId, policyId, limit?)` → `GET …/managed/backup-policies/:policyId/runs` — `{ runs: BackupRunRecord[] }`, newest first (default 20, max 100)
 - Backup policy refusals: `backup_policy_invalid` (+ `field`, `detail`), `backup_schedule_invalid`, `backup_timezone_invalid`, `backup_target_unsupported`, `managed_backup_unsupported`, `backup_policy_not_found`. `apiFetch` keeps only the code in the thrown message; `backupPolicyErrorMessage` (`src/lib/backup-policies.ts`) maps it to plain copy. `reconcile.failedServerIds` non-empty means the save stuck but the host catches up on reconnect (`backupReconcileNotice`)
 - Types/helpers in `src/lib/managed-services.ts` (`ManagedStatus`, `ManagedSettings`, `ManagedBackupRecord`, `managedErrorMessage`, `shortBackupChecksum`, …)
+- Variable refs in Compose values and the editor: `{$KEY}`, `{$scope.KEY}` and `{$db.<binding>.<field>}` (binding is the connection key prefix; fields `host port name user password url ca_file ca_text ssl_mode driver read_split`). The grammar mirror is `src/lib/compose/variable-refs.ts`; the control plane resolves it at deploy.
 - `fetchVariables(parentFilter)` → `GET /api/client/v1/variables?...` — `VariableParentFilter` includes `organizationId` / `workspaceId` / `projectId` / `environmentId` / `serviceId` / `hostingId` / `serverId`
 - `fetchVariable(id)` → `GET /api/client/v1/variables/:id`
 - `createVariable(body)` → `POST /api/client/v1/variables` (exactly one parent scope key)
