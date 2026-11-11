@@ -75,7 +75,7 @@ describe('words and bodies', () => {
     expect(hostnameHint('omicron')).toBe(
       'Point this name at omicron before you deploy, like any site.'
     )
-    expect(hostnameHint(null)).toContain("this Database Cluster's server")
+    expect(hostnameHint()).toContain("this Database Cluster's server")
   })
 
   it('sends the hostname trimmed and lowercase with an explicit access', () => {

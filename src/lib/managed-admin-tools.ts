@@ -68,9 +68,8 @@ export function adminToolAccessLabel(access: ManagedAdminToolAccess): string {
 }
 
 /** The line under the hostname field. */
-export function hostnameHint(serverName: string | null): string {
-  const target = serverName ?? "this Database Cluster's server"
-  return `Point this name at ${target} before you deploy, like any site.`
+export function hostnameHint(serverName = "this Database Cluster's server"): string {
+  return `Point this name at ${serverName} before you deploy, like any site.`
 }
 
 /** What the show-once panel prints for a new or reset tool. */

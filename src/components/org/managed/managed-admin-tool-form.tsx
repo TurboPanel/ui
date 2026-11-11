@@ -51,7 +51,7 @@ export function AddAdminToolForm({
         value={hostname}
         onChangeText={setHostname}
         placeholder="db-admin.example.com"
-        hint={hostnameHint(serverName)}
+        hint={hostnameHint(serverName ?? undefined)}
         autoCapitalize="none"
         autoCorrect={false}
         editable={!busy}

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import {
-  AdminToolResetPointer,
+  LoginRotateControl,
   UsedByAdminToolBadge,
 } from '@/components/org/managed/managed-admin-tool-login'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
@@ -728,18 +728,14 @@ export function ManagedUsersPanel({
               ) : null}
               {canManage ? (
                 <ButtonRow>
-                  {adminToolLoginIds?.has(user.id) ? (
-                    <AdminToolResetPointer />
-                  ) : (
-                    <Button
-                      label="Rotate password"
-                      size="sm"
-                      disabled={disabled}
-                      onPress={() => {
-                        void rotateUser(user.id, user.appliedUsername)
-                      }}
-                    />
-                  )}
+                  <LoginRotateControl
+                    loginId={user.id}
+                    adminToolLoginIds={adminToolLoginIds}
+                    disabled={disabled}
+                    onRotate={() => {
+                      void rotateUser(user.id, user.appliedUsername)
+                    }}
+                  />
                   {deleteBlocked ? (
                     <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
                   ) : (
