@@ -76,6 +76,7 @@ export function principalUsageLines(usage: Partial<PrincipalUsage>): string[] {
     ),
     countLine(usage.secrets ?? 0, 'secret belongs to it', 'secrets belong to it'),
     countLine(usage.logins ?? 0, 'database login', 'database logins'),
+    countLine(usage.caches ?? 0, 'project cache runs as it', 'project caches run as it'),
     countLine(usage.folders ?? 0, 'folder is owned by it', 'folders are owned by it'),
     countLine(usage.otherPlacements ?? 0, 'other server has it', 'other servers have it'),
   ].filter((line): line is string => line !== null)

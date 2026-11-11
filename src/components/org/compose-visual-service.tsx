@@ -2,6 +2,8 @@ import { createElement, useEffect, useState, type ComponentProps, type CSSProper
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { CronFields } from '@/components/org/compose-cron-fields'
+import { ReachFields } from '@/components/org/compose-reach-fields'
+import type { ReachCandidate } from '@/lib/compose/reach'
 import { DockerfileEditor } from '@/components/org/dockerfile-editor'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { repositoryLabel } from '@/lib/repository-label'
@@ -1534,6 +1536,7 @@ export function ComposeVisualServiceCard({
   nameDraft,
   saving,
   principalAliases = [],
+  reachableServices,
   onDeclarePrincipalAlias,
   hideScheduledJobs = false,
   onNameDraftChange,
@@ -1548,6 +1551,8 @@ export function ComposeVisualServiceCard({
   saving: boolean
   /** Aliases the document's root declares, in document order. */
   principalAliases?: readonly string[]
+  /** Names of the sites and Node apps in the document, for a container's helper port. */
+  reachableServices?: readonly ReachCandidate[]
   /**
    * Declare a brand-new alias at the root and return the name it got.
    *
@@ -1927,6 +1932,15 @@ export function ComposeVisualServiceCard({
           />
         </>
       ) : null}
+
+      {hostNative || reachableServices === undefined ? null : (
+        <ReachFields
+          reach={extension.reach}
+          services={reachableServices}
+          disabled={saving}
+          onChange={(reach) => applyExtension({ reach })}
+        />
+      )}
 
       {showImageFields ? (
         <ImageRefFields

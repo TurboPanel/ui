@@ -245,6 +245,12 @@ export type ComposeServiceExtensionFields = {
    */
   cron?: ComposeServiceCronJob[]
   /**
+   * A container's helper port: the container port, and the sites or Node apps
+   * that may reach it. The host publishes it on `127.0.0.1` and opens it to one
+   * Hosting Account only. Container-only. Mirrors the instance type.
+   */
+  reach?: ComposeServiceReachExtension
+  /**
    * The account this host-native service runs as, named by **alias**.
    *
    * The value is a key in the sibling root `x-turbopanel.principals` map — a
@@ -288,6 +294,37 @@ type CommonServiceExtensionFields = Pick<
   'serviceKind' | 'description' | 'source' | 'hosting'
 >
 
+/** `x-turbopanel.reach`: the container port, and the sites or apps that may reach it. */
+export type ComposeServiceReachExtension = { port: number; from: string[] }
+
+/** Most services one reach port names. Mirrors the instance. */
+export const MAX_REACH_FROM = 8
+
+const REACH_FROM_NAME_RE = /^[A-Za-z0-9._-]+$/
+
+/** True for `{ port: 1-65535, from: 1-8 service names }` and nothing else. Mirrors the instance. */
+export function isValidReachValue(value: unknown): boolean {
+  if (!isPlainMapping(value)) return false
+  const { port, from } = value
+  if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) return false
+  if (!Array.isArray(from) || from.length < 1 || from.length > MAX_REACH_FROM) return false
+  const names = new Set<string>()
+  for (const name of from) {
+    if (typeof name !== 'string' || !REACH_FROM_NAME_RE.test(name) || names.has(name)) return false
+    names.add(name)
+  }
+  return true
+}
+
+function parseServiceReach(value: unknown): ComposeServiceReachExtension | undefined {
+  if (!isValidReachValue(value)) return undefined
+  const { port, from } = value as { port: number; from: string[] }
+  return { port, from: [...from] }
+}
+
+/** Container-only fields: a helper port opened to one account. */
+type ContainerOnlyExtensionField = 'reach'
+
 /** Site-only fields: how the content is served, and what serves it. */
 type SiteOnlyExtensionField = 'engine' | 'root' | 'sourceKind' | 'php'
 
@@ -323,13 +360,14 @@ type NotForThisKind<Field extends keyof ComposeServiceExtensionFields> = {
 /** The default kind. Runs from an image; everything host-native is off-limits. */
 export type ComposeContainerServiceExtension = CommonServiceExtensionFields & {
   serviceKind?: 'container'
-} & NotForThisKind<SiteOnlyExtensionField | NodeOnlyExtensionField | HostNativeExtensionField>
+} & Pick<ComposeServiceExtensionFields, ContainerOnlyExtensionField> &
+  NotForThisKind<SiteOnlyExtensionField | NodeOnlyExtensionField | HostNativeExtensionField>
 
 /** Served by a host engine out of a document root. */
 export type ComposeSiteServiceExtension = CommonServiceExtensionFields & {
   serviceKind: 'site'
 } & Pick<ComposeServiceExtensionFields, SiteOnlyExtensionField | HostNativeExtensionField> &
-  NotForThisKind<NodeOnlyExtensionField>
+  NotForThisKind<NodeOnlyExtensionField | ContainerOnlyExtensionField>
 
 /**
  * A supervised host process built from Git. `source` is **required**, not
@@ -343,7 +381,7 @@ export type ComposeNodeServiceExtension = Omit<
     ComposeServiceExtensionFields,
     NodeOnlyExtensionField | HostNativeExtensionField
   > &
-  NotForThisKind<SiteOnlyExtensionField>
+  NotForThisKind<SiteOnlyExtensionField | ContainerOnlyExtensionField>
 
 /**
  * The per-service `x-turbopanel` block, narrowed by `serviceKind`. Mirrors the
@@ -379,6 +417,7 @@ const SITE_KIND_ONLY: readonly ComposeServiceKind[] = ['site']
 const NODE_KIND_ONLY: readonly ComposeServiceKind[] = ['node']
 /** Both host-native kinds — the set {@link isHostNativeServiceKind} names. */
 const HOST_NATIVE_KINDS: readonly ComposeServiceKind[] = ['site', 'node']
+const CONTAINER_KIND_ONLY: readonly ComposeServiceKind[] = ['container']
 
 const SERVICE_EXTENSION_FIELDS: Readonly<Record<string, ServiceExtensionFieldRule>> = {
   serviceKind: {
@@ -403,6 +442,11 @@ const SERVICE_EXTENSION_FIELDS: Readonly<Record<string, ServiceExtensionFieldRul
   sourceKind: { kinds: SITE_KIND_ONLY },
   php: { kinds: SITE_KIND_ONLY },
   cron: { kinds: HOST_NATIVE_KINDS },
+  reach: {
+    kinds: CONTAINER_KIND_ONLY,
+    typeMessage:
+      'reach must be { port: 1-65535, from: [1 to 8 site or Node app names] }, with no repeated name',
+  },
   principal: {
     kinds: HOST_NATIVE_KINDS,
     typeMessage:
@@ -851,6 +895,7 @@ export function parseServiceTurbopanelExtension(
     root: readBoundedString(value.root, Number.POSITIVE_INFINITY),
     sourceKind: readSiteSourceKind(value.sourceKind),
     cron: parseServiceCronJobs(value.cron) ?? undefined,
+    reach: parseServiceReach(value.reach),
     // Shape-only, like every other reader here. Whether the alias *resolves* is
     // a question about the document as a whole, so the linter answers it
     // (`knownPrincipalAliases`).
@@ -1035,6 +1080,7 @@ export function patchServiceTurbopanelExtension(
     source: next.source ? { ...next.source } : undefined,
     php: next.php && Object.keys(next.php).length > 0 ? { ...next.php } : undefined,
     cron: next.cron && next.cron.length > 0 ? next.cron.map((job) => ({ ...job })) : undefined,
+    reach: next.reach ? { port: next.reach.port, from: [...next.reach.from] } : undefined,
     hosting:
       next.hosting && next.hosting.length > 0
         ? next.hosting.map((entry) => ({ ...entry }))

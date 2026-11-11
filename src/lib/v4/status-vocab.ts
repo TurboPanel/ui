@@ -84,6 +84,8 @@ export const STATUS = {
   provisioning: { label: 'Provisioning', glyph: 'spinner', tone: 'busy' },
   applying: { label: 'Applying', glyph: 'spinner', tone: 'busy' },
   dbfailed: { label: 'Failed', glyph: 'diamond', tone: 'bad' },
+  // A project cache saved but not yet started by a deploy
+  cachewaiting: { label: 'Waiting for Deploy', glyph: 'dotted', tone: 'busy' },
 } as const satisfies Record<string, StatusInfo>
 
 export type StatusKey = keyof typeof STATUS

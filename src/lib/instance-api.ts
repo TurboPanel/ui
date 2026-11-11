@@ -1085,6 +1085,7 @@ export type ServerRemovalReasonKind =
   | 'environment'
   | 'managed'
   | 'replica'
+  | 'cache'
   | 'deployment'
   | 'slot'
   | 'copy'
@@ -2407,7 +2408,7 @@ export async function applyOrgFabric(orgId: string): Promise<FabricApplyResponse
   })
 }
 
-export type ServerDeleteBlockerKind = 'network' | 'container' | 'ip'
+export type ServerDeleteBlockerKind = 'network' | 'container' | 'ip' | 'cache'
 
 export type { ServerDeleteBlocker } from '@/lib/server-delete-blockers'
 
@@ -2656,6 +2657,8 @@ export type PrincipalUsage = Readonly<{
   storages: number
   secrets: number
   logins: number
+  /** Project caches that run as it. */
+  caches: number
   folders: number
   otherPlacements: number
 }>
@@ -4699,6 +4702,110 @@ export async function fetchProjectDeletePreview(projectId: string): Promise<Dele
 
 export async function fetchEnvironmentDeletePreview(environmentId: string): Promise<DeletePlan> {
   return await apiFetch(`${CLIENT_API}/environments/${environmentId}/delete-preview`)
+}
+
+// --- Project caches (`/environments/:id/caches`) -----------------------------
+
+/** `pending` waits for the next deploy; `applying` is the host starting it. */
+export type CacheStatus = 'pending' | 'applying' | 'ready' | 'stopped' | 'failed'
+
+/** `socket`: a private socket only the Hosting Account reaches. `port`: a loopback port opened to it. */
+export type CacheAccess = 'socket' | 'port'
+
+/**
+ * One project cache: a Valkey process run as a Hosting Account. The login
+ * password is never returned; `variables` lists the names its sites and apps get.
+ */
+export type CacheRecord = Readonly<{
+  id: string
+  name: string
+  engine: string
+  /** Engine series, such as `8.1`. */
+  version: string
+  status: CacheStatus
+  access: CacheAccess
+  /** Loopback port; set only for `port` access. */
+  port: number | null
+  maxMemoryMb: number
+  /** Prefix of the variable names, `REDIS` by default. */
+  keyPrefix: string
+  principalId: string
+  /** The Hosting Account's name. */
+  hostingAccount: string
+  serverId: string
+  variables: readonly string[]
+  runtimeVersion: string | null
+  lastError: string | null
+  appliedAt: string | null
+  createdAt: string
+}>
+
+export type CreateCacheBody = Readonly<{
+  name: string
+  principalId: string
+  access?: CacheAccess
+  maxMemoryMb?: number
+  keyPrefix?: string
+}>
+
+/** Only these can change; an empty body is refused with 400 `invalid_request`. */
+export type UpdateCacheBody = Readonly<{
+  access?: CacheAccess
+  maxMemoryMb?: number
+  keyPrefix?: string
+}>
+
+/** `applied` says whether the host was asked to start or change it. */
+export type CacheWriteResponse = Readonly<{
+  ok: true
+  cache: CacheRecord | null
+  applied: boolean
+}>
+
+/** `record_only`: the host is offline, so only the record went. */
+export type CacheRemoveResponse = Readonly<{
+  ok: true
+  removed: 'host' | 'record_only'
+  applied?: boolean
+}>
+
+export async function fetchEnvironmentCaches(
+  environmentId: string
+): Promise<{ caches: CacheRecord[] }> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/caches`)
+}
+
+export async function createEnvironmentCache(
+  environmentId: string,
+  body: CreateCacheBody
+): Promise<CacheWriteResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/caches`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function updateEnvironmentCache(
+  environmentId: string,
+  cacheId: string,
+  body: UpdateCacheBody
+): Promise<CacheWriteResponse> {
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/caches/${cacheId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+
+/** The cached data goes with it unless `deleteData` is false. */
+export async function deleteEnvironmentCache(
+  environmentId: string,
+  cacheId: string,
+  options?: Readonly<{ deleteData?: boolean }>
+): Promise<CacheRemoveResponse> {
+  const query = options?.deleteData === false ? '?deleteData=false' : ''
+  return await apiFetch(`${CLIENT_API}/environments/${environmentId}/caches/${cacheId}${query}`, {
+    method: 'DELETE',
+  })
 }
 
 /** `confirmName` is the project's name as typed; the control plane answers 400 `confirm_name_required` without it. */

@@ -43,12 +43,8 @@ describe('server delete blockers', () => {
         hasDatabase: false,
       },
     ]
-    expect(serverBlockerQuotedNames(items, 0)).toBe(
-      '"Acme / a", "Acme / b" and "Beta / c"'
-    )
-    expect(serverBlockerQuotedNames(items, 2)).toBe(
-      '"Acme / a", "Acme / b", "Beta / c" and 2 more'
-    )
+    expect(serverBlockerQuotedNames(items, 0)).toBe('"Acme / a", "Acme / b" and "Beta / c"')
+    expect(serverBlockerQuotedNames(items, 2)).toBe('"Acme / a", "Acme / b", "Beta / c" and 2 more')
     expect(
       formatServerDeleteBlocker({
         kind: 'environment',
@@ -81,9 +77,38 @@ describe('server delete blockers', () => {
       formatServerDeleteBlocker({
         kind: 'replica',
         count: 2,
-        items: [{ id: 'db-1', name: 'orders' }, { id: 'db-2', name: 'catalog' }],
+        items: [
+          { id: 'db-1', name: 'orders' },
+          { id: 'db-2', name: 'catalog' },
+        ],
       })
     ).toBe('Databases "orders" and "catalog" still have members on this server.')
+  })
+
+  it('names project caches from items and counts them without', () => {
+    expect(
+      formatServerDeleteBlocker({
+        kind: 'cache',
+        count: 2,
+        items: [
+          { id: 'c-1', name: 'sessions' },
+          { id: 'c-2', name: 'queue' },
+        ],
+      })
+    ).toBe('Remove the caches "sessions" and "queue" on this server first.')
+    expect(
+      formatServerDeleteBlocker({
+        kind: 'cache',
+        count: 1,
+        items: [{ id: 'c-1', name: 'sessions' }],
+      })
+    ).toBe('Remove the cache "sessions" on this server first.')
+    expect(formatServerDeleteBlocker({ kind: 'cache', count: 1 })).toBe(
+      'Remove 1 project cache on this server before deleting it.'
+    )
+    expect(formatServerDeleteBlocker({ kind: 'cache', count: 3 })).toBe(
+      'Remove 3 project caches on this server before deleting it.'
+    )
   })
 
   it('parses environment and database items from wire JSON', () => {

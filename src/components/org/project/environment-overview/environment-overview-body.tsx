@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useRouter, type Href } from 'expo-router'
 import { View } from 'react-native'
+import { CachesSection } from '@/components/org/project/caches/caches-section'
 import { CrashNotices } from '@/components/org/project/environment-overview/crash-notices'
-import { CrashSheet, type CrashRetry } from '@/components/org/project/environment-overview/crash-sheet'
+import {
+  CrashSheet,
+  type CrashRetry,
+} from '@/components/org/project/environment-overview/crash-sheet'
 import { DeploymentsSection } from '@/components/org/project/environment-overview/deployments-section'
 import { MapSection } from '@/components/org/project/environment-overview/map-section'
 import { ProblemNoticeCard } from '@/components/org/project/environment-overview/problem-notice'
@@ -38,9 +42,12 @@ function stationHref(ids: OverviewIds, source: OverviewSource): StationHref {
   const records = recordIds(source)
   const { orgId, projectId, environmentId } = ids
   return (target) => {
-    if (target.kind === 'domain') return projectEnvironmentHostingHref(orgId, projectId, environmentId)
-    if (target.kind === 'volume') return projectEnvironmentStorageHref(orgId, projectId, environmentId)
-    if (target.id.startsWith('db:')) return projectEnvironmentBindingsHref(orgId, projectId, environmentId)
+    if (target.kind === 'domain')
+      return projectEnvironmentHostingHref(orgId, projectId, environmentId)
+    if (target.kind === 'volume')
+      return projectEnvironmentStorageHref(orgId, projectId, environmentId)
+    if (target.id.startsWith('db:'))
+      return projectEnvironmentBindingsHref(orgId, projectId, environmentId)
     const recordId = records.get(target.id)
     return recordId === undefined
       ? null
@@ -56,8 +63,10 @@ function rowHrefs(ids: OverviewIds): RowHrefs {
         ? null
         : projectEnvironmentServiceHref(orgId, projectId, environmentId, recordId),
     data: (row) => {
-      if (row.kind === 'volume') return projectEnvironmentStorageHref(orgId, projectId, environmentId)
-      if (row.kind === 'database') return projectEnvironmentBindingsHref(orgId, projectId, environmentId)
+      if (row.kind === 'volume')
+        return projectEnvironmentStorageHref(orgId, projectId, environmentId)
+      if (row.kind === 'database')
+        return projectEnvironmentBindingsHref(orgId, projectId, environmentId)
       return row.recordId === undefined
         ? null
         : projectEnvironmentServiceHref(orgId, projectId, environmentId, row.recordId)
@@ -123,13 +132,24 @@ export function EnvironmentOverviewBody({
       )}
       <CrashNotices crashes={crashes} onOpen={setOpen} />
       <MapSection source={source} hrefFor={hrefFor} />
-      <ServicesSection apps={apps} data={data} hrefs={hrefs} troubled={crashes} onTroubled={setOpen} />
+      <ServicesSection
+        apps={apps}
+        data={data}
+        hrefs={hrefs}
+        troubled={crashes}
+        onTroubled={setOpen}
+      />
+      <CachesSection />
       <RelationCard
         relation={relation}
         changesHref={configurationHref}
         settingsHref={projectEnvironmentSettingsHref(orgId, projectId, environmentId)}
       />
-      <DeploymentsSection rows={deploys} envName={source.envName} deploymentsHref={deploymentsHref} />
+      <DeploymentsSection
+        rows={deploys}
+        envName={source.envName}
+        deploymentsHref={deploymentsHref}
+      />
       {openCrash === undefined ? null : (
         <CrashSheet
           info={openCrash}
