@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   ButtonRow,
+  ConfirmButton,
   LoadingState,
   MonoText,
   TextField,
@@ -103,13 +104,12 @@ function ExistingRecords({
       ))}
       <Text style={panelStyles.muted}>{DNS_REPLACE_NOTE}</Text>
       <ButtonRow>
-        <Button
+        <ConfirmButton
           label={records.length === 1 ? 'Replace Record' : 'Replace Records'}
-          variant="danger"
-          size="sm"
+          confirmLabel="Replace"
+          prompt={`Replace ${records.length === 1 ? 'this record' : 'these records'} for ${hostname}?`}
           busy={busy}
-          onPress={onReplace}
-          accessibilityLabel={`Replace the DNS records of ${hostname} and add it to the tunnel`}
+          onConfirm={onReplace}
         />
         <Button label="Cancel" size="sm" disabled={busy} onPress={onCancel} />
       </ButtonRow>
