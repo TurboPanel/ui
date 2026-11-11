@@ -12,7 +12,8 @@ export const POST_DEPLOY_SHARED_HELP =
 
 export const POST_DEPLOY_TIMING_HELP: Record<PostDeployTiming, string> = {
   'before-traffic': 'A failing command stops the deploy and the current release keeps serving.',
-  'after-switch': 'A failing command marks the deploy failed and offers a one-click rollback.',
+  'after-switch':
+    'A failing command marks the deploy failed while the new release keeps serving. Roll back from the deploy history if needed.',
 }
 
 export const WORKERS_HELP =

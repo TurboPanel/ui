@@ -286,21 +286,23 @@ export function ServiceSettingsPanel({
         />
       </View>
 
-      <View style={styles.field}>
-        <Text style={styles.label}>Post-deploy command</Text>
-        <TextInput
-          style={fieldInputStyle(true)}
-          value={postDeploy}
-          onChangeText={setPostDeploy}
-          placeholder="Runs after compose up"
-          placeholderTextColor={colors.textDim}
-          multiline
-          numberOfLines={3}
-          editable={canManage && !saving}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </View>
+      {isSite ? null : (
+        <View style={styles.field}>
+          <Text style={styles.label}>Post-deploy command</Text>
+          <TextInput
+            style={fieldInputStyle(true)}
+            value={postDeploy}
+            onChangeText={setPostDeploy}
+            placeholder="Runs after compose up"
+            placeholderTextColor={colors.textDim}
+            multiline
+            numberOfLines={3}
+            editable={canManage && !saving}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+      )}
 
       {isSite ? (
         <PhpAppSettings

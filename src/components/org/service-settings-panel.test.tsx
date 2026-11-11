@@ -142,7 +142,7 @@ describe('ServiceSettingsPanel PHP App section', () => {
     })
     fireEvent.change(screen.getByLabelText('Timeout (Seconds)'), { target: { value: '120' } })
     fireEvent.click(screen.getByText('Right after the switch'))
-    expect(screen.getByText(/offers a one-click rollback/)).toBeTruthy()
+    expect(screen.getByText(/new release keeps serving/)).toBeTruthy()
     fireEvent.click(screen.getByText('Add Worker'))
     fireEvent.click(screen.getByText('Add Worker'))
     expect(screen.getAllByLabelText('Name')).toHaveLength(2)
@@ -172,6 +172,15 @@ describe('ServiceSettingsPanel PHP App section', () => {
     fireEvent.change(screen.getByLabelText('Timeout (Seconds)'), { target: { value: '5' } })
     fireEvent.click(screen.getByText('Save service settings'))
     expect(await screen.findByText(/from 30 to 1800/)).toBeTruthy()
+  })
+
+  it('hides the older post-deploy command on a site and keeps it elsewhere', () => {
+    mount()
+    expect(screen.queryByText('Post-deploy command')).toBeNull()
+    cleanup()
+    state.kind = 'container'
+    mount()
+    expect(screen.getByText('Post-deploy command')).toBeTruthy()
   })
 
   it('keeps stored commands when saving a service that is not a site', async () => {
