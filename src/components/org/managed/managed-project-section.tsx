@@ -23,6 +23,7 @@ import {
 } from '@/components/org/managed/managed-settings-panel'
 import { ManagedStatusPanel } from '@/components/org/managed/managed-status-panel'
 import { allDatabasesOffSwitch } from '@/components/org/managed/managed-login-databases'
+import { ManagedAdminToolsPanel } from '@/components/org/managed/managed-admin-tools-panel'
 import { ManagedUsersPanel } from '@/components/org/managed/managed-users-panel'
 import {
   defaultManagedVersionSelection,
@@ -70,6 +71,7 @@ import {
   useDeleteManagedDatabase,
   useDeleteManagedUser,
   useEnvironmentManaged,
+  useManagedAdminTools,
   useManagedBackups,
   useManagedDatabases,
   useManagedStatus,
@@ -89,7 +91,7 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useCallback, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
@@ -602,6 +604,7 @@ export function ManagedEnvironmentReadyPanels({
           orgId={orgId}
           environmentId={environmentId}
           engine={managed.engine}
+          serverId={managed.serverId}
           rootUsername={detail.rootUsername}
           allDatabasesOff={allDatabasesOffSwitch(detail.allowAllDatabasesLogins)}
           databases={databases}
@@ -729,6 +732,7 @@ function ManagedDataPanels({
   orgId,
   environmentId,
   engine,
+  serverId,
   rootUsername,
   allDatabasesOff,
   databases,
@@ -748,6 +752,7 @@ function ManagedDataPanels({
   orgId: string
   environmentId: string
   engine: string | null
+  serverId: string | null
   rootUsername: string | null
   allDatabasesOff: 'organization' | 'cluster' | null
   databases: string[]
@@ -766,6 +771,11 @@ function ManagedDataPanels({
 }>) {
   const updateUserMutation = useUpdateManagedUser(orgId, environmentId)
   const appLoginsMutation = useCreateManagedAppLogins(orgId, environmentId)
+  const adminTools = useManagedAdminTools(orgId, environmentId).data
+  const adminToolLoginIds = useMemo(
+    () => new Set((adminTools?.tools ?? []).map((tool) => tool.loginId)),
+    [adminTools]
+  )
   return (
     <>
       <ManagedCredentialsPanel
@@ -850,12 +860,22 @@ function ManagedDataPanels({
           await Promise.all([usersQuery.refetch(), databasesQuery.refetch()])
         }}
         allDatabasesOff={allDatabasesOff}
+        adminToolLoginIds={adminToolLoginIds}
         onCreateAppLogins={async (databaseName, body) => {
           const result = await appLoginsMutation.run({ databaseName, body })
           if (!result.ok) throw new Error(result.error ?? 'Failed to add the app logins')
           registerCommand(result.value.commandId, 'Add app logins')
           return { logins: result.value.logins, notes: result.value.notes }
         }}
+      />
+      <ManagedAdminToolsPanel
+        orgId={orgId}
+        environmentId={environmentId}
+        serverId={serverId}
+        engine={engine}
+        tools={adminTools?.tools}
+        canManage={canManage}
+        busy={inFlight}
       />
       <ManagedBackupLoginSection
         orgId={orgId}

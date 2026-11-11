@@ -403,6 +403,9 @@ export const queryKeys = {
         /** Under `users`, so every invalidation of the logins refreshes it too. */
         backupLogin: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'users', 'backup-login'] as const,
+        /** Under `users`, so deleting or changing a tool's login from the Users list refreshes the tools too. */
+        adminTools: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'users', 'admin-tools'] as const,
         databases: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'databases'] as const,
         backups: (environmentId: string) =>
