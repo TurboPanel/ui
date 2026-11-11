@@ -290,7 +290,7 @@ describe('managedErrorMessage', () => {
     )
     expect(
       managedErrorMessage(new Error('HTTP 409: binding_engine_defaults_in_use'), 'fallback')
-    ).toContain('engine default keys')
+    ).toContain('sets these names')
     expect(managedErrorMessage(new Error('HTTP 409: binding_key_conflict'), 'fallback')).toContain(
       'variable key'
     )
