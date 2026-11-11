@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import {
   addTunnelHostname,
+  confirmedDnsRecords,
   createTunnel,
   deleteTunnel,
   fetchExistingOriginCertificates,
@@ -12,6 +13,8 @@ import {
   setServerTunnelCarrying,
   setTunnelVerifyOrigin,
   TunnelDnsRecordExistsError,
+  tunnelDnsRefusal,
+  TunnelDnsReplaceIncompleteError,
   updateTunnelPlacement,
 } from './instance-api'
 
@@ -159,12 +162,54 @@ describe('instance-api tunnel wrappers', () => {
     expect((refused as TunnelDnsRecordExistsError).hostname).toBe('app.example.com')
     await addTunnelHostname('org-1', 't1', {
       hostname: 'app.example.com',
-      replaceDnsRecords: ['rec-a'],
+      replaceDnsRecords: confirmedDnsRecords(records),
     })
     expect(JSON.parse(String(lastCall().init.body))).toEqual({
       hostname: 'app.example.com',
-      replaceDnsRecords: ['rec-a'],
+      replaceDnsRecords: [{ id: 'rec-a', type: 'A', content: '192.0.2.10' }],
     })
+    expect((refused as TunnelDnsRecordExistsError).replaceable).toBe(true)
+  })
+
+  it('reads replaceable: false as records that are only listed', () => {
+    const refused = tunnelDnsRefusal(409, {
+      error: 'dns_record_exists',
+      message: 'Remove them at your DNS provider first.',
+      hostname: 'app.example.com',
+      records: [{ id: 'rec-a', type: 'A', content: '192.0.2.10', proxied: false }],
+      replaceable: false,
+    })
+    expect(refused).toBeInstanceOf(TunnelDnsRecordExistsError)
+    expect((refused as TunnelDnsRecordExistsError).replaceable).toBe(false)
+  })
+
+  it('reads a partial replacement as the records it already removed', async () => {
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse(
+        {
+          error: 'dns_replace_incomplete',
+          message: 'The DNS records for app.example.com were only partly replaced.',
+          hostname: 'app.example.com',
+          removedRecords: [
+            { type: 'AAAA', content: '2001:db8::10', proxied: false },
+            { content: 'no type' },
+          ],
+        },
+        502
+      )
+    )
+    const refused = await addTunnelHostname('org-1', 't1', {
+      hostname: 'app.example.com',
+      replaceDnsRecords: [{ id: 'rec-6', type: 'AAAA', content: '2001:db8::10' }],
+    }).catch((err: unknown) => err)
+    expect(refused).toBeInstanceOf(TunnelDnsReplaceIncompleteError)
+    const incomplete = refused as TunnelDnsReplaceIncompleteError
+    expect(incomplete.hostname).toBe('app.example.com')
+    expect(incomplete.message).toContain('only partly replaced')
+    expect(incomplete.removedRecords).toEqual([
+      { type: 'AAAA', content: '2001:db8::10', proxied: false },
+    ])
+    expect(tunnelDnsRefusal(502, { error: 'provider_unavailable' })).toBeNull()
   })
 
   it('any other refusal of an added hostname stays a plain error with its code', async () => {

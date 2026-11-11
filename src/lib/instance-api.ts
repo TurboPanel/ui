@@ -13065,19 +13065,55 @@ export async function fetchTunnelHostnames(
 export type ExistingDnsRecord = { id: string; type: string; content: string; proxied: boolean }
 
 /**
+ * A record the person agreed to replace, sent back exactly as it was shown.
+ * The control plane compares id, type and content, so a record edited since is
+ * refused again instead of being replaced.
+ */
+export type ConfirmedDnsRecord = { id: string; type: string; content: string }
+
+/** The confirmation for a list of records, as `replaceDnsRecords` carries it. */
+export function confirmedDnsRecords(records: readonly ExistingDnsRecord[]): ConfirmedDnsRecord[] {
+  return records.map(({ id, type, content }) => ({ id, type, content }))
+}
+
+/**
  * **409** `dns_record_exists`: the name already has A, AAAA or CNAME records.
  * Nothing was stored or changed. Adding again with `replaceDnsRecords` set to
- * exactly these ids replaces them with the Tunnel's DNS name.
+ * exactly these records replaces them with the Tunnel's DNS name. `replaceable`
+ * is false when there are too many to replace here (they are removed at the
+ * DNS provider instead); an older control plane does not send it.
  */
 export class TunnelDnsRecordExistsError extends Error {
   readonly code = 'dns_record_exists'
   readonly hostname: string
   readonly records: ExistingDnsRecord[]
-  constructor(message: string, hostname: string, records: ExistingDnsRecord[]) {
+  readonly replaceable: boolean
+  constructor(message: string, hostname: string, records: ExistingDnsRecord[], replaceable = true) {
     super(message)
     this.name = 'TunnelDnsRecordExistsError'
     this.hostname = hostname
     this.records = records
+    this.replaceable = replaceable
+  }
+}
+
+/** A record removed during a replacement that then failed. */
+export type RemovedDnsRecord = { type: string; content: string; proxied: boolean }
+
+/**
+ * **502** `dns_replace_incomplete`: a replacement failed after some records were
+ * already deleted. The hostname was not added; `removedRecords` names what is
+ * gone so it can be added back at the DNS provider.
+ */
+export class TunnelDnsReplaceIncompleteError extends Error {
+  readonly code = 'dns_replace_incomplete'
+  readonly hostname: string
+  readonly removedRecords: RemovedDnsRecord[]
+  constructor(message: string, hostname: string, removedRecords: RemovedDnsRecord[]) {
+    super(message)
+    this.name = 'TunnelDnsReplaceIncompleteError'
+    this.hostname = hostname
+    this.removedRecords = removedRecords
   }
 }
 
@@ -13097,29 +13133,56 @@ function readDnsRecords(value: unknown): ExistingDnsRecord[] {
   })
 }
 
-/** The typed error for a `dns_record_exists` answer, or null for any other. */
+function readRemovedRecords(value: unknown): RemovedDnsRecord[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item: unknown) => {
+    const r = item as Record<string, unknown> | null
+    if (!r || typeof r.type !== 'string') return []
+    return [
+      {
+        type: r.type,
+        content: typeof r.content === 'string' ? r.content : '',
+        proxied: r.proxied === true,
+      },
+    ]
+  })
+}
+
+/** The typed error for a `dns_record_exists` or `dns_replace_incomplete` answer, or null for any other. */
 export function tunnelDnsRefusal(
   status: number,
   body: Readonly<Record<string, unknown>>
 ): Error | null {
+  const hostname = typeof body.hostname === 'string' ? body.hostname : ''
+  if (status === 502 && body.error === 'dns_replace_incomplete') {
+    return new TunnelDnsReplaceIncompleteError(
+      typeof body.message === 'string'
+        ? body.message
+        : 'The DNS records were only partly replaced.',
+      hostname,
+      readRemovedRecords(body.removedRecords)
+    )
+  }
   if (status !== 409 || body.error !== 'dns_record_exists') return null
   const records = readDnsRecords(body.records)
   if (records.length === 0) return null
   return new TunnelDnsRecordExistsError(
     typeof body.message === 'string' ? body.message : 'The name already has DNS records.',
-    typeof body.hostname === 'string' ? body.hostname : '',
-    records
+    hostname,
+    records,
+    body.replaceable !== false
   )
 }
 
 /**
  * **409** `hostname_in_use`, `doorway_limit`, `badge_cannot_dns`, `tunnel_not_ready`,
- * `dns_record_exists` ({@link TunnelDnsRecordExistsError}).
+ * `dns_record_exists` ({@link TunnelDnsRecordExistsError}); **502**
+ * `dns_replace_incomplete` ({@link TunnelDnsReplaceIncompleteError}).
  */
 export async function addTunnelHostname(
   orgId: string,
   tunnelId: string,
-  body: { hostname: string; isLocalOnly?: boolean; replaceDnsRecords?: string[] }
+  body: { hostname: string; isLocalOnly?: boolean; replaceDnsRecords?: ConfirmedDnsRecord[] }
 ): Promise<{ hostname: TunnelHostnameRecord }> {
   return await apiFetch(
     `${tunnelsPath(orgId)}/${tunnelId}/hostnames`,
