@@ -231,6 +231,22 @@ function PasswordsPanel({
   )
 }
 
+/** The databases part of a create request: every database, or the picked list. */
+function loginDatabasesBody(allDatabases: boolean, selected: string[]) {
+  return allDatabases ? { allDatabases: true } : { databases: selected }
+}
+
+function LoginDatabaseChips({ user }: Readonly<{ user: ManagedUserRecord }>) {
+  if (user.allDatabases) return <Chip label="All databases" />
+  return (
+    <>
+      {user.databases.map((db) => (
+        <Chip key={db} label={db} />
+      ))}
+    </>
+  )
+}
+
 export function ManagedUsersPanel({
   orgId,
   environmentId,
@@ -297,7 +313,7 @@ export function ManagedUsersPanel({
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
-  const [allDatabasesChoice, setAllDatabases] = useState(false)
+  const [allDatabasesChoice, setAllDatabasesChoice] = useState(false)
   const allDatabases = allDatabasesChoice && !allDatabasesOff
   const [job, setJob] = useState<LoginJob>(initial.job)
   const [grantMode, setGrantMode] = useState<LoginMode>(initial.grantMode)
@@ -426,7 +442,7 @@ export function ManagedUsersPanel({
     try {
       const result = await onCreateUser({
         username: trimmed,
-        ...(allDatabases ? { allDatabases: true } : { databases: selectedDbs }),
+        ...loginDatabasesBody(allDatabases, selectedDbs),
         privileges: [admin ? MANAGED_ADMIN_PRIVILEGE : job],
         connectionRole: admin ? 'read-write' : jobConnectionRole(job),
         grantMode,
@@ -619,11 +635,7 @@ export function ManagedUsersPanel({
                 {principalNamesLabel(user.username, user.appliedUsername)}
               </Text>
               <View style={styles.chipRow}>
-                {user.allDatabases ? (
-                  <Chip label="All databases" />
-                ) : (
-                  user.databases.map((db) => <Chip key={db} label={db} />)
-                )}
+                <LoginDatabaseChips user={user} />
               </View>
               <LoginModeBadges user={user} />
               <LoginAdminBadge user={user} />
@@ -754,7 +766,7 @@ export function ManagedUsersPanel({
           <Text style={panelStyles.detailLabel}>Databases</Text>
           <AllDatabasesChip
             selected={allDatabases}
-            onToggle={() => setAllDatabases(!allDatabasesChoice)}
+            onToggle={() => setAllDatabasesChoice(!allDatabasesChoice)}
             disabled={disabled}
             offReason={allDatabasesOffReason(allDatabasesOff)}
           />
