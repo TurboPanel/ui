@@ -37,6 +37,7 @@ import {
   mergeComposeOverlay,
   normalizeCompose,
   readComposeEditorView,
+  readServiceTurbopanelExtension,
   restoreComposeTurbopanelExtensions,
   setComposeEditorView,
   stripComposePlacement,
@@ -45,6 +46,7 @@ import {
   type ComposeEditorView,
   type ComposeLintIssue,
 } from '@/lib/compose'
+import { reachableServiceNames } from '@/lib/compose/reach'
 import {
   readComposeNetworks,
   writeComposeNetworks,
@@ -1170,6 +1172,15 @@ export function ComposeEditorSection({
     }
   }, [hideHeader, tab, yaml, draft])
 
+  const reachableServices = useMemo(() => {
+    const services = servicesFrom(draft)
+    const kinds: Record<string, string | undefined> = {}
+    for (const [name, service] of Object.entries(services)) {
+      kinds[name] = readServiceTurbopanelExtension(service)?.serviceKind
+    }
+    return reachableServiceNames(kinds)
+  }, [draft])
+
   /** One service's compose fields — shared by the card list and the document. */
   const serviceCard = (name: string) => {
     const service = servicesFrom(draft)[name]
@@ -1180,6 +1191,7 @@ export function ComposeEditorSection({
         nameDraft={serviceNameDrafts[name] ?? name}
         saving={saving}
         principalAliases={principalAliases}
+        reachableServices={reachableServices}
         {...(hideSave ? {} : { onDeclarePrincipalAlias: () => declarePrincipalAlias(name) })}
         // Only the create wizard hides Save; scheduled jobs wait until the
         // project exists.

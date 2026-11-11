@@ -5,6 +5,7 @@ export type ServerRemovalReasonKind =
   | 'environment'
   | 'managed'
   | 'replica'
+  | 'cache'
   | 'deployment'
   | 'slot'
   | 'copy'
@@ -37,22 +38,25 @@ export type ServerBlockerItem = ServerBlockerEnvironmentItem | ServerBlockerData
 /** How many names a blocker sentence spells out before "and N more". */
 export const SERVER_BLOCKER_MESSAGE_NAME_LIMIT = 3
 
-const NAMED_BLOCKER_COPY: Partial<
-  Record<ServerRemovalReasonKind, { one: string; many: string }>
-> = {
-  environment: {
-    one: 'App environment %s is still placed on this server.',
-    many: 'App environments %s are still placed on this server.',
-  },
-  managed: {
-    one: 'Managed database %s is still placed on this server.',
-    many: 'Managed databases %s are still placed on this server.',
-  },
-  replica: {
-    one: 'Database %s still has a member on this server.',
-    many: 'Databases %s still have members on this server.',
-  },
-}
+const NAMED_BLOCKER_COPY: Partial<Record<ServerRemovalReasonKind, { one: string; many: string }>> =
+  {
+    environment: {
+      one: 'App environment %s is still placed on this server.',
+      many: 'App environments %s are still placed on this server.',
+    },
+    managed: {
+      one: 'Managed database %s is still placed on this server.',
+      many: 'Managed databases %s are still placed on this server.',
+    },
+    replica: {
+      one: 'Database %s still has a member on this server.',
+      many: 'Databases %s still have members on this server.',
+    },
+    cache: {
+      one: 'Remove the cache %s on this server first.',
+      many: 'Remove the caches %s on this server first.',
+    },
+  }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -82,10 +86,7 @@ function joinNames(parts: readonly string[]): string {
 }
 
 /** Up to three quoted names, then "and N more" (matches services-tab reasons). */
-export function serverBlockerQuotedNames(
-  items: readonly ServerBlockerItem[],
-  more = 0
-): string {
+export function serverBlockerQuotedNames(items: readonly ServerBlockerItem[], more = 0): string {
   const shown = items
     .slice(0, SERVER_BLOCKER_MESSAGE_NAME_LIMIT)
     .map((item) => `"${serverBlockerItemName(item)}"`)
@@ -116,9 +117,10 @@ export function parseServerBlockerItems(value: unknown): ServerBlockerItem[] {
   return rows
 }
 
-export function blockerNamedItems(
-  blocker: Readonly<{ items?: unknown; more?: number }>
-): { items: ServerBlockerItem[]; more: number } {
+export function blockerNamedItems(blocker: Readonly<{ items?: unknown; more?: number }>): {
+  items: ServerBlockerItem[]
+  more: number
+} {
   const items = parseServerBlockerItems(blocker.items)
   const more = typeof blocker.more === 'number' && Number.isFinite(blocker.more) ? blocker.more : 0
   return { items, more: Math.max(0, more) }
@@ -155,6 +157,10 @@ export function formatServerDeleteBlocker(blocker: ServerDeleteBlocker): string 
   }
   if (kind === 'ip') {
     const label = count === 1 ? 'address' : 'addresses'
+    return `Remove ${count} ${label} on this server before deleting it.`
+  }
+  if (kind === 'cache') {
+    const label = count === 1 ? 'project cache' : 'project caches'
     return `Remove ${count} ${label} on this server before deleting it.`
   }
   const noun = count === 1 ? 'item' : 'items'

@@ -66,6 +66,7 @@ function entry(patch: Partial<PrincipalRemovalPlanEntry>): PrincipalRemovalPlanE
       storages: 0,
       secrets: 0,
       logins: 0,
+      caches: 0,
       folders: 0,
       otherPlacements: 0,
     },
@@ -96,7 +97,9 @@ describe('ServerRemovalPrincipals', () => {
     renderList([entry({})])
     const select = screen.getByLabelText('What to do with shop_abc') as HTMLSelectElement
     expect(select.value).toBe('keep')
-    expect(screen.getByText('Keep the Hosting Account, remove it from this server only')).toBeTruthy()
+    expect(
+      screen.getByText('Keep the Hosting Account, remove it from this server only')
+    ).toBeTruthy()
   })
 
   it('offers outright deletion only when nothing else uses the principal', () => {
@@ -112,6 +115,7 @@ describe('ServerRemovalPrincipals', () => {
           storages: 0,
           secrets: 0,
           logins: 0,
+          caches: 0,
           folders: 0,
           otherPlacements: 1,
         },
@@ -119,7 +123,9 @@ describe('ServerRemovalPrincipals', () => {
     ])
     expect(screen.getAllByText('Delete the Hosting Account outright')).toHaveLength(1)
     expect(
-      screen.getByText('Cannot be deleted while in use: 2 services run as it, 1 other server has it.')
+      screen.getByText(
+        'Cannot be deleted while in use: 2 services run as it, 1 other server has it.'
+      )
     ).toBeTruthy()
   })
 
@@ -142,9 +148,9 @@ describe('ServerRemovalPrincipals', () => {
 
   it('deleteChoices keeps only outright deletions that are still in the plan and allowed', () => {
     const plan = [entry({}), entry({ principalId: 'p-2', canDeleteOutright: false })]
-    expect(deleteChoices({ 'p-1': 'delete', 'p-2': 'delete', gone: 'delete', other: 'keep' }, plan)).toEqual([
-      { principalId: 'p-1', action: 'delete' },
-    ])
+    expect(
+      deleteChoices({ 'p-1': 'delete', 'p-2': 'delete', gone: 'delete', other: 'keep' }, plan)
+    ).toEqual([{ principalId: 'p-1', action: 'delete' }])
     expect(deleteChoices({ 'p-1': 'delete' }, undefined)).toEqual([])
   })
 })
