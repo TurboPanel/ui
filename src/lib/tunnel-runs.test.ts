@@ -4,6 +4,15 @@ import {
   carryCountNote,
   connectorLine,
   DNS_REPLACE_NOTE,
+  ROTATE_CONFIRM,
+  ROTATE_SINGLE_SERVER_WARNING,
+  rotationBlockedReason,
+  rotationProgressLine,
+  rotationRunning,
+  rotationResumable,
+  rotationStoppedHint,
+  rotationStoppedLine,
+  withServerNames,
   dnsOutcome,
   dnsRecordLine,
   draftCarryCount,
@@ -414,5 +423,145 @@ describe('existing DNS records', () => {
   it('says before replacing that the old records are not brought back and mail is kept', () => {
     expect(DNS_REPLACE_NOTE).toContain('does not bring them back')
     expect(DNS_REPLACE_NOTE).toContain('Mail and text records on the name are kept')
+  })
+})
+
+describe('run token rotation', () => {
+  const A = '00000000-0000-4000-8000-00000000000a'
+  const B = '00000000-0000-4000-8000-00000000000b'
+  const names = new Map([
+    [A, 'juliet'],
+    [B, 'panvm'],
+  ])
+  const base = {
+    phase: 'rolling' as const,
+    startedAt: '2026-11-11T00:00:00.000Z',
+    finishedAt: null,
+    movedServerIds: [A],
+    pendingServerIds: [B],
+    currentServerId: null,
+    stoppedReason: null,
+  }
+
+  it('says which servers moved and which is next', () => {
+    expect(rotationProgressLine(base, names)).toBe(
+      'Rotating run token: juliet moved, panvm next (about 10 min)'
+    )
+    expect(rotationProgressLine({ ...base, currentServerId: A }, names)).toBe(
+      'Rotating run token: juliet moving now'
+    )
+    expect(rotationProgressLine({ ...base, phase: 'starting', movedServerIds: [] }, names)).toBe(
+      'Rotating run token: asking for a new token'
+    )
+    expect(rotationProgressLine({ ...base, phase: 'finishing' }, names)).toContain(
+      'reconnect briefly'
+    )
+  })
+
+  it('runs only while starting, rolling or finishing', () => {
+    expect(rotationRunning(base)).toBe(true)
+    expect(rotationRunning({ ...base, phase: 'stopped' })).toBe(false)
+    expect(rotationRunning({ ...base, phase: 'done' })).toBe(false)
+    expect(rotationRunning(null)).toBe(false)
+    expect(rotationRunning(undefined)).toBe(false)
+  })
+
+  it('shows why it stopped with server names', () => {
+    expect(
+      rotationStoppedLine(
+        { ...base, phase: 'stopped', stoppedReason: `Server ${B} is offline` },
+        names
+      )
+    ).toBe('Run token rotation stopped: Server panvm is offline')
+    expect(rotationStoppedLine(base, names)).toBeNull()
+    expect(withServerNames(`a ${A} b ${A}`, names)).toBe('a juliet b juliet')
+  })
+
+  it('says whether a stop carries on by itself, and which servers keep the old token meanwhile', () => {
+    const stopped = { ...base, phase: 'stopped' as const, oldTokenServerIds: [B] }
+    expect(rotationStoppedHint({ ...stopped, resumesOnItsOwn: true }, names)).toBe(
+      'It tries again by itself in a few minutes, or resume it now. Until then panvm keeps the old token, which cannot reconnect after a restart.'
+    )
+    expect(rotationStoppedHint({ ...stopped, oldTokenServerIds: [] }, names)).toBe(
+      'Resuming carries on from where it stopped, with the token already issued.'
+    )
+  })
+
+  it('names why the action is unavailable, and nothing while it runs', () => {
+    expect(
+      rotationBlockedReason(
+        {
+          status: 'active',
+          runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: [B] },
+        },
+        names
+      )
+    ).toContain('Update the daemon on panvm')
+    expect(
+      rotationBlockedReason(
+        {
+          status: 'active',
+          runTokenRotationBlock: { code: 'server_not_ready', message: 'x', serverIds: [A] },
+        },
+        names
+      )
+    ).toBe('juliet cannot be reached right now. Try again once it is back.')
+    expect(
+      rotationBlockedReason(
+        {
+          status: 'active',
+          runTokenRotationBlock: { code: 'server_not_ready', message: 'x', serverIds: [A, B] },
+        },
+        names
+      )
+    ).toBe('juliet, panvm cannot be reached right now. Try again once they are back.')
+    expect(
+      rotationBlockedReason(
+        {
+          status: 'active',
+          runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: [A, B] },
+        },
+        names
+      )
+    ).toContain('they cannot move their connectors')
+    expect(
+      rotationBlockedReason(
+        { status: 'active', runTokenRotationBlock: { code: 'tunnel_not_ready', message: 'x' } },
+        names
+      )
+    ).toBe('This tunnel does not exist at the provider yet.')
+    expect(rotationBlockedReason({ status: 'removing', runTokenRotationBlock: null }, names)).toBe(
+      'This tunnel is being removed.'
+    )
+    expect(
+      rotationBlockedReason(
+        { status: 'active', runTokenRotationBlock: { code: 'rotation_in_progress', message: 'x' } },
+        names
+      )
+    ).toBeNull()
+    expect(
+      rotationBlockedReason({ status: 'active', runTokenRotationBlock: null }, names)
+    ).toBeNull()
+  })
+
+  it('offers Resume for a stopped rotation unless something only a person can fix blocks it', () => {
+    const stopped = { ...base, phase: 'stopped' as const }
+    const tunnel = (code: string | null, status = 'active') => ({
+      status,
+      runTokenRotation: stopped,
+      runTokenRotationBlock: code ? { code, message: 'x' } : null,
+    })
+    expect(rotationResumable(tunnel(null))).toBe(true)
+    expect(rotationResumable(tunnel('server_not_ready'))).toBe(true)
+    expect(rotationResumable(tunnel('tunnel_daemon_too_old'))).toBe(false)
+    expect(rotationResumable(tunnel(null, 'removing'))).toBe(false)
+    expect(rotationResumable({ ...tunnel(null), runTokenRotation: base })).toBe(false)
+  })
+
+  it('asks in the approved words, and warns a lone server about the short outage', () => {
+    expect(ROTATE_CONFIRM).toBe(
+      'Give this tunnel a new run token? Servers move one at a time, about 10 minutes apart. At the end every connector reconnects briefly.'
+    )
+    expect(ROTATE_SINGLE_SERVER_WARNING).toContain('visitors lose it for a few seconds')
   })
 })

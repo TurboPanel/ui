@@ -9,6 +9,7 @@ import {
   fetchTunnels,
   isForbiddenError,
   removeTunnelHostname,
+  rotateTunnelRunToken,
   setServerTunnelCarrying,
   setTunnelVerifyOrigin,
   updateTunnelPlacement,
@@ -18,6 +19,7 @@ import {
   type TunnelVerifyOriginBody,
 } from '@/lib/instance-api'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
+import { rotationRunning } from '@/lib/tunnel-runs'
 
 /**
  * Tunnels of the organization. Owners and managers only: a refusal reads as an
@@ -37,7 +39,9 @@ export function useTunnels(orgId: string, options?: Readonly<{ enabled?: boolean
       }
     },
     enabled: (options?.enabled ?? true) && orgId.length > 0,
-    refetchInterval: 30_000,
+    // A run-token rotation moves on its own: follow it a little closer while one runs.
+    refetchInterval: (query) =>
+      query.state.data?.tunnels.some((t) => rotationRunning(t.runTokenRotation)) ? 15_000 : 30_000,
   })
 }
 
@@ -77,6 +81,18 @@ export function useUpdateTunnelPlacement(orgId: string, tunnelId: string) {
     retry: false,
     onSuccess: invalidate,
     fallbackError: 'Failed to change where the tunnel runs',
+  })
+}
+
+/** Start (or resume) a run-token rotation; the list then follows its progress. */
+export function useRotateTunnelRunToken(orgId: string, tunnelId: string) {
+  const invalidate = useInvalidateTunnels(orgId)
+  return useApiMutation({
+    mutationFn: (body: { confirmSingleServer?: boolean }) =>
+      rotateTunnelRunToken(orgId, tunnelId, body),
+    retry: false,
+    onSettled: invalidate,
+    fallbackError: 'Failed to rotate the run token',
   })
 }
 

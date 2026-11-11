@@ -12,6 +12,7 @@ import type {
   TunnelPlacementBody,
   TunnelPortal,
   TunnelRecord,
+  TunnelRunTokenRotation,
   VerifyOriginState,
 } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
@@ -426,3 +427,126 @@ export const DNS_TOO_MANY_RECORDS_NOTE =
 /** What replacing the records does, said before the person agrees. */
 export const DNS_REPLACE_NOTE =
   'Replacing points the name at this tunnel. Visitors stop reaching whatever these records point at now, and removing the hostname later does not bring them back. Mail and text records on the name are kept.'
+
+/** Asked before a run-token rotation starts (owner-approved wording). */
+export const ROTATE_CONFIRM =
+  'Give this tunnel a new run token? Servers move one at a time, about 10 minutes apart. At the end every connector reconnects briefly.'
+
+/** Added when only one server runs the tunnel: there is no other server to carry visitors meanwhile. */
+export const ROTATE_SINGLE_SERVER_WARNING =
+  'Only one server runs this tunnel, so visitors lose it for a few seconds while its connector restarts.'
+
+/** A rotation that is still moving on its own (not done, not stopped). */
+export function rotationRunning(rotation: TunnelRunTokenRotation | null | undefined): boolean {
+  return (
+    rotation?.phase === 'starting' ||
+    rotation?.phase === 'rolling' ||
+    rotation?.phase === 'finishing'
+  )
+}
+
+/** Server ids in a control-plane sentence replaced by the server names the screen knows. */
+export function withServerNames(text: string, names: ReadonlyMap<string, string>): string {
+  let out = text
+  for (const [id, name] of names) out = out.split(id).join(name)
+  return out
+}
+
+function nameOf(id: string, names: ReadonlyMap<string, string>): string {
+  return names.get(id) ?? id.slice(0, 8)
+}
+
+/**
+ * One line on where a running rotation is, for example
+ * `Rotating run token: juliet moved, panvm next (about 10 min)`.
+ */
+export function rotationProgressLine(
+  rotation: TunnelRunTokenRotation,
+  names: ReadonlyMap<string, string>
+): string {
+  const head = 'Rotating run token'
+  if (rotation.phase === 'starting') return `${head}: asking for a new token`
+  if (rotation.phase === 'finishing') {
+    return `${head}: dropping old connections, connectors reconnect briefly`
+  }
+  const parts: string[] = []
+  if (rotation.movedServerIds.length > 0) {
+    const done = rotation.movedServerIds.filter((id) => id !== rotation.currentServerId)
+    if (done.length > 0) parts.push(`${done.map((id) => nameOf(id, names)).join(', ')} moved`)
+  }
+  if (rotation.currentServerId) {
+    parts.push(`${nameOf(rotation.currentServerId, names)} moving now`)
+  } else if (rotation.pendingServerIds[0]) {
+    parts.push(`${nameOf(rotation.pendingServerIds[0], names)} next (about 10 min)`)
+  }
+  return parts.length > 0 ? `${head}: ${parts.join(', ')}` : head
+}
+
+/** Why the rotation stopped, with server names, or null when it did not stop. */
+export function rotationStoppedLine(
+  rotation: TunnelRunTokenRotation | null | undefined,
+  names: ReadonlyMap<string, string>
+): string | null {
+  if (rotation?.phase !== 'stopped') return null
+  const reason = rotation.stoppedReason ? withServerNames(rotation.stoppedReason, names) : null
+  return reason ? `Run token rotation stopped: ${reason}` : 'Run token rotation stopped'
+}
+
+/**
+ * Why Rotate Run Token cannot be pressed now, in the screen's words, or null.
+ * A rotation already under way is shown as progress, not as a reason.
+ */
+export function rotationBlockedReason(
+  tunnel: Pick<TunnelRecord, 'runTokenRotationBlock' | 'status'>,
+  names: ReadonlyMap<string, string>
+): string | null {
+  if (tunnel.status === 'removing') return 'This tunnel is being removed.'
+  const block = tunnel.runTokenRotationBlock
+  if (!block || block.code === 'rotation_in_progress') return null
+  const ids = block.serverIds ?? []
+  const servers = ids.map((id) => nameOf(id, names)).join(', ')
+  const one = ids.length === 1
+  switch (block.code) {
+    case 'tunnel_daemon_too_old':
+      return `Update the daemon on ${servers} first: ${one ? 'it cannot move its connector' : 'they cannot move their connectors'} to a new run token.`
+    case 'server_not_ready':
+      return `${servers} cannot be reached right now. Try again once ${one ? 'it is' : 'they are'} back.`
+    case 'tunnel_not_ready':
+      return 'This tunnel does not exist at the provider yet.'
+    case 'tunnel_removing':
+      return 'This tunnel is being removed.'
+    default:
+      return withServerNames(block.message, names)
+  }
+}
+
+/**
+ * Blocks that do not stop a stopped rotation from being resumed: the control
+ * plane waits for an unreachable server itself once a new secret was chosen.
+ */
+const RESUMABLE_BLOCKS = new Set(['server_not_ready', 'rotation_in_progress'])
+
+/** Can a stopped rotation be resumed from the screen now? Pure. */
+export function rotationResumable(
+  tunnel: Pick<TunnelRecord, 'runTokenRotation' | 'runTokenRotationBlock' | 'status'>
+): boolean {
+  if (tunnel.runTokenRotation?.phase !== 'stopped' || tunnel.status === 'removing') return false
+  const block = tunnel.runTokenRotationBlock
+  return !block || RESUMABLE_BLOCKS.has(block.code)
+}
+
+/** What the stopped notice says next: the control plane retries on its own, or the person resumes. */
+export function rotationStoppedHint(
+  rotation: TunnelRunTokenRotation,
+  names: ReadonlyMap<string, string>
+): string {
+  const old = (rotation.oldTokenServerIds ?? []).map((id) => nameOf(id, names))
+  const verb = old.length === 1 ? 'keeps' : 'keep'
+  const stale =
+    old.length > 0
+      ? ` Until then ${old.join(', ')} ${verb} the old token, which cannot reconnect after a restart.`
+      : ''
+  return rotation.resumesOnItsOwn
+    ? `It tries again by itself in a few minutes, or resume it now.${stale}`
+    : `Resuming carries on from where it stopped, with the token already issued.${stale}`
+}

@@ -10,6 +10,7 @@ import {
   fetchTunnelHostnames,
   fetchTunnels,
   removeTunnelHostname,
+  rotateTunnelRunToken,
   setServerTunnelCarrying,
   setTunnelVerifyOrigin,
   TunnelDnsRecordExistsError,
@@ -219,5 +220,13 @@ describe('instance-api tunnel wrappers', () => {
     )
     expect(refused).not.toBeInstanceOf(TunnelDnsRecordExistsError)
     expect(String(refused)).toContain('hostname_in_use')
+  })
+  it('rotates a run token, sending the single-server confirmation only when asked', async () => {
+    await rotateTunnelRunToken('org-1', 't1')
+    expect(lastCall().url).toMatch(/\/tunnels\/t1\/run-token\/rotate$/)
+    expect(lastCall().init.method).toBe('POST')
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({})
+    await rotateTunnelRunToken('org-1', 't1', { confirmSingleServer: true })
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ confirmSingleServer: true })
   })
 })
