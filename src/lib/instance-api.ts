@@ -2893,7 +2893,9 @@ export async function completeInstall(body: {
 async function apiFetch<T>(
   path: string,
   init?: RequestInit,
-  organizationId?: string | null
+  organizationId?: string | null,
+  /** Turn a JSON error body into a typed error the screen can use; null keeps the plain one. */
+  refusal?: (status: number, body: Readonly<Record<string, unknown>>) => Error | null
 ): Promise<T> {
   const resolvedOrgId = organizationId ?? getActiveOrganizationId()
   const headers: Record<string, string> = {
@@ -2916,12 +2918,14 @@ async function apiFetch<T>(
 
   if (!response.ok) {
     let detail = formatFetchFailureDetail(response.status)
+    let refused: Error | null = null
     try {
       const body = (await response.json()) as {
         error?: string
         message?: string
         issues?: { message?: string }[]
       }
+      refused = refusal?.(response.status, body) ?? null
       if (
         body.error === 'compose_invalid' &&
         Array.isArray(body.issues) &&
@@ -2945,7 +2949,7 @@ async function apiFetch<T>(
     } catch {
       // Non-JSON error body — keep the status-only message.
     }
-    throw new Error(`${path} failed: ${detail}`)
+    throw refused ?? new Error(`${path} failed: ${detail}`)
   }
 
   return (await response.json()) as T
@@ -13057,16 +13061,72 @@ export async function fetchTunnelHostnames(
   return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames`)
 }
 
-/** **409** `hostname_in_use`, `doorway_limit`, `badge_cannot_dns`, `tunnel_not_ready`. */
+/** A DNS record that already holds a tunnel hostname, as the control plane showed it. */
+export type ExistingDnsRecord = { id: string; type: string; content: string; proxied: boolean }
+
+/**
+ * **409** `dns_record_exists`: the name already has A, AAAA or CNAME records.
+ * Nothing was stored or changed. Adding again with `replaceDnsRecords` set to
+ * exactly these ids replaces them with the Tunnel's DNS name.
+ */
+export class TunnelDnsRecordExistsError extends Error {
+  readonly code = 'dns_record_exists'
+  readonly hostname: string
+  readonly records: ExistingDnsRecord[]
+  constructor(message: string, hostname: string, records: ExistingDnsRecord[]) {
+    super(message)
+    this.name = 'TunnelDnsRecordExistsError'
+    this.hostname = hostname
+    this.records = records
+  }
+}
+
+function readDnsRecords(value: unknown): ExistingDnsRecord[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item: unknown) => {
+    const r = item as Record<string, unknown> | null
+    if (!r || typeof r.id !== 'string' || typeof r.type !== 'string') return []
+    return [
+      {
+        id: r.id,
+        type: r.type,
+        content: typeof r.content === 'string' ? r.content : '',
+        proxied: r.proxied === true,
+      },
+    ]
+  })
+}
+
+/** The typed error for a `dns_record_exists` answer, or null for any other. */
+export function tunnelDnsRefusal(
+  status: number,
+  body: Readonly<Record<string, unknown>>
+): Error | null {
+  if (status !== 409 || body.error !== 'dns_record_exists') return null
+  const records = readDnsRecords(body.records)
+  if (records.length === 0) return null
+  return new TunnelDnsRecordExistsError(
+    typeof body.message === 'string' ? body.message : 'The name already has DNS records.',
+    typeof body.hostname === 'string' ? body.hostname : '',
+    records
+  )
+}
+
+/**
+ * **409** `hostname_in_use`, `doorway_limit`, `badge_cannot_dns`, `tunnel_not_ready`,
+ * `dns_record_exists` ({@link TunnelDnsRecordExistsError}).
+ */
 export async function addTunnelHostname(
   orgId: string,
   tunnelId: string,
-  body: { hostname: string; isLocalOnly?: boolean }
+  body: { hostname: string; isLocalOnly?: boolean; replaceDnsRecords?: string[] }
 ): Promise<{ hostname: TunnelHostnameRecord }> {
-  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  })
+  return await apiFetch(
+    `${tunnelsPath(orgId)}/${tunnelId}/hostnames`,
+    { method: 'POST', body: JSON.stringify(body) },
+    undefined,
+    tunnelDnsRefusal
+  )
 }
 
 export async function removeTunnelHostname(

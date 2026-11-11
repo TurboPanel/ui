@@ -407,3 +407,14 @@ export function hostnameStatusTone(status: string): BadgeTone {
       return 'danger'
   }
 }
+
+/** One existing DNS record as shown before it is replaced: `A 192.0.2.10 (proxied)`. */
+export function dnsRecordLine(
+  record: Readonly<{ type: string; content: string; proxied: boolean }>
+): string {
+  return `${record.type} ${record.content}${record.proxied ? ' (proxied)' : ''}`
+}
+
+/** What replacing the records does, said before the person agrees. */
+export const DNS_REPLACE_NOTE =
+  'Replacing points the name at this tunnel. Visitors stop reaching whatever these records point at now, and removing the hostname later does not bring them back. Mail and text records on the name are kept.'
