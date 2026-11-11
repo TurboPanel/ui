@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { StyleSheet, Text } from 'react-native'
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { AllDatabasesSwitch } from '@/components/org/managed/all-databases-switch'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
 import { Button, SectionPanel, TextField } from '@/components/ui'
 import {
@@ -61,6 +62,7 @@ export function ManagedDefaultsSettingsSection({ orgId }: Readonly<{ orgId: stri
   return (
     <>
       <ManagedTlsDefaultsPanel orgId={orgId} query={query} />
+      <AllDatabasesDefaultPanel orgId={orgId} query={query} />
       <ManagedListenerPortsPanel orgId={orgId} query={query} />
     </>
   )
@@ -79,6 +81,7 @@ function useSaveManagedDefaults(
       queryClient.setQueryData<OrgManagedDefaults>(queryKey, {
         sslMode: data.sslMode,
         effectiveSslMode: data.effectiveSslMode,
+        allowAllDatabasesLogins: data.allowAllDatabasesLogins,
         ports: data.ports,
         effectivePorts: data.effectivePorts,
       })
@@ -163,6 +166,38 @@ function ManagedTlsDefaultsPanel({
               },
             }
           )
+        }}
+      />
+    </SectionPanel>
+  )
+}
+
+function AllDatabasesDefaultPanel({
+  orgId,
+  query,
+}: Readonly<{ orgId: string; query: UseQueryResult<OrgManagedDefaults> }>) {
+  const [error, setError] = useState<string | null>(null)
+  const mutation = useSaveManagedDefaults(
+    orgId,
+    setError,
+    'Failed to save the All Databases switch'
+  )
+  return (
+    <SectionPanel
+      title="All Databases Logins"
+      hint="Whether a login may read every database of its Database Cluster"
+      collapsible
+      defaultCollapsed
+    >
+      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      <AllDatabasesSwitch
+        value={query.data?.allowAllDatabasesLogins ?? true}
+        disabled={query.isLoading || !query.data}
+        busy={mutation.isPending}
+        hint="On by default. Each Database Cluster also has its own switch, off until you turn it on. A login may use All Databases only when both are on."
+        onChange={(allowAllDatabasesLogins) => {
+          setError(null)
+          mutation.mutate({ allowAllDatabasesLogins })
         }}
       />
     </SectionPanel>

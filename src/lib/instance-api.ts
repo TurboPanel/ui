@@ -1816,6 +1816,8 @@ export async function saveOrgProjectSettings(
 export type OrgManagedDefaults = {
   sslMode: ManagedSslMode | null
   effectiveSslMode: ManagedSslMode
+  /** Lets logins use All Databases anywhere in the organization; on by default. Absent on an older control plane. */
+  allowAllDatabasesLogins?: boolean
   ports: {
     postgres: number | null
     mysqlFamily: number | null
@@ -1826,6 +1828,7 @@ export type OrgManagedDefaults = {
 /** `undefined` on a key leaves it unchanged; `null` clears it to the default. */
 export type OrgManagedDefaultsPatch = {
   sslMode?: ManagedSslMode | null
+  allowAllDatabasesLogins?: boolean
   ports?: { postgres?: number | null; mysqlFamily?: number | null } | null
 }
 
@@ -11091,7 +11094,10 @@ export async function createManagedUser(
     username: string
     /** Omit to use the org default; 409 `principal_scheme_locked` when the org locks it. */
     nameScheme?: NameScheme
-    databases: string[]
+    /** Omit with `allDatabases: true`; 400 `managed_login_all_databases_conflict` when both are sent. */
+    databases?: string[]
+    /** Every database of the cluster, including ones added later. 400 `managed_login_all_databases_not_allowed` when the login cannot use it. */
+    allDatabases?: boolean
     /** Omit for the default of the connection role. `['admin']` = Database admin login (alone, never read-only, `tool` true by default; 400 `managed_admin_login_not_read_only`, 422 `managed_admin_needs_owner_role`). */
     privileges?: string[]
     /** Omit for `read-write`; `read-only` is allowed on a single server (it uses the primary and the database refuses writes). */
@@ -11183,6 +11189,8 @@ export type ManagedUserPatch = {
   grantMode?: 'recipe' | 'self'
   tool?: boolean
   databases?: string[]
+  /** `true` covers every database, including later ones; `false` keeps the current list. */
+  allDatabases?: boolean
   connectionRole?: ManagedConnectionRole
   /** Required (409 `managed_grant_reset_needs_confirm`) when the change resets permissions. */
   confirmReset?: boolean

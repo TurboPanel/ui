@@ -35,6 +35,11 @@ import {
   NewLoginAdminField,
 } from '@/components/org/managed/managed-login-admin'
 import {
+  AllDatabasesChip,
+  allDatabasesOffReason,
+  LoginAllDatabasesEditor,
+} from '@/components/org/managed/managed-login-databases'
+import {
   jobConnectionRole,
   LoginJobEditor,
   NewLoginJobField,
@@ -243,7 +248,10 @@ export function ManagedUsersPanel({
   onRedeployService,
   onReload,
   onCreateAppLogins,
+  allDatabasesOff = null,
 }: Readonly<{
+  /** Which All Databases switch is off, if any; the chip is then disabled. */
+  allDatabasesOff?: 'organization' | 'cluster' | null
   orgId: string
   environmentId: string
   /** Engine code of the cluster; the straight-through switch is PostgreSQL only. */
@@ -257,7 +265,9 @@ export function ManagedUsersPanel({
   onDeleteDatabase: (name: string, confirmName: string) => Promise<void>
   onCreateUser: (input: {
     username: string
-    databases: string[]
+    /** Absent when `allDatabases` is true. */
+    databases?: string[]
+    allDatabases?: boolean
     privileges?: string[]
     connectionRole: ManagedConnectionRole
     grantMode: LoginMode
@@ -287,6 +297,8 @@ export function ManagedUsersPanel({
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
+  const [allDatabasesChoice, setAllDatabases] = useState(false)
+  const allDatabases = allDatabasesChoice && !allDatabasesOff
   const [job, setJob] = useState<LoginJob>(initial.job)
   const [grantMode, setGrantMode] = useState<LoginMode>(initial.grantMode)
   const [tool, setTool] = useState(initial.tool)
@@ -395,7 +407,7 @@ export function ManagedUsersPanel({
       setNewLoginError(nameProblem)
       return
     }
-    if (selectedDbs.length === 0) {
+    if (!allDatabases && selectedDbs.length === 0) {
       setNewLoginError('Select at least one database.')
       return
     }
@@ -414,7 +426,7 @@ export function ManagedUsersPanel({
     try {
       const result = await onCreateUser({
         username: trimmed,
-        databases: selectedDbs,
+        ...(allDatabases ? { allDatabases: true } : { databases: selectedDbs }),
         privileges: [admin ? MANAGED_ADMIN_PRIVILEGE : job],
         connectionRole: admin ? 'read-write' : jobConnectionRole(job),
         grantMode,
@@ -607,9 +619,11 @@ export function ManagedUsersPanel({
                 {principalNamesLabel(user.username, user.appliedUsername)}
               </Text>
               <View style={styles.chipRow}>
-                {user.databases.map((db) => (
-                  <Chip key={db} label={db} />
-                ))}
+                {user.allDatabases ? (
+                  <Chip label="All databases" />
+                ) : (
+                  user.databases.map((db) => <Chip key={db} label={db} />)
+                )}
               </View>
               <LoginModeBadges user={user} />
               <LoginAdminBadge user={user} />
@@ -662,6 +676,15 @@ export function ManagedUsersPanel({
                 <LoginJobEditor
                   user={user}
                   disabled={disabled}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : null}
+              {canManage ? (
+                <LoginAllDatabasesEditor
+                  user={user}
+                  disabled={disabled}
+                  off={allDatabasesOff}
                   onUpdate={onUpdateUser}
                   onError={setError}
                 />
@@ -729,17 +752,24 @@ export function ManagedUsersPanel({
           {usernameHint ? <Text style={panelStyles.calloutWarning}>{usernameHint}</Text> : null}
           <PrincipalNameSchemeField scheme={nameScheme} disabled={disabled} />
           <Text style={panelStyles.detailLabel}>Databases</Text>
+          <AllDatabasesChip
+            selected={allDatabases}
+            onToggle={() => setAllDatabases(!allDatabasesChoice)}
+            disabled={disabled}
+            offReason={allDatabasesOffReason(allDatabasesOff)}
+          />
           <View style={styles.chipRow}>
             {databases.map((name) => {
-              const selected = selectedDbs.includes(name)
+              const selected = !allDatabases && selectedDbs.includes(name)
+              const chipDisabled = disabled || allDatabases
               return (
                 <Pressable
                   key={name}
                   style={[styles.chip, selected && styles.chipSelected, webPointer]}
                   onPress={() => toggleDb(name)}
-                  disabled={disabled}
+                  disabled={chipDisabled}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selected, disabled }}
+                  accessibilityState={{ checked: selected, disabled: chipDisabled }}
                   aria-checked={selected}
                   accessibilityLabel={name}
                 >

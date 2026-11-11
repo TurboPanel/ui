@@ -23,6 +23,7 @@ vi.mock('@/components/ui', () => ({
   SegmentedControl: () => null,
   TextField: () => null,
 }))
+vi.mock('@/components/org/managed/all-databases-switch', () => ({ AllDatabasesSwitch: () => null }))
 vi.mock('@/components/header-chevron', () => ({ HeaderChevron: () => null }))
 vi.mock('@/components/org/managed/managed-external-access-switch', () => ({
   ManagedExternalAccessSwitch: () => null,
@@ -121,5 +122,19 @@ describe('Base image while the database runs', () => {
     renderSettings(false)
     expect(screen.getByText('Base image')).toBeTruthy()
     expect(screen.queryByText('Stop the database to change its base image.')).toBeNull()
+  })
+})
+
+describe('All Databases switch in the settings form', () => {
+  it('carries the switch and sends it only when on', async () => {
+    const { settingsToForm, buildManagedSettingsPayload } = await import('./managed-settings-panel')
+    const off = settingsToForm({ ssl: {} }, 'img')
+    expect(off.allowAllDatabasesLogins).toBe(false)
+    const offResult = buildManagedSettingsPayload(off)
+    expect(offResult.ok && 'allowAllDatabasesLogins' in offResult.settings).toBe(false)
+    const on = settingsToForm({ ssl: {}, allowAllDatabasesLogins: true }, 'img')
+    expect(on.allowAllDatabasesLogins).toBe(true)
+    const onResult = buildManagedSettingsPayload(on)
+    expect(onResult.ok && onResult.settings.allowAllDatabasesLogins).toBe(true)
   })
 })
