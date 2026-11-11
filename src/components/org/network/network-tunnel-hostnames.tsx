@@ -5,12 +5,17 @@ import {
   Badge,
   Button,
   ButtonRow,
+  ConfirmButton,
   LoadingState,
   MonoText,
   TextField,
   TypeNameDeleteButton,
 } from '@/components/ui'
-import type { TunnelHostnameRecord } from '@/lib/instance-api'
+import {
+  TunnelDnsRecordExistsError,
+  type ExistingDnsRecord,
+  type TunnelHostnameRecord,
+} from '@/lib/instance-api'
 import {
   useAddTunnelHostname,
   useRemoveTunnelHostname,
@@ -19,7 +24,9 @@ import {
 import { spacing } from '@/lib/theme'
 import { tunnelErrorMessage } from '@/lib/tunnels'
 import {
+  DNS_REPLACE_NOTE,
   dnsOutcome,
+  dnsRecordLine,
   hostnameProblem,
   hostnameStatusLabel,
   hostnameStatusTone,
@@ -70,24 +77,80 @@ function HostnameRow({
   )
 }
 
+/** The records that already hold the name, and the choice to replace them. */
+function ExistingRecords({
+  hostname,
+  records,
+  busy,
+  onReplace,
+  onCancel,
+}: Readonly<{
+  hostname: string
+  records: ExistingDnsRecord[]
+  busy: boolean
+  onReplace: () => void
+  onCancel: () => void
+}>) {
+  return (
+    <View style={panelStyles.detailCard} accessibilityRole="alert">
+      <Text style={panelStyles.detailTitle}>
+        {records.length === 1 ? 'Existing DNS Record' : 'Existing DNS Records'}
+      </Text>
+      <Text style={panelStyles.muted}>
+        {hostname} already has {records.length === 1 ? 'this DNS record' : 'these DNS records'}:
+      </Text>
+      {records.map((record) => (
+        <MonoText key={record.id}>{dnsRecordLine(record)}</MonoText>
+      ))}
+      <Text style={panelStyles.muted}>{DNS_REPLACE_NOTE}</Text>
+      <ButtonRow>
+        <ConfirmButton
+          label={records.length === 1 ? 'Replace Record' : 'Replace Records'}
+          confirmLabel="Replace"
+          prompt={`Replace ${records.length === 1 ? 'this record' : 'these records'} for ${hostname}?`}
+          busy={busy}
+          onConfirm={onReplace}
+        />
+        <Button label="Cancel" size="sm" disabled={busy} onPress={onCancel} />
+      </ButtonRow>
+    </View>
+  )
+}
+
 function AddHostnameForm({ orgId, tunnelId }: Readonly<{ orgId: string; tunnelId: string }>) {
   const [hostname, setHostname] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
+  const [conflict, setConflict] = useState<TunnelDnsRecordExistsError | null>(null)
   const add = useAddTunnelHostname(orgId, tunnelId)
   const problem = hostname.length > 0 ? hostnameProblem(hostname) : null
   const canSend = !add.isPending && hostname.trim().length > 0 && !problem
 
-  async function send() {
+  async function send(replaceDnsRecords?: string[]) {
     setError(null)
     setDone(null)
-    const result = await add.run({ hostname: normalizeHostname(hostname) })
+    const result = await add.run({
+      hostname: normalizeHostname(hostname),
+      ...(replaceDnsRecords ? { replaceDnsRecords } : {}),
+    })
     if (result.ok) {
+      setConflict(null)
       setDone(dnsOutcome(result.value.hostname.dns))
       setHostname('')
       return
     }
+    if (result.cause instanceof TunnelDnsRecordExistsError) {
+      // Shown with the choice to replace; a second answer (the records changed) replaces the first.
+      setConflict(result.cause)
+      return
+    }
+    setConflict(null)
     setError(tunnelErrorMessage(result.cause, 'Failed to add the hostname'))
+  }
+
+  function edit(next: string) {
+    setHostname(next)
+    setConflict(null)
   }
 
   return (
@@ -101,7 +164,7 @@ function AddHostnameForm({ orgId, tunnelId }: Readonly<{ orgId: string; tunnelId
       <TextField
         label="Hostname"
         value={hostname}
-        onChangeText={setHostname}
+        onChangeText={edit}
         editable={!add.isPending}
         error={problem}
         placeholder="app.example.com"
@@ -112,17 +175,27 @@ function AddHostnameForm({ orgId, tunnelId }: Readonly<{ orgId: string; tunnelId
         keyboardType="url"
         mono
       />
-      <ButtonRow>
-        <Button
-          label="Add Hostname"
-          variant="primary"
-          size="sm"
+      {conflict ? (
+        <ExistingRecords
+          hostname={conflict.hostname || normalizeHostname(hostname)}
+          records={conflict.records}
           busy={add.isPending}
-          disabled={!canSend}
-          onPress={() => void send()}
-          accessibilityLabel="Add hostname to tunnel"
+          onReplace={() => void send(conflict.records.map((record) => record.id))}
+          onCancel={() => setConflict(null)}
         />
-      </ButtonRow>
+      ) : (
+        <ButtonRow>
+          <Button
+            label="Add Hostname"
+            variant="primary"
+            size="sm"
+            busy={add.isPending}
+            disabled={!canSend}
+            onPress={() => void send()}
+            accessibilityLabel="Add hostname to tunnel"
+          />
+        </ButtonRow>
+      )}
     </View>
   )
 }

@@ -11,6 +11,7 @@ import {
   removeTunnelHostname,
   setServerTunnelCarrying,
   setTunnelVerifyOrigin,
+  TunnelDnsRecordExistsError,
   updateTunnelPlacement,
 } from './instance-api'
 
@@ -136,5 +137,42 @@ describe('instance-api tunnel wrappers', () => {
     )
     await fetchExistingOriginCertificates('org-1', 'c1', 'a b&c')
     expect(lastCall().url).toContain('zone=a%20b%26c')
+  })
+  it('a name held by DNS records is a typed refusal naming them, and a confirmed add sends their ids', async () => {
+    const records = [{ id: 'rec-a', type: 'A', content: '192.0.2.10', proxied: true }]
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse(
+        {
+          error: 'dns_record_exists',
+          message: 'A DNS record for app.example.com already exists: A 192.0.2.10 (proxied).',
+          hostname: 'app.example.com',
+          records,
+        },
+        409
+      )
+    )
+    const refused = await addTunnelHostname('org-1', 't1', { hostname: 'app.example.com' }).catch(
+      (err: unknown) => err
+    )
+    expect(refused).toBeInstanceOf(TunnelDnsRecordExistsError)
+    expect((refused as TunnelDnsRecordExistsError).records).toEqual(records)
+    expect((refused as TunnelDnsRecordExistsError).hostname).toBe('app.example.com')
+    await addTunnelHostname('org-1', 't1', {
+      hostname: 'app.example.com',
+      replaceDnsRecords: ['rec-a'],
+    })
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({
+      hostname: 'app.example.com',
+      replaceDnsRecords: ['rec-a'],
+    })
+  })
+
+  it('any other refusal of an added hostname stays a plain error with its code', async () => {
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ error: 'hostname_in_use' }, 409))
+    const refused = await addTunnelHostname('org-1', 't1', { hostname: 'app.example.com' }).catch(
+      (err: unknown) => err
+    )
+    expect(refused).not.toBeInstanceOf(TunnelDnsRecordExistsError)
+    expect(String(refused)).toContain('hostname_in_use')
   })
 })

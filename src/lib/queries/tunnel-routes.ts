@@ -92,7 +92,7 @@ export function useDeleteTunnel(orgId: string) {
 export function useAddTunnelHostname(orgId: string, tunnelId: string) {
   const invalidate = useInvalidateTunnels(orgId)
   return useApiMutation({
-    mutationFn: (body: { hostname: string; isLocalOnly?: boolean }) =>
+    mutationFn: (body: { hostname: string; isLocalOnly?: boolean; replaceDnsRecords?: string[] }) =>
       addTunnelHostname(orgId, tunnelId, body),
     retry: false,
     onSuccess: invalidate,

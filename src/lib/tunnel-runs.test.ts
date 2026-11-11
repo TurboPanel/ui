@@ -3,7 +3,9 @@ import type { OrgServerRecord, TunnelCarrier, TunnelPortal, TunnelRecord } from 
 import {
   carryCountNote,
   connectorLine,
+  DNS_REPLACE_NOTE,
   dnsOutcome,
+  dnsRecordLine,
   draftCarryCount,
   draftFromTunnel,
   draftRunsOn,
@@ -398,5 +400,19 @@ describe('issuedCertificateNote', () => {
     )
     expect(issuedCertificateNote({ retired: false, renewalDue: true })).toContain('renewed soon')
     expect(issuedCertificateNote({ retired: false, renewalDue: false })).toBe('')
+  })
+})
+
+describe('existing DNS records', () => {
+  it('reads each record as type, content and whether it is proxied', () => {
+    expect(dnsRecordLine({ type: 'A', content: '192.0.2.10', proxied: false })).toBe('A 192.0.2.10')
+    expect(dnsRecordLine({ type: 'CNAME', content: 'old.example.net', proxied: true })).toBe(
+      'CNAME old.example.net (proxied)'
+    )
+  })
+
+  it('says before replacing that the old records are not brought back and mail is kept', () => {
+    expect(DNS_REPLACE_NOTE).toContain('does not bring them back')
+    expect(DNS_REPLACE_NOTE).toContain('Mail and text records on the name are kept')
   })
 })
