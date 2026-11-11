@@ -11,6 +11,7 @@ import {
   ROTATE_SINGLE_SERVER_WARNING,
   rotationBlockedReason,
   rotationProgressLine,
+  rotationResumable,
   rotationRunning,
   rotationStoppedHint,
   rotationStoppedLine,
@@ -37,6 +38,8 @@ export function NetworkTunnelRotate({
   const single = tunnel.carryingServerIds.length === 1
   const blocked = rotationBlockedReason(tunnel, names)
   const stopped = rotationStoppedLine(rotation, names)
+  // A stopped rotation is resumed even when a server is out of reach: the control plane waits for it.
+  const resumable = rotationResumable(tunnel)
 
   async function start() {
     setError(null)
@@ -71,7 +74,7 @@ export function NetworkTunnelRotate({
           title={stopped}
           body={rotation ? rotationStoppedHint(rotation, names) : undefined}
           actions={
-            blocked ? null : (
+            resumable ? (
               <Button
                 label="Resume Rotation"
                 size="sm"
@@ -79,7 +82,7 @@ export function NetworkTunnelRotate({
                 onPress={() => void start()}
                 accessibilityLabel={`Resume the run token rotation of ${tunnel.name}`}
               />
-            )
+            ) : null
           }
         />
       ) : null}
@@ -98,7 +101,7 @@ export function NetworkTunnelRotate({
           />
         </ButtonRow>
       )}
-      {blocked ? <Text style={panelStyles.muted}>{blocked}</Text> : null}
+      {blocked && !resumable ? <Text style={panelStyles.muted}>{blocked}</Text> : null}
     </View>
   )
 }

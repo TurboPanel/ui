@@ -503,19 +503,36 @@ export function rotationBlockedReason(
   if (tunnel.status === 'removing') return 'This tunnel is being removed.'
   const block = tunnel.runTokenRotationBlock
   if (!block || block.code === 'rotation_in_progress') return null
-  const servers = (block.serverIds ?? []).map((id) => nameOf(id, names)).join(', ')
+  const ids = block.serverIds ?? []
+  const servers = ids.map((id) => nameOf(id, names)).join(', ')
+  const one = ids.length === 1
   switch (block.code) {
     case 'tunnel_daemon_too_old':
-      return `Update the daemon on ${servers} first: it cannot move its connector to a new run token.`
+      return `Update the daemon on ${servers} first: ${one ? 'it cannot move its connector' : 'they cannot move their connectors'} to a new run token.`
     case 'server_not_ready':
-      return `${servers} cannot be reached right now. Try again once it is back.`
+      return `${servers} ${one ? 'cannot' : 'cannot all'} be reached right now. Try again once ${one ? 'it is' : 'they are'} back.`
     case 'tunnel_not_ready':
-      return 'This tunnel does not exist at Cloudflare yet.'
+      return 'This tunnel does not exist at the provider yet.'
     case 'tunnel_removing':
       return 'This tunnel is being removed.'
     default:
       return withServerNames(block.message, names)
   }
+}
+
+/**
+ * Blocks that do not stop a stopped rotation from being resumed: the control
+ * plane waits for an unreachable server itself once a new secret was chosen.
+ */
+const RESUMABLE_BLOCKS = new Set(['server_not_ready', 'rotation_in_progress'])
+
+/** Can a stopped rotation be resumed from the screen now? Pure. */
+export function rotationResumable(
+  tunnel: Pick<TunnelRecord, 'runTokenRotation' | 'runTokenRotationBlock' | 'status'>
+): boolean {
+  if (tunnel.runTokenRotation?.phase !== 'stopped' || tunnel.status === 'removing') return false
+  const block = tunnel.runTokenRotationBlock
+  return !block || RESUMABLE_BLOCKS.has(block.code)
 }
 
 /** What the stopped notice says next: the control plane retries on its own, or the person resumes. */
@@ -530,6 +547,6 @@ export function rotationStoppedHint(
       ? ` Until then ${old.join(', ')} ${verb} the old token, which cannot reconnect after a restart.`
       : ''
   return rotation.resumesOnItsOwn
-    ? `It carries on by itself once the server can be reached.${stale}`
+    ? `It tries again by itself in a few minutes, or resume it now.${stale}`
     : `Resuming carries on from where it stopped, with the token already issued.${stale}`
 }
