@@ -12914,6 +12914,28 @@ export type TunnelRecord = {
   doorwayCount: number
   /** The verified connection to your web server (see `setTunnelVerifyOrigin`). Missing from an older panel, which means off. */
   verifyOrigin?: VerifyOriginState
+  /** The last or current run-token rotation; null when there was none, missing from an older panel. */
+  runTokenRotation?: TunnelRunTokenRotation | null
+  /** Why Rotate Run Token would be refused now, or null when it can start; missing from an older panel. */
+  runTokenRotationBlock?: TunnelRotationBlock | null
+}
+
+/** Where a run-token rotation is. The token itself is never returned. */
+export type TunnelRunTokenRotation = {
+  phase: 'starting' | 'rolling' | 'finishing' | 'done' | 'stopped'
+  startedAt: string
+  finishedAt: string | null
+  movedServerIds: string[]
+  pendingServerIds: string[]
+  currentServerId: string | null
+  stoppedReason: string | null
+}
+
+/** A refusal the control plane would give if a rotation were started now. */
+export type TunnelRotationBlock = {
+  code: string
+  message: string
+  serverIds?: string[]
 }
 
 /** Asked for, in effect, and which names still wait for a site or a certificate. */
@@ -12994,6 +13016,23 @@ export async function createTunnel(
   body: CreateTunnelBody
 ): Promise<{ tunnel: TunnelRecord }> {
   return await apiFetch(tunnelsPath(orgId), { method: 'POST', body: JSON.stringify(body) })
+}
+
+/**
+ * Give the tunnel a new run token; servers move to it one at a time. **409**
+ * `rotation_single_server` (send `confirmSingleServer: true`),
+ * `tunnel_daemon_too_old`, `server_not_ready`, `rotation_in_progress`,
+ * `tunnel_removing`. A stopped rotation resumes.
+ */
+export async function rotateTunnelRunToken(
+  orgId: string,
+  tunnelId: string,
+  body: { confirmSingleServer?: boolean } = {}
+): Promise<{ rotation: TunnelRunTokenRotation; warnings: string[] }> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/run-token/rotate`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
 }
 
 export async function updateTunnelPlacement(
