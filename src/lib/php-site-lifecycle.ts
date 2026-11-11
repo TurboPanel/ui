@@ -151,12 +151,3 @@ export function storedLifecycleFields(options: ServiceOptions): LifecycleFields 
   if (options.workers) fields.workers = options.workers
   return fields
 }
-
-/** What a save carries: the form's fields for a site, the stored ones for any other service. */
-export function lifecycleSaveFields(
-  isSite: boolean,
-  form: PhpLifecycleForm,
-  stored: ServiceOptions
-): { fields: LifecycleFields } | { error: string } {
-  return isSite ? lifecycleFieldsFrom(form) : { fields: storedLifecycleFields(stored) }
-}

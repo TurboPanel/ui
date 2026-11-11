@@ -7,8 +7,9 @@ import { Checkbox, SegmentedControl, type SegmentedOption } from '@/components/u
 import { panelStyles } from '@/components/ui/panel-styles'
 import { type HealthCheckPolicy, type ServiceOptions, type ServiceRecord } from '@/lib/instance-api'
 import {
+  lifecycleFieldsFrom,
   lifecycleFormFrom,
-  lifecycleSaveFields,
+  storedLifecycleFields,
   type PhpLifecycleForm,
 } from '@/lib/php-site-lifecycle'
 import { useUpdateService } from '@/lib/queries/services'
@@ -168,7 +169,9 @@ export function ServiceSettingsPanel({
     // A save replaces the stored options, so the PHP App fields are carried
     // through unchanged while the section is not shown.
     const stored = parseServiceOptions(service?.options)
-    const lifecycleFields = lifecycleSaveFields(isSite, lifecycle, stored)
+    const lifecycleFields = isSite
+      ? lifecycleFieldsFrom(lifecycle)
+      : { fields: storedLifecycleFields(stored) }
     if ('error' in lifecycleFields) return lifecycleFields
     Object.assign(options, lifecycleFields.fields)
     if (preDeploy.trim()) options.preDeployCommand = preDeploy.trim()
