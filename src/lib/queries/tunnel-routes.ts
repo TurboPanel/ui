@@ -13,6 +13,7 @@ import {
   setServerTunnelCarrying,
   setTunnelVerifyOrigin,
   updateTunnelPlacement,
+  type ConfirmedDnsRecord,
   type CreateTunnelBody,
   type TunnelPlacementBody,
   type TunnelVerifyOriginBody,
@@ -108,8 +109,11 @@ export function useDeleteTunnel(orgId: string) {
 export function useAddTunnelHostname(orgId: string, tunnelId: string) {
   const invalidate = useInvalidateTunnels(orgId)
   return useApiMutation({
-    mutationFn: (body: { hostname: string; isLocalOnly?: boolean; replaceDnsRecords?: string[] }) =>
-      addTunnelHostname(orgId, tunnelId, body),
+    mutationFn: (body: {
+      hostname: string
+      isLocalOnly?: boolean
+      replaceDnsRecords?: ConfirmedDnsRecord[]
+    }) => addTunnelHostname(orgId, tunnelId, body),
     retry: false,
     onSuccess: invalidate,
     fallbackError: 'Failed to add the hostname',

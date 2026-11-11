@@ -416,6 +416,14 @@ export function dnsRecordLine(
   return `${record.type} ${record.content}${record.proxied ? ' (proxied)' : ''}`
 }
 
+/** After a replacement failed partway: what to do about the records already removed. */
+export const DNS_REPLACE_INCOMPLETE_NOTE =
+  'Add them back at your DNS provider if the name still needs them, then try adding the hostname again.'
+
+/** Past the replace limit the records are only listed: what to do instead. */
+export const DNS_TOO_MANY_RECORDS_NOTE =
+  'That is more than 10 records, too many to replace here. Remove them at your DNS provider, then add the hostname again.'
+
 /** What replacing the records does, said before the person agrees. */
 export const DNS_REPLACE_NOTE =
   'Replacing points the name at this tunnel. Visitors stop reaching whatever these records point at now, and removing the hostname later does not bring them back. Mail and text records on the name are kept.'
