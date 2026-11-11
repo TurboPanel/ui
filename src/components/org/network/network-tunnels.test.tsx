@@ -71,6 +71,7 @@ vi.mock('@/lib/queries/tunnel-routes', () => ({
 vi.mock('./network-tunnel-create', () => ({ NetworkTunnelCreate: () => <p>create form</p> }))
 vi.mock('./network-tunnel-hostnames', () => ({ NetworkTunnelHostnames: () => null }))
 vi.mock('./network-tunnel-placement', () => ({ NetworkTunnelPlacement: () => null }))
+vi.mock('./network-tunnel-rotate', () => ({ NetworkTunnelRotate: () => null }))
 vi.mock('./network-tunnel-verify', () => ({ NetworkTunnelVerify: () => null }))
 
 const portal = (extra: Partial<TunnelPortal> = {}): TunnelPortal => ({
