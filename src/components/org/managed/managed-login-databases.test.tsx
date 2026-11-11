@@ -84,7 +84,12 @@ describe('All Databases switches', () => {
 })
 
 const loginRow = (allDatabases: boolean) =>
-  ({ id: 'l1', username: 'reader', allDatabases }) as unknown as ManagedUserRecord
+  ({
+    id: 'l1',
+    username: 'reader',
+    allDatabases,
+    databases: ['app'],
+  }) as unknown as ManagedUserRecord
 
 describe('LoginAllDatabasesEditor', () => {
   it('patches allDatabases for an existing login', async () => {
