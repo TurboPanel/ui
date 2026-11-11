@@ -148,3 +148,37 @@ export function adminToolBody(input: {
 }) {
   return { tool: input.tool, hostname: input.hostname.trim().toLowerCase(), access: input.access }
 }
+
+const OLDER_DAEMON_NOTE =
+  "This server's daemon is older, so the tool's login got read and write access only. Update the server, then apply again."
+const NO_OWNER_ROLE_MARKER = 'work through: '
+const NO_OWNER_ROLE_END = '. The login has'
+const API_WORDING = /POST |…\/|\/managed\/|\{name\}|connectionRole/
+const OTHER_NOTE_GENERIC =
+  "The tool's login was added with limited access. Check the Users list for what it can do."
+
+/** The note about databases without an owner role, in the tool's words; `null` when it is another note. */
+function noOwnerRoleNote(note: string): string | null {
+  const start = note.indexOf(NO_OWNER_ROLE_MARKER)
+  const end = note.indexOf(NO_OWNER_ROLE_END)
+  if (start < 0 || end < start) return null
+  const list = note.slice(start + NO_OWNER_ROLE_MARKER.length, end)
+  const access = /connect only/i.test(note) ? 'can only connect' : 'has read and write access'
+  return `The tool's login ${access} on ${list} instead of full Database Admin rights.`
+}
+
+function plainAdminToolNote(note: string): string {
+  if (/is older than (owner roles|the Database admin login)/i.test(note)) return OLDER_DAEMON_NOTE
+  const noOwner = noOwnerRoleNote(note)
+  if (noOwner) return noOwner
+  return API_WORDING.test(note) ? OTHER_NOTE_GENERIC : note
+}
+
+/**
+ * The notes the control plane sends with an added tool, in plain words. They
+ * describe the tool's login (not an app login), so the shared app login
+ * rewrites do not apply. Duplicates are dropped.
+ */
+export function plainAdminToolNotes(notes: readonly string[] | undefined): string[] {
+  return [...new Set((notes ?? []).map(plainAdminToolNote))]
+}

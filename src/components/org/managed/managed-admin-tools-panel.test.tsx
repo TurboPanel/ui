@@ -267,7 +267,9 @@ describe('ManagedAdminToolsPanel', () => {
         environmentId: 'e-new',
         loginName: 'pgadmin_abc123',
         loginPassword: 'db',
-        notes: ['Admin logins on PostgreSQL need an owner role.'],
+        notes: [
+          'These databases have no owner role yet, so there is none for a Database admin login to work through: shop, blog. The login has read and write access to the data (no owner rights, and it cannot hand out access to others) there, and the full Database admin rights on every database that has an owner role. Move a database onto an owner role (POST …/managed/databases/{name}/owner-role with confirm: true) to give it the full rights there. It is never the root login.',
+        ],
       },
     })
     renderPanel({ engine: 'postgres' })
@@ -275,7 +277,11 @@ describe('ManagedAdminToolsPanel', () => {
     fireEvent.change(screen.getByLabelText('Hostname'), { target: { value: 'pg.example.com' } })
     fireEvent.click(screen.getByText('Add and Deploy'))
     await waitFor(() =>
-      expect(screen.getByText('Admin logins on PostgreSQL need an owner role.')).toBeTruthy()
+      expect(
+        screen.getByText(
+          "The tool's login has read and write access on shop, blog instead of full Database Admin rights."
+        )
+      ).toBeTruthy()
     )
   })
 

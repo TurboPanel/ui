@@ -6,12 +6,12 @@ import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import { Button, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { ManagedAdminToolRecord } from '@/lib/instance-api'
-import { plainAppLoginNotes } from '@/lib/managed-app-logins'
 import {
   ADMIN_TOOLS_HINT,
   adminToolChoices,
   adminToolErrorMessage,
   adminToolReveal,
+  plainAdminToolNotes,
   type AdminToolReveal,
 } from '@/lib/managed-admin-tools'
 import { useDeployEnvironmentById } from '@/lib/queries/environments'
@@ -147,7 +147,7 @@ export function ManagedAdminToolsPanel({
           }}
         />
         {reveal.values.note ? <Text style={panelStyles.muted}>{reveal.values.note}</Text> : null}
-        {plainAppLoginNotes(reveal.values.notes).map((note) => (
+        {plainAdminToolNotes(reveal.values.notes).map((note) => (
           <Text key={note} style={panelStyles.muted}>
             {note}
           </Text>

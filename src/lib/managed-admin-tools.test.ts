@@ -7,6 +7,7 @@ import {
   adminToolErrorMessage,
   adminToolReveal,
   hostnameHint,
+  plainAdminToolNotes,
   PGADMIN_AUTO_CONNECT_NOTE,
 } from './managed-admin-tools'
 
@@ -101,5 +102,50 @@ describe('words and bodies', () => {
 
   it('falls back for an unknown failure', () => {
     expect(adminToolErrorMessage('boom', 'Failed to add')).toBe('Failed to add')
+  })
+})
+
+describe('plainAdminToolNotes', () => {
+  const noOwner = (access: string) =>
+    `These databases have no owner role yet, so there is none for a Database admin login to work through: shop, blog. The login has ${access} there, and the full Database admin rights on every database that has an owner role. Move a database onto an owner role (POST …/managed/databases/{name}/owner-role with confirm: true) to give it the full rights there. It is never the root login.`
+
+  it('keeps the database list of a no owner role note and drops the route', () => {
+    expect(
+      plainAdminToolNotes([
+        noOwner(
+          'read and write access to the data (no owner rights, and it cannot hand out access to others)'
+        ),
+      ])
+    ).toEqual([
+      "The tool's login has read and write access on shop, blog instead of full Database Admin rights.",
+    ])
+  })
+
+  it('says can only connect when the note says connect only', () => {
+    expect(
+      plainAdminToolNotes([
+        noOwner(
+          "the right to connect only (this server's TurboPanel daemon is older; update it to give read and write access)"
+        ),
+      ])
+    ).toEqual([
+      "The tool's login can only connect on shop, blog instead of full Database Admin rights.",
+    ])
+  })
+
+  it('turns both older daemon notes into one sentence', () => {
+    const older = plainAdminToolNotes([
+      "This server's TurboPanel daemon is older than owner roles, so the login was added with read and write access to the data instead of the full Database admin rights. Update the server and apply again to give it the full rights on databases that have an owner role.",
+      "This server's TurboPanel daemon is older than the Database admin login, so the login was added with read and write access instead of all rights on its databases. Update the server and apply again to give it the full rights.",
+    ])
+    expect(older).toEqual([
+      "This server's daemon is older, so the tool's login got read and write access only. Update the server, then apply again.",
+    ])
+  })
+
+  it('passes other notes through, but never API wording', () => {
+    expect(plainAdminToolNotes(['Something plain.'])).toEqual(['Something plain.'])
+    expect(plainAdminToolNotes(['Call POST …/managed/x to fix it.'])[0]).not.toContain('POST')
+    expect(plainAdminToolNotes(undefined)).toEqual([])
   })
 })
