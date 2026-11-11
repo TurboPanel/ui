@@ -159,6 +159,53 @@ describe('ManagedUsersPanel straight through', () => {
   })
 })
 
+describe('ManagedUsersPanel All Databases', () => {
+  it('sends allDatabases and no list, and shows the chip for an admin login too', async () => {
+    const onCreateUser = draw('mysql')
+    fireEvent.click(screen.getByLabelText('All Databases'))
+    await create('everything')
+    await waitFor(() => expect(onCreateUser).toHaveBeenCalledTimes(1))
+    const body = onCreateUser.mock.calls[0]?.[0]
+    expect(body).toMatchObject({ username: 'everything', allDatabases: true })
+    expect(body).not.toHaveProperty('databases')
+    expect(screen.getByTestId('admin-field')).toBeTruthy()
+  })
+
+  it('shows All databases in the list instead of the names', () => {
+    const users = [
+      { id: 'l1', username: 'reader', databases: ['app'], allDatabases: true, privileges: [] },
+    ] as never
+    render(
+      <ManagedUsersPanel
+        orgId="o1"
+        environmentId="e1"
+        engine="mysql"
+        databases={['app']}
+        users={users}
+        canManage={false}
+        busy={false}
+        onCreateDatabase={vi.fn()}
+        onDeleteDatabase={vi.fn()}
+        onCreateUser={vi.fn()}
+        onDeleteUser={vi.fn()}
+        onUpdateUser={vi.fn()}
+        onRotateUserPassword={vi.fn(async () => null)}
+        onRedeployService={vi.fn()}
+        onReload={vi.fn(async () => {})}
+      />
+    )
+    expect(screen.getByText('All databases')).toBeTruthy()
+  })
+
+  it('still sends the picked list when the chip is off', async () => {
+    const onCreateUser = draw('mysql')
+    await create('picked')
+    await waitFor(() => expect(onCreateUser).toHaveBeenCalledTimes(1))
+    expect(onCreateUser.mock.calls[0]?.[0]).toMatchObject({ databases: ['app'] })
+    expect(onCreateUser.mock.calls[0]?.[0]).not.toHaveProperty('allDatabases')
+  })
+})
+
 describe('ManagedUsersPanel while the last change is still applying', () => {
   it('locks the add forms and says so next to them, with a spinner', () => {
     const onCreateDatabase = vi.fn(async (_name: string) => {})

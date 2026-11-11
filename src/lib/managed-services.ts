@@ -258,6 +258,8 @@ export type ManagedSettings = {
     extraEnv?: Record<string, string>
   }
   engineConfig?: string
+  /** Lets a login of this Database Cluster use All Databases; off until the owner opts in. */
+  allowAllDatabasesLogins?: boolean
   /** Retention (keep-N) for `managed.backup` — clamped to the engine's `maxRetentionKeep`. */
   backups?: {
     retentionKeep?: number
@@ -301,6 +303,8 @@ export type ManagedUserRecord = {
   appliedUsername: string
   nameScheme?: NameScheme
   databases: string[]
+  /** Reads every database of the cluster, including ones added later; absent on an older control plane. */
+  allDatabases?: boolean
   privileges: string[]
   connectionRole: ManagedConnectionRole
   /** Absent on a control plane that predates permission modes. */
@@ -513,6 +517,8 @@ export type ManagedDetailResponse = {
   externalAccess?: ManagedExternalAccessView | null
   settings: ManagedSettings | null
   ssl: ManagedSslView | null
+  /** The two All Databases switches; both must be on for a login to use it. Absent on an older control plane (treated as on). */
+  allowAllDatabasesLogins?: { organization: boolean; cluster: boolean }
   release: ManagedReleaseView | null
   server: ManagedServerSummary | null
   rootUsername: string | null

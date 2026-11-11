@@ -22,6 +22,7 @@ import {
   type ManagedSettingsSection,
 } from '@/components/org/managed/managed-settings-panel'
 import { ManagedStatusPanel } from '@/components/org/managed/managed-status-panel'
+import { allDatabasesOffSwitch } from '@/components/org/managed/managed-login-databases'
 import { ManagedUsersPanel } from '@/components/org/managed/managed-users-panel'
 import {
   defaultManagedVersionSelection,
@@ -602,6 +603,7 @@ export function ManagedEnvironmentReadyPanels({
           environmentId={environmentId}
           engine={managed.engine}
           rootUsername={detail.rootUsername}
+          allDatabasesOff={allDatabasesOffSwitch(detail.allowAllDatabasesLogins)}
           databases={databases}
           users={users}
           canManage={canManage}
@@ -728,6 +730,7 @@ function ManagedDataPanels({
   environmentId,
   engine,
   rootUsername,
+  allDatabasesOff,
   databases,
   users,
   canManage,
@@ -746,6 +749,7 @@ function ManagedDataPanels({
   environmentId: string
   engine: string | null
   rootUsername: string | null
+  allDatabasesOff: 'organization' | 'cluster' | null
   databases: string[]
   users: ManagedUserRecord[]
   canManage: boolean
@@ -845,6 +849,7 @@ function ManagedDataPanels({
         onReload={async () => {
           await Promise.all([usersQuery.refetch(), databasesQuery.refetch()])
         }}
+        allDatabasesOff={allDatabasesOff}
         onCreateAppLogins={async (databaseName, body) => {
           const result = await appLoginsMutation.run({ databaseName, body })
           if (!result.ok) throw new Error(result.error ?? 'Failed to add the app logins')
