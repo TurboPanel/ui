@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BINDING_ENGINE_DEFAULT_KEYS,
+  plainPresetForEngine,
+  presetKeyNames,
+  presetsForEngine,
   BINDING_SECRET_KEY_SUFFIXES,
   DEFAULT_BINDING_KEY_PREFIX,
   MAX_BINDING_KEY_PREFIX_LENGTH,
@@ -35,6 +37,7 @@ describe('bindingPrefixedKeys', () => {
   it('emits the exact prefixed key set', () => {
     expect(bindingPrefixedKeys('DATABASE')).toEqual({
       url: 'DATABASE_URL',
+      sslMode: 'DATABASE_SSL_MODE',
       caCert: 'DATABASE_CA_CERT',
       caFile: 'DATABASE_CA_FILE',
       readSplit: 'DATABASE_READ_SPLIT',
@@ -47,50 +50,48 @@ describe('bindingPrefixedKeys', () => {
   })
 })
 
-describe('BINDING_ENGINE_DEFAULT_KEYS', () => {
-  it('matches postgres unprefixed keys including PGSSLMODE', () => {
-    expect(BINDING_ENGINE_DEFAULT_KEYS.postgres).toEqual([
-      'PGHOST',
-      'PGPORT',
-      'PGDATABASE',
-      'PGUSER',
-      'PGPASSWORD',
-      'PGSSLMODE',
+describe('binding presets', () => {
+  it('offers the plain preset first, per engine', () => {
+    expect(presetsForEngine('postgres')).toEqual(['postgres', 'laravel', 'metabase'])
+    expect(presetsForEngine('mariadb')).toEqual([
+      'mysql',
+      'laravel',
+      'wordpress',
+      'metabase',
+      'uptime-kuma',
     ])
+    expect(plainPresetForEngine('mysql')).toBe('mysql')
+    expect(plainPresetForEngine('redis')).toBeNull()
   })
 
-  it('matches mysql and mariadb MYSQL_* keys', () => {
-    expect(BINDING_ENGINE_DEFAULT_KEYS.mysql).toEqual([
-      'MYSQL_HOST',
-      'MYSQL_PORT',
-      'MYSQL_DATABASE',
-      'MYSQL_USER',
-      'MYSQL_PASSWORD',
+  it('names match the control plane preset table', () => {
+    expect(presetKeyNames('postgres', 'postgres')).toContain('PGSSLMODE')
+    expect(presetKeyNames('laravel', 'postgres')).toContain('DB_SSLMODE')
+    expect(presetKeyNames('laravel', 'mysql')).toContain('MYSQL_ATTR_SSL_CA')
+    expect(presetKeyNames('wordpress', 'mysql')).toEqual([
+      'DB_HOST',
+      'DB_USER',
+      'DB_PASSWORD',
+      'DB_NAME',
     ])
-    expect(BINDING_ENGINE_DEFAULT_KEYS.mariadb).toEqual(BINDING_ENGINE_DEFAULT_KEYS.mysql)
+    expect(presetKeyNames('metabase', 'mariadb')).toContain('MB_DB_DBNAME')
   })
 })
 
 describe('previewBindingKeys', () => {
-  it('includes engine defaults when requested', () => {
-    const keys = previewBindingKeys({
-      prefix: 'ORDERS',
-      engine: 'postgres',
-      emitEngineDefaults: true,
-    })
-    expect(keys).toContain('ORDERS_URL')
-    expect(keys).toContain('PGHOST')
-    expect(keys).toContain('PGSSLMODE')
+  it('lists prefixed names and the preset names apart', () => {
+    const keys = previewBindingKeys({ prefix: 'ORDERS', engine: 'postgres', preset: 'postgres' })
+    expect(keys.prefixed).toContain('ORDERS_URL')
+    expect(keys.prefixed).toContain('ORDERS_SSL_MODE')
+    expect(keys.prefixed).toContain('ORDERS_CA_FILE')
+    expect(keys.preset).toContain('PGHOST')
+    expect(keys.preset).toContain('PGSSLMODE')
   })
 
-  it('omits engine defaults when off', () => {
-    const keys = previewBindingKeys({
-      prefix: 'ORDERS',
-      engine: 'postgres',
-      emitEngineDefaults: false,
-    })
-    expect(keys).toContain('ORDERS_HOST')
-    expect(keys).not.toContain('PGHOST')
+  it('adds no preset names for None', () => {
+    const keys = previewBindingKeys({ prefix: 'ORDERS', engine: 'postgres', preset: null })
+    expect(keys.prefixed).toContain('ORDERS_HOST')
+    expect(keys.preset).toEqual([])
   })
 })
 

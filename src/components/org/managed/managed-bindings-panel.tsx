@@ -5,7 +5,6 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
-  Checkbox,
   ConfirmButton,
   EmptyState,
   SectionPanel,
@@ -13,9 +12,13 @@ import {
   TextField,
 } from '@/components/ui'
 import {
+  BINDING_PRESET_LABELS,
   DEFAULT_BINDING_KEY_PREFIX,
   bindingPrefixedKeys,
+  plainPresetForEngine,
+  presetsForEngine,
   previewBindingKeys,
+  type BindingPreset,
   validateBindingKeyPrefix,
 } from '@/lib/bindings'
 import {
@@ -31,6 +34,8 @@ import {
   useCreateBinding,
   useDeleteBinding,
   useManagedEnvironmentBindings,
+  useServiceBindings,
+  useUpdateBinding,
 } from '@/lib/queries/bindings'
 import { useEnvironments } from '@/lib/queries/environments'
 import { useProjects } from '@/lib/queries/projects'
@@ -44,7 +49,7 @@ type ConnectBindingFields = {
   loginId: string
   databaseName: string
   keyPrefix: string
-  emitEngineDefaults: boolean
+  preset: BindingPreset | null
 }
 
 /**
@@ -64,6 +69,52 @@ function caNote(prefix: string): string {
     `${keys.caFile} instead: the path of a file only the site owner's ` +
     `Linux user can read, kept in the site's .turbopanel-hosting folder. ` +
     `Paste that path into an app that asks for a CA file.`
+  )
+}
+
+/** Plain-words line on reading a binding's values from any other variable. */
+function referenceHint(prefix: string): string {
+  return (
+    `Use {$db.${prefix}.host} (and port, name, user, password, url, ca_file, ssl_mode, ` +
+    `driver) in any variable.`
+  )
+}
+
+const OWNED_PRESET_NOTE = 'Another database on this service already sets these names.'
+const NO_PRESET = 'none'
+
+function PresetPicker({
+  engine,
+  value,
+  owned,
+  disabled,
+  onChange,
+}: Readonly<{
+  engine: ManagedServiceEngine
+  value: BindingPreset | null
+  owned: boolean
+  disabled: boolean
+  onChange: (preset: BindingPreset | null) => void
+}>) {
+  const options = [
+    { value: NO_PRESET, label: 'None' },
+    ...presetsForEngine(engine).map((preset) => ({
+      value: preset as string,
+      label: BINDING_PRESET_LABELS[preset],
+      disabled: owned,
+    })),
+  ]
+  return (
+    <>
+      <SegmentedControl
+        options={options}
+        value={value ?? NO_PRESET}
+        onChange={(id) => onChange(id === NO_PRESET ? null : (id as BindingPreset))}
+        disabled={disabled}
+        accessibilityLabel="Variable Names"
+      />
+      {owned ? <Text style={panelStyles.muted}>{OWNED_PRESET_NOTE}</Text> : null}
+    </>
   )
 }
 
@@ -115,17 +166,23 @@ function BindingCard({
   user,
   canManage,
   disabled,
+  otherOwnsPreset,
   onOpenService,
   onDisconnect,
+  onChangeNames,
 }: Readonly<{
   binding: BindingRecord
   meta: ServiceMeta | undefined
   user: ManagedUserRecord | undefined
   canManage: boolean
   disabled: boolean
+  otherOwnsPreset: boolean
   onOpenService: (projectId: string, serviceId: string) => void
   onDisconnect: (binding: BindingRecord) => void
+  onChangeNames: (binding: BindingRecord, preset: BindingPreset | null) => Promise<boolean>
 }>) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<BindingPreset | null>(binding.preset)
   const endpoint = binding.endpoint ? `${binding.endpoint.host}:${binding.endpoint.port}` : '—'
 
   return (
@@ -142,10 +199,42 @@ function BindingCard({
         <Text style={panelStyles.detailLabel}>Prefix: </Text>
         {binding.keyPrefix}
       </Text>
-      {binding.emitEngineDefaults ? (
+      {binding.preset ? (
         <View style={styles.chip}>
-          <Text style={styles.chipText}>Engine defaults</Text>
+          <Text style={styles.chipText}>{BINDING_PRESET_LABELS[binding.preset]}</Text>
         </View>
+      ) : null}
+      {editing && binding.engine ? (
+        <>
+          <PresetPicker
+            engine={binding.engine}
+            value={draft}
+            owned={otherOwnsPreset}
+            disabled={disabled}
+            onChange={setDraft}
+          />
+          <ButtonRow>
+            <Button
+              label="Save"
+              variant="primary"
+              size="sm"
+              disabled={disabled}
+              onPress={() => {
+                void onChangeNames(binding, draft).then((saved) => {
+                  if (saved) setEditing(false)
+                })
+              }}
+            />
+            <Button
+              label="Cancel"
+              size="sm"
+              onPress={() => {
+                setDraft(binding.preset)
+                setEditing(false)
+              }}
+            />
+          </ButtonRow>
+        </>
       ) : null}
       <Text style={panelStyles.detailLine}>
         <Text style={panelStyles.detailLabel}>Endpoint: </Text>
@@ -155,6 +244,7 @@ function BindingCard({
         {"Points at this server's database ingress and does not move when the primary changes."}
       </Text>
       <Text style={panelStyles.muted}>{caNote(binding.keyPrefix)}</Text>
+      <Text style={panelStyles.muted}>{referenceHint(binding.keyPrefix)}</Text>
       <View style={styles.keyRow}>
         {binding.keys.map((key) => (
           <KeyChip key={key} label={key} />
@@ -166,6 +256,17 @@ function BindingCard({
             label="Open service"
             size="sm"
             onPress={() => onOpenService(meta.projectId, binding.serviceId)}
+          />
+        ) : null}
+        {canManage && binding.engine && !editing ? (
+          <Button
+            label="Change Names"
+            size="sm"
+            disabled={disabled}
+            onPress={() => {
+              setDraft(binding.preset)
+              setEditing(true)
+            }}
           />
         ) : null}
         {canManage ? (
@@ -191,6 +292,7 @@ function ServiceBindingGroup({
   disabled,
   onOpenService,
   onDisconnect,
+  onChangeNames,
 }: Readonly<{
   title: string
   rows: BindingRecord[]
@@ -200,6 +302,7 @@ function ServiceBindingGroup({
   disabled: boolean
   onOpenService: (projectId: string, serviceId: string) => void
   onDisconnect: (binding: BindingRecord) => void
+  onChangeNames: (binding: BindingRecord, preset: BindingPreset | null) => Promise<boolean>
 }>) {
   return (
     <View style={styles.group}>
@@ -212,8 +315,10 @@ function ServiceBindingGroup({
           user={userById.get(binding.loginId)}
           canManage={canManage}
           disabled={disabled}
+          otherOwnsPreset={rows.some((row) => row.id !== binding.id && row.preset !== null)}
           onOpenService={onOpenService}
           onDisconnect={onDisconnect}
+          onChangeNames={onChangeNames}
         />
       ))}
     </View>
@@ -248,7 +353,8 @@ function ConnectServiceForm({
   const [loginId, setLoginId] = useState('')
   const [databaseName, setDatabaseName] = useState('')
   const [keyPrefix, setKeyPrefix] = useState(DEFAULT_BINDING_KEY_PREFIX)
-  const [emitEngineDefaults, setEmitEngineDefaults] = useState(true)
+  // null means the person has not chosen yet: the default applies.
+  const [presetChoice, setPresetChoice] = useState<BindingPreset | typeof NO_PRESET | null>(null)
 
   const servicesForEnvQuery = useServices(orgId, targetEnvironmentId || undefined, {
     enabled: Boolean(targetEnvironmentId),
@@ -256,15 +362,18 @@ function ConnectServiceForm({
   const envServices = servicesForEnvQuery.data?.services ?? []
   const otherEnvironments = environments.filter((env) => env.id !== environmentId)
 
+  const serviceBindingsQuery = useServiceBindings(orgId, serviceId)
+  const presetOwned = (serviceBindingsQuery.data?.bindings ?? []).some((b) => b.preset !== null)
+  let preset: BindingPreset | null = null
+  if (engine && !presetOwned) {
+    preset = presetChoice === NO_PRESET ? null : (presetChoice ?? plainPresetForEngine(engine))
+  }
+
   const prefixValidation = validateBindingKeyPrefix(keyPrefix)
   const previewKeys =
     engine && prefixValidation.ok
-      ? previewBindingKeys({
-          prefix: prefixValidation.prefix,
-          engine,
-          emitEngineDefaults,
-        })
-      : []
+      ? previewBindingKeys({ prefix: prefixValidation.prefix, engine, preset })
+      : null
 
   return (
     <View style={styles.form}>
@@ -326,24 +435,40 @@ function ConnectServiceForm({
         editable={!disabled}
       />
 
-      <Checkbox
-        label="Also set engine defaults"
-        checked={emitEngineDefaults}
-        disabled={disabled}
-        onPress={() => setEmitEngineDefaults((v) => !v)}
-      />
-
-      {previewKeys.length > 0 ? (
-        <Text style={panelStyles.muted}>
-          {caNote(prefixValidation.ok ? prefixValidation.prefix : keyPrefix)}
-        </Text>
+      {engine ? (
+        <>
+          <Text style={panelStyles.detailLabel}>Variable Names</Text>
+          <PresetPicker
+            engine={engine}
+            value={preset}
+            owned={presetOwned}
+            disabled={disabled}
+            onChange={(next) => setPresetChoice(next ?? NO_PRESET)}
+          />
+        </>
       ) : null}
-      {previewKeys.length > 0 ? (
-        <View style={styles.keyRow}>
-          {previewKeys.map((key) => (
-            <KeyChip key={key} label={key} />
-          ))}
-        </View>
+
+      {previewKeys ? (
+        <>
+          <Text style={panelStyles.muted}>
+            {caNote(prefixValidation.ok ? prefixValidation.prefix : keyPrefix)}
+          </Text>
+          <View style={styles.keyRow}>
+            {previewKeys.prefixed.map((key) => (
+              <KeyChip key={key} label={key} />
+            ))}
+          </View>
+          {previewKeys.preset.length > 0 ? (
+            <>
+              <Text style={panelStyles.detailLabel}>Also Sets</Text>
+              <View style={styles.keyRow}>
+                {previewKeys.preset.map((key) => (
+                  <KeyChip key={key} label={key} />
+                ))}
+              </View>
+            </>
+          ) : null}
+        </>
       ) : null}
 
       <ButtonRow>
@@ -357,7 +482,7 @@ function ConnectServiceForm({
               loginId,
               databaseName,
               keyPrefix,
-              emitEngineDefaults,
+              preset,
             })
           }
         />
@@ -420,6 +545,7 @@ export function ManagedBindingsPanel({
   const allServicesQuery = useServices(orgId)
   const createBinding = useCreateBinding(orgId)
   const deleteBinding = useDeleteBinding(orgId)
+  const updateBinding = useUpdateBinding(orgId)
 
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -487,7 +613,7 @@ export function ManagedBindingsPanel({
         serviceId: fields.serviceId,
         databaseName: fields.databaseName.trim(),
         keyPrefix: prefixValidation.prefix,
-        emitEngineDefaults: fields.emitEngineDefaults,
+        preset: fields.preset,
         managedEnvironmentId: environmentId,
       })
       setShowForm(false)
@@ -510,6 +636,28 @@ export function ManagedBindingsPanel({
       })
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to disconnect'))
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const handleChangeNames = async (
+    binding: BindingRecord,
+    preset: BindingPreset | null
+  ): Promise<boolean> => {
+    setWorking(true)
+    setError(null)
+    try {
+      await updateBinding.mutateAsync({
+        id: binding.id,
+        body: { preset },
+        serviceId: binding.serviceId,
+        managedEnvironmentId: environmentId,
+      })
+      return true
+    } catch (err) {
+      setError(managedErrorMessage(err, 'Failed to change variable names'))
+      return false
     } finally {
       setWorking(false)
     }
@@ -548,6 +696,7 @@ export function ManagedBindingsPanel({
               disabled={disabled}
               onOpenService={handleOpenService}
               onDisconnect={handleDisconnect}
+              onChangeNames={handleChangeNames}
             />
           )
         })}

@@ -657,7 +657,9 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   binding_key_prefix_in_use:
     'This service already has a connection using that prefix — pick another.',
   binding_engine_defaults_in_use:
-    'Another connection on this service already owns the engine default keys — turn engine defaults off.',
+    'Another database on this service already sets these names. Choose None, or change the other one first.',
+  binding_preset_conflict: 'Send either a name preset or the engine defaults switch, not both.',
+  binding_preset_engine_mismatch: 'That set of names does not fit this database engine.',
   binding_key_conflict:
     'A variable key from this connection already exists on that service — rename or remove it first.',
   binding_endpoint_unavailable: "No network path from that service's server to this cluster.",

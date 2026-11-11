@@ -25,6 +25,7 @@ import type {
 import type { ManagedSslMode } from '@/lib/managed-ssl'
 import { getActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
 import { confirmNameQuery } from '@/lib/confirm-name'
+import type { BindingPreset } from '@/lib/bindings'
 import { fetchWithStepUp, reauthFailureMessage } from '@/lib/step-up'
 export {
   isForbiddenError,
@@ -3882,6 +3883,8 @@ export type BindingRecord = {
   serviceId: string
   databaseName: string
   keyPrefix: string
+  /** Effective name preset, or null for None. */
+  preset: BindingPreset | null
   emitEngineDefaults: boolean
   keys: string[]
   endpoint: { host: string; port: number } | null
@@ -11909,6 +11912,8 @@ export async function createBinding(body: {
   serviceId: string
   databaseName: string
   keyPrefix?: string
+  /** A preset id, or null for None. Do not send with `emitEngineDefaults`. */
+  preset?: BindingPreset | null
   emitEngineDefaults?: boolean
 }): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/bindings`, {
@@ -11921,6 +11926,7 @@ export async function updateBinding(
   id: string,
   body: {
     keyPrefix?: string
+    preset?: BindingPreset | null
     emitEngineDefaults?: boolean
     databaseName?: string
   }
