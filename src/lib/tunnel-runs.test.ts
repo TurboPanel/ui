@@ -514,7 +514,7 @@ describe('run token rotation', () => {
         },
         names
       )
-    ).toBe('juliet, panvm cannot all be reached right now. Try again once they are back.')
+    ).toBe('juliet, panvm cannot be reached right now. Try again once they are back.')
     expect(
       rotationBlockedReason(
         {
