@@ -12929,6 +12929,10 @@ export type TunnelRunTokenRotation = {
   pendingServerIds: string[]
   currentServerId: string | null
   stoppedReason: string | null
+  /** Servers still on the old token after the new one was issued: they could not reconnect after a restart. */
+  oldTokenServerIds?: string[]
+  /** A stop for a server that could not be reached: the control plane resumes it on its own. */
+  resumesOnItsOwn?: boolean
 }
 
 /** A refusal the control plane would give if a rotation were started now. */

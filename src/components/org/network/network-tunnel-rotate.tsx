@@ -12,6 +12,7 @@ import {
   rotationBlockedReason,
   rotationProgressLine,
   rotationRunning,
+  rotationStoppedHint,
   rotationStoppedLine,
 } from '@/lib/tunnel-runs'
 
@@ -68,7 +69,7 @@ export function NetworkTunnelRotate({
         <InlineNotice
           tone="warning"
           title={stopped}
-          body="Resuming carries on from where it stopped, with the token already issued."
+          body={rotation ? rotationStoppedHint(rotation, names) : undefined}
           actions={
             blocked ? null : (
               <Button

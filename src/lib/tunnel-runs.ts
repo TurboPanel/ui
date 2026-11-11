@@ -509,3 +509,18 @@ export function rotationBlockedReason(
       return withServerNames(block.message, names)
   }
 }
+
+/** What the stopped notice says next: the control plane retries on its own, or the person resumes. */
+export function rotationStoppedHint(
+  rotation: TunnelRunTokenRotation,
+  names: ReadonlyMap<string, string>
+): string {
+  const old = (rotation.oldTokenServerIds ?? []).map((id) => nameOf(id, names))
+  const stale =
+    old.length > 0
+      ? ` Until then ${old.join(', ')} ${old.length === 1 ? 'keeps' : 'keep'} the old token, which cannot reconnect after a restart.`
+      : ''
+  return rotation.resumesOnItsOwn
+    ? `It carries on by itself once the server can be reached.${stale}`
+    : `Resuming carries on from where it stopped, with the token already issued.${stale}`
+}

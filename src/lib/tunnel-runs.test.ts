@@ -9,6 +9,7 @@ import {
   rotationBlockedReason,
   rotationProgressLine,
   rotationRunning,
+  rotationStoppedHint,
   rotationStoppedLine,
   withServerNames,
   dnsOutcome,
@@ -473,6 +474,16 @@ describe('run token rotation', () => {
     ).toBe('Run token rotation stopped: Server panvm is offline')
     expect(rotationStoppedLine(base, names)).toBeNull()
     expect(withServerNames(`a ${A} b ${A}`, names)).toBe('a juliet b juliet')
+  })
+
+  it('says whether a stop carries on by itself, and which servers keep the old token meanwhile', () => {
+    const stopped = { ...base, phase: 'stopped' as const, oldTokenServerIds: [B] }
+    expect(rotationStoppedHint({ ...stopped, resumesOnItsOwn: true }, names)).toBe(
+      'It carries on by itself once the server can be reached. Until then panvm keeps the old token, which cannot reconnect after a restart.'
+    )
+    expect(rotationStoppedHint({ ...stopped, oldTokenServerIds: [] }, names)).toBe(
+      'Resuming carries on from where it stopped, with the token already issued.'
+    )
   })
 
   it('names why the action is unavailable, and nothing while it runs', () => {
