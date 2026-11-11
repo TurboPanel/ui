@@ -31,6 +31,7 @@ describe('adminToolReveal', () => {
       usernameLabel: 'Username',
       passwordLabel: 'Password',
       note: null,
+      notes: [],
     })
   })
 
@@ -48,6 +49,7 @@ describe('adminToolReveal', () => {
       usernameLabel: 'Sign-In Email',
       passwordLabel: 'Sign-In Password',
       note: PGADMIN_AUTO_CONNECT_NOTE,
+      notes: [],
     })
   })
 })

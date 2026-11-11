@@ -260,6 +260,25 @@ describe('ManagedAdminToolsPanel', () => {
     })
   })
 
+  it('shows the notes of an add under the password', async () => {
+    mocks.create.mockResolvedValue({
+      ok: true,
+      value: {
+        environmentId: 'e-new',
+        loginName: 'pgadmin_abc123',
+        loginPassword: 'db',
+        notes: ['Admin logins on PostgreSQL need an owner role.'],
+      },
+    })
+    renderPanel({ engine: 'postgres' })
+    fireEvent.click(screen.getByText('Add Admin Tool'))
+    fireEvent.change(screen.getByLabelText('Hostname'), { target: { value: 'pg.example.com' } })
+    fireEvent.click(screen.getByText('Add and Deploy'))
+    await waitFor(() =>
+      expect(screen.getByText('Admin logins on PostgreSQL need an owner role.')).toBeTruthy()
+    )
+  })
+
   it('reveals the pgAdmin web account with the connects-by-itself line', async () => {
     mocks.create.mockResolvedValue({
       ok: true,

@@ -8,6 +8,7 @@ import {
   TextLink,
   TypeNameDeleteButton,
 } from '@/components/ui'
+import { panelStyles } from '@/components/ui/panel-styles'
 import { confirmationName } from '@/lib/confirm-name'
 import type { ManagedAdminToolRecord } from '@/lib/instance-api'
 import { useLatestDeployments } from '@/lib/queries/environment-cards'
@@ -16,7 +17,7 @@ import {
   adminToolAccessLabel,
   adminToolDeployChip,
 } from '@/lib/managed-admin-tools'
-import { colors, spacing } from '@/lib/theme'
+import { spacing } from '@/lib/theme'
 
 /** The address the tool answers on. */
 export function adminToolUrl(tool: Pick<ManagedAdminToolRecord, 'hostname'>): string {
@@ -50,8 +51,8 @@ export function ManagedAdminToolCard({
   const deployChip = adminToolDeployChip(latest[tool.environmentId])
   const url = adminToolUrl(tool)
   return (
-    <View style={styles.card}>
-      <Text style={styles.title}>{tool.label}</Text>
+    <View style={panelStyles.detailCard}>
+      <Text style={panelStyles.detailTitle}>{tool.label}</Text>
       <TextLink
         label={url}
         onPress={() => openTool(url)}
@@ -97,19 +98,6 @@ export function ManagedAdminToolCard({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: 8,
-    padding: spacing.sm,
-    gap: spacing.xs,
-    backgroundColor: colors.bgSecondary,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-  },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

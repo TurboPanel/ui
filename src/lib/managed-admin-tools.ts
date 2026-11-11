@@ -80,6 +80,8 @@ export type AdminToolReveal = Readonly<{
   passwordLabel: string
   /** A muted line under the password. */
   note: string | null
+  /** Lines the control plane adds to an add (empty for a reset), shown under the password. */
+  notes: readonly string[]
 }>
 
 /** pgAdmin signs in with its web account; the other tools with the tool login. */
@@ -87,8 +89,9 @@ export function adminToolReveal(
   result: Pick<
     ManagedAdminToolCreated | ManagedAdminToolReset,
     'loginName' | 'loginPassword' | 'webEmail' | 'webPassword'
-  >
+  > & { notes?: readonly string[] }
 ): AdminToolReveal {
+  const notes = result.notes ?? []
   if (result.webEmail && result.webPassword) {
     return {
       username: result.webEmail,
@@ -96,6 +99,7 @@ export function adminToolReveal(
       usernameLabel: 'Sign-In Email',
       passwordLabel: 'Sign-In Password',
       note: PGADMIN_AUTO_CONNECT_NOTE,
+      notes,
     }
   }
   return {
@@ -104,6 +108,7 @@ export function adminToolReveal(
     usernameLabel: 'Username',
     passwordLabel: 'Password',
     note: null,
+    notes,
   }
 }
 
