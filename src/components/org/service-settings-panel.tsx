@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { PhpAppSettings, useIsSiteService } from '@/components/org/php-app-settings'
 import { ServiceFolderSettings } from '@/components/org/service-folder-settings'
 import { ServiceBindingsPanel } from '@/components/org/service-bindings-panel'
 import { Checkbox, SegmentedControl, type SegmentedOption } from '@/components/ui'
@@ -9,6 +10,11 @@ import {
   type ServiceOptions,
   type ServiceRecord,
 } from '@/lib/instance-api'
+import {
+  lifecycleFormFrom,
+  lifecycleSaveFields,
+  type PhpLifecycleForm,
+} from '@/lib/php-site-lifecycle'
 import { useUpdateService } from '@/lib/queries/services'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -141,6 +147,8 @@ export function ServiceSettingsPanel({
       ? String(Math.round(parsed.resources.memoryReservationBytes / (1024 * 1024)))
       : '',
   )
+  const [lifecycle, setLifecycle] = useState<PhpLifecycleForm>(() => lifecycleFormFrom(parsed))
+  const isSite = useIsSiteService(orgId, service)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedHint, setSavedHint] = useState<string | null>(null)
@@ -153,6 +161,7 @@ export function ServiceSettingsPanel({
     setPreDeploy(next.preDeployCommand ?? '')
     setPostDeploy(next.postDeployCommand ?? '')
     setHealthPolicy(next.healthCheck?.policy ?? 'disabled')
+    setLifecycle(lifecycleFormFrom(next))
     setCpus(next.resources?.cpus?.toString() ?? '')
     setMemoryMb(
       next.resources?.memoryBytes
@@ -166,8 +175,14 @@ export function ServiceSettingsPanel({
     )
   }, [service?.id, service?.options])
 
-  const buildOptions = (): ServiceOptions => {
+  const buildOptions = (): ServiceOptions | { error: string } => {
     const options: ServiceOptions = {}
+    // A save replaces the stored options, so the PHP App fields are carried
+    // through unchanged while the section is not shown.
+    const stored = parseServiceOptions(service?.options)
+    const lifecycleFields = lifecycleSaveFields(isSite, lifecycle, stored)
+    if ('error' in lifecycleFields) return lifecycleFields
+    Object.assign(options, lifecycleFields.fields)
     if (preDeploy.trim()) options.preDeployCommand = preDeploy.trim()
     if (postDeploy.trim()) options.postDeployCommand = postDeploy.trim()
     if (disableCache) options.build = { disableCache: true }
@@ -189,6 +204,11 @@ export function ServiceSettingsPanel({
     setError(null)
     setSavedHint(null)
     const options = buildOptions()
+    if ('error' in options) {
+      setSaving(false)
+      setError(options.error)
+      return
+    }
     const result = await updateMutation.run({ options })
     setSaving(false)
     if (!result.ok) {
@@ -281,6 +301,14 @@ export function ServiceSettingsPanel({
           autoCorrect={false}
         />
       </View>
+
+      {isSite ? (
+        <PhpAppSettings
+          form={lifecycle}
+          disabled={!canManage || saving}
+          onChange={setLifecycle}
+        />
+      ) : null}
 
       <View style={styles.field}>
         <Text style={styles.label}>Health check policy</Text>

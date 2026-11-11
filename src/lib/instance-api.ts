@@ -3978,9 +3978,37 @@ export type EnvironmentLifecycleAction = 'start' | 'stop' | 'restart'
 
 export type HealthCheckPolicy = 'disabled' | 'warn' | 'required'
 
+export type PostDeployTiming = 'before-traffic' | 'after-switch'
+
+export type SiteWorkerOption = {
+  /** Lowercase letters, digits and dashes, at most 32 characters; unique per service. */
+  name: string
+  command: string
+  /** 1 to 8; absent means 1. */
+  processes?: number
+  /** Seconds, 10 to 3600; absent means 90. */
+  stopTimeoutSeconds?: number
+  /** MiB, 64 to 65536 (not bytes, unlike `resources`). */
+  memoryMb?: number
+  /** Absent means enabled; only `false` is stored. */
+  enabled?: boolean
+}
+
 export type ServiceOptions = {
   preDeployCommand?: string
   postDeployCommand?: string
+  /**
+   * PHP site commands, one command line each (at most 10), run as the site's
+   * account in each new release. A retried deploy can run them again, so they
+   * should be safe to run more than once. Not run on a rollback.
+   */
+  postDeployCommands?: string[]
+  /** Seconds, 30 to 1800; absent means 900. */
+  postDeployTimeoutSeconds?: number
+  /** Absent means `before-traffic`. */
+  postDeployTiming?: PostDeployTiming
+  /** PHP site background workers (at most 10), restarted after every deploy. */
+  workers?: SiteWorkerOption[]
   build?: {
     disableCache?: boolean
   }
