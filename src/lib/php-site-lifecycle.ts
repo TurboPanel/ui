@@ -99,7 +99,10 @@ function workerFrom(row: WorkerRow): { worker: SiteWorkerOption } | { error: str
   const worker: SiteWorkerOption = { name, command: row.command.trim() }
   for (const [field, label] of WORKER_NUMBER_FIELDS) {
     const parsed = wholeNumber(row[field])
-    if (!parsed.ok) return { error: `Worker "${name}": the ${label} must be a whole number.` }
+    if (!parsed.ok) {
+      const who = name === '' ? 'A new worker' : `Worker "${name}"`
+      return { error: `${who}: the ${label} must be a whole number.` }
+    }
     if (parsed.value !== undefined) worker[field] = parsed.value
   }
   if (!row.enabled) worker.enabled = false

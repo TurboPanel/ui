@@ -183,6 +183,14 @@ describe('ServiceSettingsPanel PHP App section', () => {
     expect(screen.getByText('Post-deploy command')).toBeTruthy()
   })
 
+  it('still sends a stored older post-deploy command from a site save', async () => {
+    mount(service({ postDeployCommand: 'echo done' }))
+    fireEvent.click(screen.getByText('Save service settings'))
+    await waitFor(() => expect(state.run).toHaveBeenCalled())
+    const sent = state.run.mock.calls[0]?.[0] as { options: Record<string, unknown> }
+    expect(sent.options.postDeployCommand).toBe('echo done')
+  })
+
   it('keeps stored commands when saving a service that is not a site', async () => {
     state.kind = 'container'
     mount(service({ postDeployCommands: ['a'] }))

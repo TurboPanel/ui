@@ -5,11 +5,7 @@ import { ServiceFolderSettings } from '@/components/org/service-folder-settings'
 import { ServiceBindingsPanel } from '@/components/org/service-bindings-panel'
 import { Checkbox, SegmentedControl, type SegmentedOption } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import {
-  type HealthCheckPolicy,
-  type ServiceOptions,
-  type ServiceRecord,
-} from '@/lib/instance-api'
+import { type HealthCheckPolicy, type ServiceOptions, type ServiceRecord } from '@/lib/instance-api'
 import {
   lifecycleFormFrom,
   lifecycleSaveFields,
@@ -51,12 +47,7 @@ function ToggleRow({
 }>) {
   return (
     <View style={styles.toggleRow}>
-      <Checkbox
-        checked={checked}
-        disabled={disabled}
-        onPress={onToggle}
-        label={label}
-      />
+      <Checkbox checked={checked} disabled={disabled} onPress={onToggle} label={label} />
     </View>
   )
 }
@@ -68,10 +59,7 @@ const HEALTH_POLICY_OPTIONS: readonly SegmentedOption<HealthCheckPolicy>[] = [
 ]
 
 function fieldInputStyle(multiline = false) {
-  return [
-    Platform.OS === 'web' ? webInputStyle : styles.input,
-    multiline && styles.multilineInput,
-  ]
+  return [Platform.OS === 'web' ? webInputStyle : styles.input, multiline && styles.multilineInput]
 }
 
 function parsePositiveInt(value: string): number | undefined {
@@ -82,7 +70,7 @@ function parsePositiveInt(value: string): number | undefined {
 
 function buildOperationsOptions(
   stopGrace: string,
-  maxRestart: string,
+  maxRestart: string
 ): ServiceOptions['operations'] | undefined {
   const operations: NonNullable<ServiceOptions['operations']> = {}
   const stopGraceNum = parsePositiveInt(stopGrace)
@@ -95,7 +83,7 @@ function buildOperationsOptions(
 function buildResourcesOptions(
   cpus: string,
   memoryMb: string,
-  memoryReservationMb: string,
+  memoryReservationMb: string
 ): ServiceOptions['resources'] | undefined {
   const resources: NonNullable<ServiceOptions['resources']> = {}
   const cpusNum = Number.parseFloat(cpus.trim())
@@ -126,26 +114,26 @@ export function ServiceSettingsPanel({
   const parsed = parseServiceOptions(service?.options)
   const [disableCache, setDisableCache] = useState(parsed.build?.disableCache === true)
   const [stopGrace, setStopGrace] = useState(
-    parsed.operations?.stopGracePeriodSeconds?.toString() ?? '',
+    parsed.operations?.stopGracePeriodSeconds?.toString() ?? ''
   )
   const [maxRestart, setMaxRestart] = useState(
-    parsed.operations?.maxRestartAttempts?.toString() ?? '',
+    parsed.operations?.maxRestartAttempts?.toString() ?? ''
   )
   const [preDeploy, setPreDeploy] = useState(parsed.preDeployCommand ?? '')
   const [postDeploy, setPostDeploy] = useState(parsed.postDeployCommand ?? '')
   const [healthPolicy, setHealthPolicy] = useState<HealthCheckPolicy>(
-    parsed.healthCheck?.policy ?? 'disabled',
+    parsed.healthCheck?.policy ?? 'disabled'
   )
   const [cpus, setCpus] = useState(parsed.resources?.cpus?.toString() ?? '')
   const [memoryMb, setMemoryMb] = useState(
     parsed.resources?.memoryBytes
       ? String(Math.round(parsed.resources.memoryBytes / (1024 * 1024)))
-      : '',
+      : ''
   )
   const [memoryReservationMb, setMemoryReservationMb] = useState(
     parsed.resources?.memoryReservationBytes
       ? String(Math.round(parsed.resources.memoryReservationBytes / (1024 * 1024)))
-      : '',
+      : ''
   )
   const [lifecycle, setLifecycle] = useState<PhpLifecycleForm>(() => lifecycleFormFrom(parsed))
   const isSite = useIsSiteService(orgId, service)
@@ -166,12 +154,12 @@ export function ServiceSettingsPanel({
     setMemoryMb(
       next.resources?.memoryBytes
         ? String(Math.round(next.resources.memoryBytes / (1024 * 1024)))
-        : '',
+        : ''
     )
     setMemoryReservationMb(
       next.resources?.memoryReservationBytes
         ? String(Math.round(next.resources.memoryReservationBytes / (1024 * 1024)))
-        : '',
+        : ''
     )
   }, [service?.id, service?.options])
 
@@ -222,78 +210,57 @@ export function ServiceSettingsPanel({
   return (
     <View style={{ gap: spacing.md }}>
       {service?.id ? (
-        <ServiceBindingsPanel
-          orgId={orgId}
-          serviceId={service.id}
-          canManage={canManage}
-        />
+        <ServiceBindingsPanel orgId={orgId} serviceId={service.id} canManage={canManage} />
       ) : null}
       {service?.id ? (
         <ServiceFolderSettings orgId={orgId} service={service} canManage={canManage} />
       ) : null}
       <View style={panelStyles.detailCard}>
-      <Text style={panelStyles.detailTitle}>{composeServiceName}</Text>
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {savedHint ? <Text style={panelStyles.muted}>{savedHint}</Text> : null}
+        <Text style={panelStyles.detailTitle}>{composeServiceName}</Text>
+        {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+        {savedHint ? <Text style={panelStyles.muted}>{savedHint}</Text> : null}
 
-      <ToggleRow
-        label="Disable build cache"
-        checked={disableCache}
-        disabled={!canManage || saving}
-        onToggle={() => setDisableCache((current) => !current)}
-      />
-
-      <View style={styles.fieldRow}>
-        <View style={styles.fieldHalf}>
-          <Text style={styles.label}>Stop grace (seconds)</Text>
-          <TextInput
-            style={fieldInputStyle()}
-            value={stopGrace}
-            onChangeText={setStopGrace}
-            placeholder="30"
-            placeholderTextColor={colors.textDim}
-            keyboardType="number-pad"
-            editable={canManage && !saving}
-          />
-        </View>
-        <View style={styles.fieldHalf}>
-          <Text style={styles.label}>Max restart attempts</Text>
-          <TextInput
-            style={fieldInputStyle()}
-            value={maxRestart}
-            onChangeText={setMaxRestart}
-            placeholder="10"
-            placeholderTextColor={colors.textDim}
-            keyboardType="number-pad"
-            editable={canManage && !saving}
-          />
-        </View>
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Pre-deploy command</Text>
-        <TextInput
-          style={fieldInputStyle(true)}
-          value={preDeploy}
-          onChangeText={setPreDeploy}
-          placeholder="Runs on the server before compose up"
-          placeholderTextColor={colors.textDim}
-          multiline
-          numberOfLines={3}
-          editable={canManage && !saving}
-          autoCapitalize="none"
-          autoCorrect={false}
+        <ToggleRow
+          label="Disable build cache"
+          checked={disableCache}
+          disabled={!canManage || saving}
+          onToggle={() => setDisableCache((current) => !current)}
         />
-      </View>
 
-      {isSite ? null : (
+        <View style={styles.fieldRow}>
+          <View style={styles.fieldHalf}>
+            <Text style={styles.label}>Stop grace (seconds)</Text>
+            <TextInput
+              style={fieldInputStyle()}
+              value={stopGrace}
+              onChangeText={setStopGrace}
+              placeholder="30"
+              placeholderTextColor={colors.textDim}
+              keyboardType="number-pad"
+              editable={canManage && !saving}
+            />
+          </View>
+          <View style={styles.fieldHalf}>
+            <Text style={styles.label}>Max restart attempts</Text>
+            <TextInput
+              style={fieldInputStyle()}
+              value={maxRestart}
+              onChangeText={setMaxRestart}
+              placeholder="10"
+              placeholderTextColor={colors.textDim}
+              keyboardType="number-pad"
+              editable={canManage && !saving}
+            />
+          </View>
+        </View>
+
         <View style={styles.field}>
-          <Text style={styles.label}>Post-deploy command</Text>
+          <Text style={styles.label}>Pre-deploy command</Text>
           <TextInput
             style={fieldInputStyle(true)}
-            value={postDeploy}
-            onChangeText={setPostDeploy}
-            placeholder="Runs after compose up"
+            value={preDeploy}
+            onChangeText={setPreDeploy}
+            placeholder="Runs on the server before compose up"
             placeholderTextColor={colors.textDim}
             multiline
             numberOfLines={3}
@@ -302,85 +269,102 @@ export function ServiceSettingsPanel({
             autoCorrect={false}
           />
         </View>
-      )}
 
-      {isSite ? (
-        <PhpAppSettings
-          form={lifecycle}
-          disabled={!canManage || saving}
-          onChange={setLifecycle}
-        />
-      ) : null}
+        {isSite ? null : (
+          <View style={styles.field}>
+            <Text style={styles.label}>Post-deploy command</Text>
+            <TextInput
+              style={fieldInputStyle(true)}
+              value={postDeploy}
+              onChangeText={setPostDeploy}
+              placeholder="Runs after compose up"
+              placeholderTextColor={colors.textDim}
+              multiline
+              numberOfLines={3}
+              editable={canManage && !saving}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        )}
 
-      <View style={styles.field}>
-        <Text style={styles.label}>Health check policy</Text>
-        <SegmentedControl
-          accessibilityLabel="Health check policy"
-          options={HEALTH_POLICY_OPTIONS}
-          value={healthPolicy}
-          disabled={!canManage || saving}
-          onChange={setHealthPolicy}
-        />
-      </View>
+        {isSite ? (
+          <PhpAppSettings
+            form={lifecycle}
+            disabled={!canManage || saving}
+            onChange={setLifecycle}
+          />
+        ) : null}
 
-      <View style={styles.fieldRow}>
-        <View style={styles.fieldHalf}>
-          <Text style={styles.label}>CPU limit</Text>
-          <TextInput
-            style={fieldInputStyle()}
-            value={cpus}
-            onChangeText={setCpus}
-            placeholder="e.g. 1.5"
-            placeholderTextColor={colors.textDim}
-            keyboardType="decimal-pad"
-            editable={canManage && !saving}
+        <View style={styles.field}>
+          <Text style={styles.label}>Health check policy</Text>
+          <SegmentedControl
+            accessibilityLabel="Health check policy"
+            options={HEALTH_POLICY_OPTIONS}
+            value={healthPolicy}
+            disabled={!canManage || saving}
+            onChange={setHealthPolicy}
           />
         </View>
-        <View style={styles.fieldHalf}>
-          <Text style={styles.label}>Memory (MiB)</Text>
+
+        <View style={styles.fieldRow}>
+          <View style={styles.fieldHalf}>
+            <Text style={styles.label}>CPU limit</Text>
+            <TextInput
+              style={fieldInputStyle()}
+              value={cpus}
+              onChangeText={setCpus}
+              placeholder="e.g. 1.5"
+              placeholderTextColor={colors.textDim}
+              keyboardType="decimal-pad"
+              editable={canManage && !saving}
+            />
+          </View>
+          <View style={styles.fieldHalf}>
+            <Text style={styles.label}>Memory (MiB)</Text>
+            <TextInput
+              style={fieldInputStyle()}
+              value={memoryMb}
+              onChangeText={setMemoryMb}
+              placeholder="512"
+              placeholderTextColor={colors.textDim}
+              keyboardType="number-pad"
+              editable={canManage && !saving}
+            />
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Memory reservation (MiB)</Text>
           <TextInput
             style={fieldInputStyle()}
-            value={memoryMb}
-            onChangeText={setMemoryMb}
-            placeholder="512"
+            value={memoryReservationMb}
+            onChangeText={setMemoryReservationMb}
+            placeholder="Optional"
             placeholderTextColor={colors.textDim}
             keyboardType="number-pad"
             editable={canManage && !saving}
           />
         </View>
-      </View>
 
-      <View style={styles.field}>
-        <Text style={styles.label}>Memory reservation (MiB)</Text>
-        <TextInput
-          style={fieldInputStyle()}
-          value={memoryReservationMb}
-          onChangeText={setMemoryReservationMb}
-          placeholder="Optional"
-          placeholderTextColor={colors.textDim}
-          keyboardType="number-pad"
-          editable={canManage && !saving}
-        />
-      </View>
-
-      {canManage ? (
-        <>
-          {!service ? (
-            <Text style={panelStyles.muted}>Save the compose document first.</Text>
-          ) : null}
-          <Pressable
-            style={[styles.saveButton, (saving || !service) && styles.buttonDisabled]}
-            disabled={saving || !service}
-            onPress={() => {
-              void save()
-            }}
-          >
-            <Text style={styles.saveButtonText}>
-              {saving ? 'Saving…' : 'Save service settings'}
-            </Text>
-          </Pressable>
-        </>
-      ) : null}
+        {canManage ? (
+          <>
+            {!service ? (
+              <Text style={panelStyles.muted}>Save the compose document first.</Text>
+            ) : null}
+            <Pressable
+              style={[styles.saveButton, (saving || !service) && styles.buttonDisabled]}
+              disabled={saving || !service}
+              onPress={() => {
+                void save()
+              }}
+            >
+              <Text style={styles.saveButtonText}>
+                {saving ? 'Saving…' : 'Save service settings'}
+              </Text>
+            </Pressable>
+          </>
+        ) : null}
       </View>
     </View>
   )

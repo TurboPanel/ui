@@ -38,6 +38,10 @@ describe('php site lifecycle form', () => {
     expect(lifecycleFieldsFrom(form)).toEqual({
       error: 'Worker "queue": the process count must be a whole number.',
     })
+    form.workers = [{ ...emptyWorkerRow('n'), memoryMb: 'x' }]
+    expect(lifecycleFieldsFrom(form)).toEqual({
+      error: 'A new worker: the memory limit in megabytes must be a whole number.',
+    })
     form.workers = []
     form.timeoutSeconds = '1.5'
     expect(lifecycleFieldsFrom(form)).toHaveProperty('error')
