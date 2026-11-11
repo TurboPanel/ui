@@ -9,9 +9,9 @@ import { type HealthCheckPolicy, type ServiceOptions, type ServiceRecord } from 
 import {
   lifecycleFieldsFrom,
   lifecycleFormFrom,
-  storedLifecycleFields,
   type PhpLifecycleForm,
 } from '@/lib/php-site-lifecycle'
+import { mergeEditedOptions } from '@/lib/service-options-merge'
 import { useUpdateService } from '@/lib/queries/services'
 import { chrome, colors, spacing } from '@/lib/theme'
 
@@ -27,6 +27,22 @@ const webInputStyle = {
   minHeight: 44,
   fontFamily: 'monospace',
 } as const
+
+const PANEL_OPTION_KEYS: readonly (keyof ServiceOptions)[] = [
+  'preDeployCommand',
+  'postDeployCommand',
+  'build',
+  'operations',
+  'healthCheck',
+  'resources',
+]
+
+const LIFECYCLE_OPTION_KEYS: readonly (keyof ServiceOptions)[] = [
+  'postDeployCommands',
+  'postDeployTimeoutSeconds',
+  'postDeployTiming',
+  'workers',
+]
 
 function parseServiceOptions(value: unknown): ServiceOptions {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -166,14 +182,16 @@ export function ServiceSettingsPanel({
 
   const buildOptions = (): ServiceOptions | { error: string } => {
     const options: ServiceOptions = {}
-    // A save replaces the stored options, so the PHP App fields are carried
-    // through unchanged while the section is not shown.
     const stored = parseServiceOptions(service?.options)
-    const lifecycleFields = isSite
-      ? lifecycleFieldsFrom(lifecycle)
-      : { fields: storedLifecycleFields(stored) }
-    if ('error' in lifecycleFields) return lifecycleFields
-    Object.assign(options, lifecycleFields.fields)
+    // The PHP App fields are edited only while the section is shown; otherwise
+    // they stay among the stored options carried through unchanged.
+    let editedKeys: readonly (keyof ServiceOptions)[] = PANEL_OPTION_KEYS
+    if (isSite) {
+      const lifecycleFields = lifecycleFieldsFrom(lifecycle)
+      if ('error' in lifecycleFields) return lifecycleFields
+      Object.assign(options, lifecycleFields.fields)
+      editedKeys = [...PANEL_OPTION_KEYS, ...LIFECYCLE_OPTION_KEYS]
+    }
     if (preDeploy.trim()) options.preDeployCommand = preDeploy.trim()
     if (postDeploy.trim()) options.postDeployCommand = postDeploy.trim()
     if (disableCache) options.build = { disableCache: true }
@@ -186,7 +204,7 @@ export function ServiceSettingsPanel({
     const resources = buildResourcesOptions(cpus, memoryMb, memoryReservationMb)
     if (resources) options.resources = resources
 
-    return options
+    return mergeEditedOptions(stored, options, editedKeys)
   }
 
   const save = async () => {

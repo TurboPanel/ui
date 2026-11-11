@@ -4009,6 +4009,8 @@ export type ServiceOptions = {
   postDeployTiming?: PostDeployTiming
   /** PHP site background workers (at most 10), restarted after every deploy. */
   workers?: SiteWorkerOption[]
+  /** Desired instance count (1 = single container). Set by managed apply, not by the settings screen. */
+  instances?: number
   build?: {
     disableCache?: boolean
   }
