@@ -4,6 +4,7 @@ import { statusInfo } from '@/lib/v4/status-vocab'
 import {
   cacheAccessLabel,
   cacheAccountChoices,
+  cacheFormDiffers,
   cacheFormError,
   cacheFormFor,
   cacheMemoryLabel,
@@ -143,6 +144,17 @@ describe('request bodies', () => {
       keyPrefix: 'SESS',
     })
     expect(updateCacheBody(cache, { ...form, memory: '8' })).toBeNull()
+  })
+})
+
+describe('edit differences', () => {
+  it('sees a change even when the new value is invalid', () => {
+    const form = cacheFormFor(cache)
+    expect(cacheFormDiffers(cache, form)).toBe(false)
+    expect(cacheFormDiffers(cache, { ...form, memory: '5' })).toBe(true)
+    expect(cacheFormDiffers(cache, { ...form, prefix: '1BAD' })).toBe(true)
+    expect(cacheFormDiffers(cache, { ...form, memory: ' 64 ' })).toBe(false)
+    expect(cacheFormDiffers(cache, { ...form, access: 'port' })).toBe(true)
   })
 })
 

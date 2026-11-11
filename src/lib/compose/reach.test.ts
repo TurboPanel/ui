@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseReachPort,
-  reachableServiceNames,
+  reachCandidates,
+  reachSelectable,
   reachDecision,
   toggleReachName,
 } from '@/lib/compose/reach'
@@ -66,10 +67,33 @@ describe('reach editing', () => {
     expect(parseReachPort('')).toBeNull()
   })
 
-  it('offers only sites and Node apps', () => {
+  it('offers only sites and Node apps, with the account each runs as', () => {
     expect(
-      reachableServiceNames({ web: 'site', api: 'node', cache: 'container', db: undefined })
-    ).toEqual(['web', 'api'])
+      reachCandidates({
+        web: { kind: 'site', account: 'blog' },
+        api: { kind: 'node' },
+        cache: { kind: 'container' },
+        db: {},
+      })
+    ).toEqual([
+      { name: 'web', account: 'blog' },
+      { name: 'api', account: null },
+    ])
+  })
+
+  it('limits the choice to one account once a name is chosen', () => {
+    const list = [
+      { name: 'web', account: 'blog' },
+      { name: 'api', account: 'blog' },
+      { name: 'shop', account: 'store' },
+      { name: 'bare', account: null },
+    ]
+    expect(reachSelectable(list, [], 'shop')).toBe(true)
+    expect(reachSelectable(list, ['web'], 'api')).toBe(true)
+    expect(reachSelectable(list, ['web'], 'shop')).toBe(false)
+    expect(reachSelectable(list, ['web'], 'bare')).toBe(false)
+    expect(reachSelectable(list, ['web'], 'web')).toBe(true)
+    expect(reachSelectable(list, ['gone'], 'shop')).toBe(true)
   })
 
   it('toggles names and stops at eight', () => {

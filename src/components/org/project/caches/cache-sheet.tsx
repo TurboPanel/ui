@@ -13,6 +13,7 @@ import {
   CACHE_ACCESS_CHOICES,
   CACHE_ENGINE_LABEL,
   CACHE_VARIABLES_NOTE,
+  cacheFormDiffers,
   cacheFormError,
   cacheFormFor,
   cacheMemoryHint,
@@ -158,6 +159,7 @@ export function CacheSheet({
   const change = (next: Partial<CacheForm>) => {
     setForm((current) => ({ ...current, ...next }))
     setError(null)
+    setTouched(true)
   }
 
   const save = async () => {
@@ -192,13 +194,13 @@ export function CacheSheet({
 
   const memoryError = touched ? validateCacheMemory(form.memory) : null
   const prefixError = touched ? validateCachePrefix(form.prefix.trim()) : null
-  const unchanged = !adding && cache !== null && updateCacheBody(cache, form) === null
+  const unchanged = cache !== null && !cacheFormDiffers(cache, form)
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
       title={adding ? 'Add Cache' : `Edit ${cache.name}`}
-      why={adding ? undefined : 'A new limit or access restarts the cache.'}
+      why={adding ? undefined : 'A new limit, access or key prefix restarts the cache.'}
       footer={
         <>
           <ActionButton label="Cancel" variant="quiet" onPress={onClose} />

@@ -28,6 +28,7 @@ vi.mock('@/components/ui', () => ({
         value={props.value as string}
         onChange={(event) => (props.onChangeText as (value: string) => void)(event.target.value)}
       />
+      {props.error ? <span role="alert">{props.error as string}</span> : null}
     </label>
   ),
   MonoText: (props: Readonly<Record<string, unknown>>) => <code>{props.children as string}</code>,
@@ -245,5 +246,32 @@ describe.each(SCENARIOS)('CachesSection ($name)', (scenario) => {
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => expect(state.updateRun).toHaveBeenCalledTimes(1))
     expect(state.updateRun).toHaveBeenCalledWith({ cacheId: 'c1', body: { maxMemoryMb: 128 } })
+  })
+
+  it('says what is wrong with an edit and keeps Save pressable', async () => {
+    render(<CachesSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for cache sessions' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }))
+    fireEvent.change(screen.getByLabelText('Memory limit in MiB'), { target: { value: '5' } })
+    expect(screen.getAllByRole('alert')[0].textContent).toContain('from 16 to 4096')
+    const save = screen.getByText('Save').closest('button')
+    expect(save?.getAttribute('aria-disabled')).not.toBe('true')
+    fireEvent.change(screen.getByLabelText('Variable prefix'), { target: { value: '1BAD' } })
+    expect(
+      screen
+        .getAllByRole('alert')
+        .map((node) => node.textContent)
+        .join(' ')
+    ).toContain('Start with a letter')
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => expect(screen.getAllByRole('alert').length).toBeGreaterThan(0))
+    expect(state.updateRun).not.toHaveBeenCalled()
+  })
+
+  it('names the restart for a limit, access or prefix change', () => {
+    render(<CachesSection />)
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for cache sessions' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }))
+    expect(screen.getByText('A new limit, access or key prefix restarts the cache.')).toBeTruthy()
   })
 })

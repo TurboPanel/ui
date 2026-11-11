@@ -175,6 +175,15 @@ export function createCacheBody(form: CacheForm): CreateCacheBody | null {
   }
 }
 
+/** True when a field differs from the record, whether or not the new values are valid. */
+export function cacheFormDiffers(cache: CacheRecord, form: CacheForm): boolean {
+  return (
+    form.access !== cache.access ||
+    form.memory.trim() !== String(cache.maxMemoryMb) ||
+    form.prefix.trim() !== cache.keyPrefix
+  )
+}
+
 /** Only what changed; null when nothing did (the control plane refuses an empty change). */
 export function updateCacheBody(cache: CacheRecord, form: CacheForm): UpdateCacheBody | null {
   if (cacheFormError(form, false) !== null) return null

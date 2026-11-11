@@ -46,7 +46,7 @@ import {
   type ComposeEditorView,
   type ComposeLintIssue,
 } from '@/lib/compose'
-import { reachableServiceNames } from '@/lib/compose/reach'
+import { reachCandidates } from '@/lib/compose/reach'
 import {
   readComposeNetworks,
   writeComposeNetworks,
@@ -1173,12 +1173,12 @@ export function ComposeEditorSection({
   }, [hideHeader, tab, yaml, draft])
 
   const reachableServices = useMemo(() => {
-    const services = servicesFrom(draft)
-    const kinds: Record<string, string | undefined> = {}
-    for (const [name, service] of Object.entries(services)) {
-      kinds[name] = readServiceTurbopanelExtension(service)?.serviceKind
+    const services: Record<string, { kind?: string; account?: string }> = {}
+    for (const [name, service] of Object.entries(servicesFrom(draft))) {
+      const extension = readServiceTurbopanelExtension(service)
+      services[name] = { kind: extension?.serviceKind, account: extension?.principal }
     }
-    return reachableServiceNames(kinds)
+    return reachCandidates(services)
   }, [draft])
 
   /** One service's compose fields — shared by the card list and the document. */

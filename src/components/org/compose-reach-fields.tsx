@@ -1,20 +1,30 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { Checkbox, MonoText, TextField } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   REACH_HINT,
+  REACH_ONE_ACCOUNT_NOTE,
   REACH_SECTION_TITLE,
   reachDecision,
+  reachSelectable,
   toggleReachName,
+  type ReachCandidate,
 } from '@/lib/compose/reach'
 import type { ComposeServiceReachExtension } from '@/lib/compose/service-kind'
 import { spacing } from '@/lib/theme'
 
+function reachKey(reach: ComposeServiceReachExtension | undefined): string {
+  return reach === undefined ? '' : `${reach.port}:${reach.from.join(',')}`
+}
+
 /**
  * "Reachable from Sites" for a container: the port the container listens on
- * and the sites and apps that may connect to it. A valid pair is written at
- * once; a half-filled one says what is missing and leaves the saved value.
+ * and the sites and apps that may connect to it. The port and the ticks are
+ * kept here while they are typed; a complete, valid pair is written to the
+ * document, nothing typed and nothing ticked removes the field, and anything
+ * between says what is missing. The fields follow the document when it
+ * changes elsewhere (the YAML tab, a rename).
  */
 export function ReachFields({
   reach,
@@ -23,16 +33,30 @@ export function ReachFields({
   onChange,
 }: Readonly<{
   reach: ComposeServiceReachExtension | undefined
-  /** Names of the sites and Node apps in this document. */
-  services: readonly string[]
+  /** The sites and Node apps in this document, with the account each runs as. */
+  services: readonly ReachCandidate[]
   disabled: boolean
   onChange: (reach: ComposeServiceReachExtension | undefined) => void
 }>) {
   const [portText, setPortText] = useState(reach === undefined ? '' : String(reach.port))
+  const [from, setFrom] = useState<string[]>(reach === undefined ? [] : [...reach.from])
   const [issue, setIssue] = useState<string | null>(null)
-  const chosen = reach?.from ?? []
+  const key = reachKey(reach)
+
+  useEffect(() => {
+    setPortText(reach === undefined ? '' : String(reach.port))
+    setFrom(reach === undefined ? [] : [...reach.from])
+    setIssue(null)
+    // Only a change of the saved value resets what is being typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
   // A name that was authored but is not a site or app here stays listed so it can be cleared.
-  const names = [...services, ...chosen.filter((name) => !services.includes(name))]
+  const known = new Set(services.map((service) => service.name))
+  const candidates: ReachCandidate[] = [
+    ...services,
+    ...from.filter((name) => !known.has(name)).map((name) => ({ name, account: null })),
+  ]
 
   const commit = (nextPort: string, nextFrom: readonly string[]) => {
     const decision = reachDecision(nextPort, nextFrom)
@@ -49,26 +73,33 @@ export function ReachFields({
         value={portText}
         onChangeText={(text) => {
           setPortText(text)
-          commit(text, chosen)
+          commit(text, from)
         }}
         keyboardType="number-pad"
         editable={!disabled}
         placeholder="e.g. 6379"
         accessibilityLabel="Container port"
       />
-      {names.length === 0 ? (
+      {candidates.length === 0 ? (
         <Text style={panelStyles.muted}>Add a site or Node app to this environment first.</Text>
       ) : (
-        names.map((name) => (
-          <Checkbox
-            key={name}
-            checked={chosen.includes(name)}
-            disabled={disabled}
-            onPress={() => commit(portText, toggleReachName(chosen, name))}
-            label={name}
-            accessibilityLabel={`Reachable from ${name}`}
-          />
-        ))
+        <>
+          <Text style={panelStyles.muted}>{REACH_ONE_ACCOUNT_NOTE}</Text>
+          {candidates.map(({ name }) => (
+            <Checkbox
+              key={name}
+              checked={from.includes(name)}
+              disabled={disabled || !reachSelectable(candidates, from, name)}
+              onPress={() => {
+                const next = toggleReachName(from, name)
+                setFrom(next)
+                commit(portText, next)
+              }}
+              label={name}
+              accessibilityLabel={`Reachable from ${name}`}
+            />
+          ))}
+        </>
       )}
       {issue === null ? null : <MonoText style={panelStyles.error}>{issue}</MonoText>}
     </View>
