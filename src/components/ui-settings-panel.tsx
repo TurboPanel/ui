@@ -1,22 +1,11 @@
 import { useState, type ReactNode } from 'react'
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { headerMenuGroupStyles } from '@/components/header-menu-group-styles'
 import { PageLayoutIcon, SlidersMenuIcon } from '@/components/icons/account-menu-icons'
 import { ThemeModeIcon } from '@/components/icons/theme-icons'
-import {
-  PAGE_WIDTH_MODES,
-  setPageWidth,
-  usePageWidth,
-  type PageWidthMode,
-} from '@/lib/page-width'
+import { PAGE_WIDTH_MODES, setPageWidth, usePageWidth, type PageWidthMode } from '@/lib/page-width'
+import { moveInRadioGroup, type RadioGroupKeyEvent } from '@/lib/radio-group-keys'
 import { colors, webPointer } from '@/lib/theme'
 import {
   setThemeMode,
@@ -66,27 +55,9 @@ function ChoiceRow<T extends string>({
   value: T
   onChange: (next: T) => void
 }>) {
-  const onKeyDown = (event: {
-    key: string
-    target: unknown
-    currentTarget: unknown
-    preventDefault: () => void
-  }) => {
-    const jump = event.key === 'Home' || event.key === 'End'
-    let step = 0
-    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') step = 1
-    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') step = -1
-    if (step === 0 && !jump) return
-    const group = event.currentTarget as HTMLElement
-    const radios = Array.from(group.querySelectorAll<HTMLElement>('[role="radio"]'))
-    const at = radios.indexOf(event.target as HTMLElement)
-    if (at < 0) return
-    event.preventDefault()
-    let next = (at + step + radios.length) % radios.length
-    if (event.key === 'Home') next = 0
-    else if (event.key === 'End') next = radios.length - 1
-    radios[next]?.focus()
-    const choice = choices[next]
+  const onKeyDown = (event: RadioGroupKeyEvent) => {
+    const next = moveInRadioGroup(event)
+    const choice = next === null ? undefined : choices[next]
     if (choice) onChange(choice.value)
   }
 
@@ -106,8 +77,12 @@ function ChoiceRow<T extends string>({
             accessibilityRole="radio"
             accessibilityLabel={choice.name ?? choice.label}
             accessibilityState={{ checked }}
+            aria-checked={checked}
             // Web hover tooltip and one tab stop per group; native ignores both.
-            {...({ title: choice.hint ?? choice.name ?? choice.label, tabIndex: checked ? 0 : -1 } as object)}
+            {...({
+              title: choice.hint ?? choice.name ?? choice.label,
+              tabIndex: checked ? 0 : -1,
+            } as object)}
             style={({ pressed }) => [
               styles.choice,
               checked && styles.choiceChecked,
@@ -116,7 +91,10 @@ function ChoiceRow<T extends string>({
             ]}
           >
             {choice.icon(checked ? colors.link : colors.textDim)}
-            <Text style={[styles.choiceLabel, checked && styles.choiceLabelChecked]} numberOfLines={1}>
+            <Text
+              style={[styles.choiceLabel, checked && styles.choiceLabelChecked]}
+              numberOfLines={1}
+            >
               {choice.label}
             </Text>
           </Pressable>
@@ -126,14 +104,12 @@ function ChoiceRow<T extends string>({
   )
 }
 
-const THEME_CHOICES: readonly Choice<(typeof THEME_MODES)[number]>[] = THEME_MODES.map(
-  (mode) => ({
-    value: mode,
-    label: mode === 'system' ? 'System' : THEME_MODE_LABELS[mode],
-    name: THEME_MODE_LABELS[mode],
-    icon: (color: string) => <ThemeModeIcon mode={mode} size={18} color={color} />,
-  }),
-)
+const THEME_CHOICES: readonly Choice<(typeof THEME_MODES)[number]>[] = THEME_MODES.map((mode) => ({
+  value: mode,
+  label: mode === 'system' ? 'System' : THEME_MODE_LABELS[mode],
+  name: THEME_MODE_LABELS[mode],
+  icon: (color: string) => <ThemeModeIcon mode={mode} size={18} color={color} />,
+}))
 
 const LAYOUT_CHOICES: readonly Choice<PageWidthMode>[] = PAGE_WIDTH_MODES.map((mode) => ({
   value: mode,

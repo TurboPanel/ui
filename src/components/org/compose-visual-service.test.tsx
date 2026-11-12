@@ -16,6 +16,9 @@ vi.mock('expo-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/components/org/compose-cron-fields', () => ({
   CronFields: () => <div>Scheduled jobs</div>,
 }))
+vi.mock('@/components/org/compose-reach-fields', () => ({
+  ReachFields: () => <div>Reachable from Sites</div>,
+}))
 vi.mock('@/components/org/dockerfile-editor', () => ({ DockerfileEditor: () => null }))
 vi.mock('@/components/org/git-sources/repository-picker', () => ({
   RepositoryPicker: () => null,
@@ -54,7 +57,11 @@ const nodeService = {
   },
 }
 
-function card(service: Record<string, unknown>, hideScheduledJobs?: boolean) {
+function card(
+  service: Record<string, unknown>,
+  hideScheduledJobs?: boolean,
+  reachableServices?: readonly { name: string; account: string | null }[]
+) {
   const onPatchService = vi.fn()
   render(
     <ComposeVisualServiceCard
@@ -62,6 +69,7 @@ function card(service: Record<string, unknown>, hideScheduledJobs?: boolean) {
       nameDraft="web"
       saving={false}
       hideScheduledJobs={hideScheduledJobs}
+      {...(reachableServices ? { reachableServices } : {})}
       onNameDraftChange={vi.fn()}
       onRename={vi.fn()}
       onRemoveService={vi.fn()}
@@ -92,5 +100,27 @@ describe('ComposeVisualServiceCard scheduled jobs', () => {
     // The jobs already in the compose file are kept untouched.
     expect(service).toEqual(before)
     expect(onPatchService).not.toHaveBeenCalled()
+  })
+})
+
+describe('ComposeVisualServiceCard helper port', () => {
+  const containerService = { image: 'valkey/valkey' }
+
+  it('shows Reachable from Sites on a container when the surface offers it', () => {
+    card(containerService, false, [{ name: 'web', account: null }])
+    expect(screen.getByText('Reachable from Sites')).toBeTruthy()
+  })
+
+  it('leaves it out on an environment layer, which passes no services', () => {
+    card(containerService)
+    expect(screen.queryByText('Reachable from Sites')).toBeNull()
+  })
+
+  it.each([
+    ['site', siteService],
+    ['node', nodeService],
+  ])('never shows it on a %s service', (_kind, service) => {
+    card(service, false, [{ name: 'web', account: null }])
+    expect(screen.queryByText('Reachable from Sites')).toBeNull()
   })
 })

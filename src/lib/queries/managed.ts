@@ -1,4 +1,9 @@
 import {
+  createManagedAdminTool,
+  createManagedBackupLogin,
+  deleteManagedBackupLogin,
+  fetchManagedAdminTools,
+  fetchManagedBackupLogin,
   addManagedReplica,
   applyEnvironmentManaged,
   createEnvironmentManaged,
@@ -22,13 +27,17 @@ import {
   fetchOrganizationManaged,
   fetchServerManagedExternalAccess,
   isForbiddenError,
+  isHttpStatusError,
   promoteManagedDisasterRecovery,
   promoteManagedMember,
+  removeManagedAdminTool,
   removeManagedMember,
+  resetManagedAdminToolPassword,
   restoreManagedBackup,
   resyncManagedMember,
   rotateManagedRootPassword,
   rotateManagedUserPassword,
+  updateManagedAdminTool,
   updateManagedUser,
   runManagedLifecycle,
   saveServerManagedExternalAccess,
@@ -329,7 +338,8 @@ export function useRunManagedLifecycle(orgId: string, environmentId: string) {
 export function useDeleteEnvironmentManaged(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: () => deleteEnvironmentManaged(environmentId),
+    /** The project's name as typed; the control plane refuses without it. */
+    mutationFn: (confirmName: string) => deleteEnvironmentManaged(environmentId, { confirmName }),
     onSuccess: () =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).managed.all,
@@ -340,12 +350,14 @@ export function useDeleteEnvironmentManaged(orgId: string, environmentId: string
 export function useDeleteEnvironmentManagedMutation(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (input: string | { environmentId: string; force?: boolean }) =>
-      typeof input === 'string'
-        ? deleteEnvironmentManaged(input)
-        : deleteEnvironmentManaged(input.environmentId, {
-            ...(input.force ? { force: true } : {}),
-          }),
+    /** `confirmName` is the project's name as typed; the control plane refuses without it. */
+    mutationFn: (
+      input: Readonly<{ environmentId: string; confirmName: string; force?: boolean }>
+    ) =>
+      deleteEnvironmentManaged(input.environmentId, {
+        confirmName: input.confirmName,
+        ...(input.force ? { force: true } : {}),
+      }),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({
@@ -447,6 +459,131 @@ export function useDeleteManagedUser(orgId: string, environmentId: string) {
   })
 }
 
+/**
+ * The cluster's admin tools. `null` when this screen cannot have them: an
+ * older control plane without the routes answers 404 (the ui can ship first),
+ * and a viewer without manage gets 403, which must not reach the global
+ * sign-out handler.
+ */
+export function useManagedAdminTools(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.adminTools(environmentId),
+    queryFn: async () => {
+      try {
+        return await fetchManagedAdminTools(environmentId)
+      } catch (err) {
+        if (isHttpStatusError(err, 404) || isForbiddenError(err)) return null
+        throw err
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+  })
+}
+
+/** A tool is a login, a project and an address: refresh all of them. */
+function invalidateAfterAdminToolChange(
+  queryClient: ReturnType<typeof useQueryClient>,
+  orgId: string,
+  environmentId: string
+) {
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).managed.adminTools(environmentId),
+    }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).managed.users(environmentId) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).commands.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).projects.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).environments.all }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all }),
+  ])
+}
+
+/** Add a tool; its passwords are never kept in the cache. */
+export function useCreateManagedAdminTool(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (body: Parameters<typeof createManagedAdminTool>[1]) =>
+      createManagedAdminTool(environmentId, body),
+    onSuccess: () => invalidateAfterAdminToolChange(queryClient, orgId, environmentId),
+  })
+  return useShowOnceSecretMutation(mutation, 'Failed to add the admin tool')
+}
+
+/** Reset a tool's passwords; they are never kept in the cache. */
+export function useResetManagedAdminToolPassword(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (projectId: string) => resetManagedAdminToolPassword(environmentId, projectId),
+    onSuccess: () => invalidateAfterAdminToolChange(queryClient, orgId, environmentId),
+  })
+  return useShowOnceSecretMutation(mutation, 'Failed to reset the admin tool password')
+}
+
+export function useUpdateManagedAdminTool(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (projectId: string) => updateManagedAdminTool(environmentId, projectId),
+    onSuccess: () => invalidateAfterAdminToolChange(queryClient, orgId, environmentId),
+  })
+}
+
+export function useRemoveManagedAdminTool(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (input: Readonly<{ projectId: string; confirmName: string }>) =>
+      removeManagedAdminTool(environmentId, input.projectId, input.confirmName),
+    onSuccess: () => invalidateAfterAdminToolChange(queryClient, orgId, environmentId),
+  })
+}
+
+/**
+ * The cluster's backup login. `null` when this screen cannot have one: an
+ * older control plane without the route answers 404 (the ui can ship first),
+ * and a viewer without manage gets 403, which must not reach the global
+ * sign-out handler. `{ login: null }` means the cluster has none yet.
+ */
+export function useManagedBackupLogin(
+  orgId: string,
+  environmentId: string,
+  options?: Readonly<{ enabled?: boolean }>
+) {
+  return useQuery({
+    queryKey: queryKeys.org(orgId).managed.backupLogin(environmentId),
+    queryFn: async () => {
+      try {
+        return await fetchManagedBackupLogin(environmentId)
+      } catch (err) {
+        if (isHttpStatusError(err, 404) || isForbiddenError(err)) return null
+        throw err
+      }
+    },
+    enabled: (options?.enabled ?? true) && orgId.length > 0 && environmentId.length > 0,
+  })
+}
+
+/** The backup login; its password is never kept in the cache. */
+export function useCreateManagedBackupLogin(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (body: Parameters<typeof createManagedBackupLogin>[1]) =>
+      createManagedBackupLogin(environmentId, body),
+    onSuccess: () => invalidateAfterLoginCreate(queryClient, orgId, environmentId),
+  })
+  return useShowOnceSecretMutation(mutation, 'Failed to add the backup login')
+}
+
+export function useDeleteManagedBackupLogin(orgId: string, environmentId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => deleteManagedBackupLogin(environmentId),
+    onSuccess: () => invalidateAfterLoginCreate(queryClient, orgId, environmentId),
+  })
+}
+
 export function useCreateManagedDatabase(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
@@ -467,7 +604,9 @@ export function useCreateManagedDatabase(orgId: string, environmentId: string) {
 export function useDeleteManagedDatabase(orgId: string, environmentId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (name: string) => deleteManagedDatabase(environmentId, name),
+    /** `confirmName` is the database name as typed; the control plane refuses without it. */
+    mutationFn: ({ name, confirmName }: Readonly<{ name: string; confirmName: string }>) =>
+      deleteManagedDatabase(environmentId, name, confirmName),
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({

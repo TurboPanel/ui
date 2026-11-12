@@ -11,16 +11,12 @@
 import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import {
-  Badge,
-  Button,
-  ButtonRow,
-  TextField,
-} from '@/components/ui'
+import { Badge, Button, ButtonRow, TextField } from '@/components/ui'
 import type { ForgeCreate, ForgeSummary, ForgeUpdate } from '@/lib/instance-api'
 import { useCreateForge, useUpdateForge } from '@/lib/queries/admin'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
+import { secretAutoComplete } from '@/lib/field-autofill'
 
 type Provider = 'github' | 'gitlab'
 type Scope = 'admin' | 'org'
@@ -101,20 +97,23 @@ function editorFrom(app: ForgeSummary): EditorState {
  * and spelling that as a ternary per label, placeholder and hint made the form
  * mostly branching. Adding a provider is now a third entry here.
  */
-const PROVIDER_COPY: Record<Provider, {
-  namePlaceholder: string
-  appIdLabel: string
-  appIdPlaceholder: string
-  appIdHint: string
-  appIdRequired: string
-  originLabel: string
-  originHint: string
-  clientIdLabel: string
-  clientIdPlaceholder: string
-  clientIdHint: string
-  webhookLabel: string
-  webhookHint: string
-}> = {
+const PROVIDER_COPY: Record<
+  Provider,
+  {
+    namePlaceholder: string
+    appIdLabel: string
+    appIdPlaceholder: string
+    appIdHint: string
+    appIdRequired: string
+    originLabel: string
+    originHint: string
+    clientIdLabel: string
+    clientIdPlaceholder: string
+    clientIdHint: string
+    webhookLabel: string
+    webhookHint: string
+  }
+> = {
   github: {
     namePlaceholder: 'TurboPanel',
     appIdLabel: 'App ID',
@@ -166,7 +165,7 @@ function validationError(form: EditorState, provider: Provider): string | null {
 function payloadFrom(
   form: EditorState,
   touched: Record<string, boolean>,
-  provider: Provider,
+  provider: Provider
 ): ForgeUpdate {
   const secrets: ForgeUpdate = {}
   if (touched.privateKeyPem && form.privateKeyPem.trim() !== '') {
@@ -234,7 +233,7 @@ function CredentialFields({
         secureTextEntry
         autoCapitalize="none"
         autoCorrect={false}
-        autoComplete="off"
+        autoComplete={secretAutoComplete()}
         editable={!busy}
       />
       <TextField
@@ -276,7 +275,7 @@ export function ForgeEditor({
   const busy = create.isPending || update.isPending
 
   const [form, setForm] = useState<EditorState>(
-    existing ? editorFrom(existing) : blankEditor(provider),
+    existing ? editorFrom(existing) : blankEditor(provider)
   )
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | null>(null)
@@ -371,13 +370,7 @@ export function ForgeEditor({
         editable={!busy}
       />
 
-      <CredentialFields
-        isGithub={isGithub}
-        existing={existing}
-        form={form}
-        set={set}
-        busy={busy}
-      />
+      <CredentialFields isGithub={isGithub} existing={existing} form={form} set={set} busy={busy} />
 
       <TextField
         label={copy.webhookLabel}
@@ -388,7 +381,7 @@ export function ForgeEditor({
         secureTextEntry
         autoCapitalize="none"
         autoCorrect={false}
-        autoComplete="off"
+        autoComplete={secretAutoComplete()}
         editable={!busy}
       />
 

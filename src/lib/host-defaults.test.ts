@@ -4,6 +4,7 @@ import {
   configuredSourceLabel,
   formatNtpHostList,
   hideWebServerNamesSourceLabel,
+  sendViaHeaderSourceLabel,
   isEmptyNtpDraft,
   ntpDefaultsFromDrafts,
   parseNtpHostList,
@@ -14,17 +15,24 @@ import {
 describe('host-defaults helpers', () => {
   it('labels configured sources and platform SSH default', () => {
     expect(configuredSourceLabel('server')).toBe('Server override')
-    expect(configuredSourceLabel('datacenter')).toBe('Datacenter default')
+    expect(configuredSourceLabel('datacenter')).toBe('Datacenter network default')
     expect(configuredSourceLabel('organization')).toBe('Organization default')
     expect(configuredSourceLabel(null)).toBe('Not set')
     expect(sshPortSourceLabel(null)).toBe(`Platform default (${String(DEFAULT_SSH_PORT)})`)
-    expect(sshPortSourceLabel('datacenter')).toBe('Datacenter default')
+    expect(sshPortSourceLabel('datacenter')).toBe('Datacenter network default')
   })
 
   it('labels where web server name hiding comes from', () => {
     expect(hideWebServerNamesSourceLabel(null)).toBe('Platform default (on)')
     expect(hideWebServerNamesSourceLabel('organization')).toBe('Organization default')
     expect(hideWebServerNamesSourceLabel('server')).toBe('Server override')
+  })
+
+  it('labels where the Via header setting comes from', () => {
+    expect(sendViaHeaderSourceLabel(null)).toBe('Platform default (off)')
+    expect(sendViaHeaderSourceLabel(undefined)).toBe('Platform default (off)')
+    expect(sendViaHeaderSourceLabel('organization')).toBe('Organization default')
+    expect(sendViaHeaderSourceLabel('server')).toBe('Server override')
   })
 
   it('parses SSH port drafts', () => {

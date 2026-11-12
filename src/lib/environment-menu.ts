@@ -1,9 +1,60 @@
 /** Pure rules for the environment header "⋯" menu (no React). */
 
 export const DESTROY_EXPLANATION =
-  "Removes this environment's containers and their data volumes. The environment and its settings stay. Use Delete environment to remove the environment itself."
+  "Removes this environment's containers. Its data volumes stay unless you choose to delete them too. The environment and its settings stay. Use Delete Environment to remove the environment itself."
 
 export const DESTROY_ARMED_HINT = `${DESTROY_EXPLANATION} Cannot be undone.`
+
+/** The Destroy choice to delete data as well; off every time Destroy is armed. */
+export const DESTROY_DELETE_VOLUMES_LABEL = 'Also Delete the Data Volumes'
+
+export const DESTROY_CONFIRM_NAME_LABEL = 'Environment Name'
+
+/** What the typed-name field asks for. */
+export function destroyConfirmNameHint(name: string): string {
+  return `Type ${name} to delete its data volumes. Everything in them is gone for good.`
+}
+
+export const DESTROY_NO_VOLUMES_COPY = 'This environment has no data volumes to delete.'
+
+export const DESTROY_VOLUMES_HEADING = 'These volumes and everything in them are deleted:'
+
+export const DESTROY_KEPT_HEADING = 'These stay:'
+
+/** Where a copy of a volume stays because the Destroy does not go to that server. */
+export function destroyStaysOnCopy(names: readonly string[]): string | null {
+  if (names.length === 0) return null
+  return `A copy on ${names.join(', ')} stays.`
+}
+
+/** Why data cannot be deleted yet, naming the servers; null when every daemon can. */
+export function destroyOutdatedServersCopy(names: readonly string[]): string | null {
+  if (names.length === 0) return null
+  return `Update the daemon on ${names.join(', ')} before deleting data volumes.`
+}
+
+/**
+ * Whether Confirm Destroy may be pressed: always for a plain Destroy; with
+ * data deletion, only once the list is loaded, every daemon can remove
+ * volumes and the typed name matches exactly.
+ */
+export function destroyConfirmReady(
+  input: Readonly<{
+    deleteVolumes: boolean
+    typedName: string
+    expectedName: string
+    volumesLoaded: boolean
+    outdatedServerCount: number
+  }>
+): boolean {
+  if (!input.deleteVolumes) return true
+  return (
+    input.volumesLoaded &&
+    input.outdatedServerCount === 0 &&
+    input.expectedName !== '' &&
+    input.typedName === input.expectedName
+  )
+}
 
 export const LAST_ENVIRONMENT_REASON = 'A project needs at least one environment'
 
@@ -126,7 +177,7 @@ export function environmentActionItems(
   }
   if (input.canOwn) {
     items.push(
-      item('delete', 'Delete environment…', {
+      item('delete', 'Delete Environment…', {
         tone: 'danger',
         disabledReason: deleteBlockReason(input),
       })

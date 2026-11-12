@@ -18,6 +18,7 @@ function passkey(overrides: Partial<PasskeyRecord> = {}): PasskeyRecord {
     createdAt: '2026-03-04T10:00:00.000Z',
     deviceType: 'multiDevice',
     isBackedUp: true,
+    isRotation: false,
     ...overrides,
   }
 }
@@ -36,22 +37,18 @@ describe('passkeyDisplayName', () => {
 describe('passkeyDeviceLabel', () => {
   it('separates synced from merely multi-device', () => {
     expect(passkeyDeviceLabel(passkey())).toBe('Synced')
-    expect(passkeyDeviceLabel(passkey({ isBackedUp: false }))).toBe(
-      'Multi-device',
-    )
+    expect(passkeyDeviceLabel(passkey({ isBackedUp: false }))).toBe('Multi-device')
   })
 
   it('names a device-bound credential', () => {
-    expect(
-      passkeyDeviceLabel(passkey({ deviceType: 'singleDevice', isBackedUp: false })),
-    ).toBe('This device only')
+    expect(passkeyDeviceLabel(passkey({ deviceType: 'singleDevice', isBackedUp: false }))).toBe(
+      'This device only'
+    )
   })
 
   it('falls back on the backup flag when the device type is absent', () => {
     expect(passkeyDeviceLabel(passkey({ deviceType: null }))).toBe('Synced')
-    expect(
-      passkeyDeviceLabel(passkey({ deviceType: null, isBackedUp: false })),
-    ).toBe('Unknown')
+    expect(passkeyDeviceLabel(passkey({ deviceType: null, isBackedUp: false }))).toBe('Unknown')
   })
 })
 
@@ -75,7 +72,7 @@ describe('twoFactorStatusLabel', () => {
         backupCodesRemaining: 0,
         passkeys: [],
         linkedProviders: [],
-      }),
+      })
     ).toBe('Not enabled')
   })
 
@@ -87,7 +84,7 @@ describe('twoFactorStatusLabel', () => {
         backupCodesRemaining: 8,
         passkeys: [],
         linkedProviders: [],
-      }),
+      })
     ).toBe('Authenticator app')
   })
 
@@ -99,7 +96,7 @@ describe('twoFactorStatusLabel', () => {
         backupCodesRemaining: 8,
         passkeys: [],
         linkedProviders: [],
-      }),
+      })
     ).toBe('Enabled')
   })
 })

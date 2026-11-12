@@ -1,4 +1,4 @@
-import { orgAreaHref } from '@/lib/org-navigation'
+import { ORG_AREAS, orgAreaHref } from '@/lib/org-navigation'
 import { projectEnvironmentHref, projectOverviewHref } from '@/lib/project-navigation'
 import { resolveServerConnectionStatus } from '@/lib/server-connection-status'
 import { ALL_WORKSPACES_SCOPE, projectsListHref } from '@/lib/workspace-scope'
@@ -24,7 +24,11 @@ export type Breadcrumb = Readonly<{
 
 export type BreadcrumbRoute = Readonly<{ kind: 'server' | 'project'; id: string }>
 
-const SERVER_LIST_PAGES = new Set(['datacenters', 'keys', 'settings', 'tls'])
+// The Servers sub-pages (Datacenters, the old Network pages, …) come from the
+// navigation registry, so a new sub-page is never read as a server id.
+const SERVER_LIST_PAGES = new Set<string>(
+  ORG_AREAS.find((area) => area.id === 'servers')?.subRoutes.map((sub) => sub.pathSegment) ?? []
+)
 const PROJECT_LIST_PAGES = new Set(['new', 'settings', 'git-sources', 'repositories'])
 
 /** The server or project the address names, or null on list pages and other areas. */

@@ -36,13 +36,15 @@ describe('status vocabulary', () => {
       .filter(([, info]) => info.tone === 'ok')
       .map(([key]) => key)
       .sort()
-    expect(green).toEqual(['deployed', 'live', 'ok', 'online', 'ready', 'running'])
+    expect(green).toEqual(['deployed', 'edge', 'live', 'ok', 'online', 'ready', 'running'])
   })
 
   it('never leaves status to colour: shapes differ between tones that could be confused', () => {
     // Red and amber states use shapes no green state uses.
     const greenShapes = new Set<string>(
-      Object.values(STATUS).filter((i) => i.tone === 'ok').map((i) => i.glyph),
+      Object.values(STATUS)
+        .filter((i) => i.tone === 'ok')
+        .map((i) => i.glyph)
     )
     for (const info of Object.values(STATUS)) {
       if (info.tone === 'bad' || info.tone === 'warn') {
@@ -69,7 +71,9 @@ describe('status vocabulary', () => {
 
   it('words the pending texts', () => {
     expect(compactPendingLabel(2)).toBe('2 not deployed')
-    expect(pendingSummary(1, 'Staging')).toBe('1 change · Saved. Goes live when you deploy Staging.')
+    expect(pendingSummary(1, 'Staging')).toBe(
+      '1 change · Saved. Goes live when you deploy Staging.'
+    )
     expect(pendingSummary(3, 'Staging')).toContain('3 changes')
   })
 

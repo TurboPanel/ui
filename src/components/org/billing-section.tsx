@@ -273,7 +273,7 @@ function CheckoutReturnNotice({
     return (
       <InlineNotice
         title="Checkout complete"
-        body="You can now add servers from Servers → Add server; each one uses a license."
+        body="You can now add servers from Servers → Add Server; each one uses a license."
       />
     )
   }

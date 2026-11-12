@@ -11,7 +11,6 @@ import {
   Badge,
   Button,
   ButtonRow,
-  ConfirmButton,
   EmptyState,
   FormField,
   InlineNotice,
@@ -21,6 +20,7 @@ import {
   SettingRow,
   TextField,
   Toggle,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import type {
   DatacenterAddressPreference,
@@ -40,17 +40,20 @@ import {
   INVALID_CIDR_ERROR,
   SUBNET_HAS_MEMBERS_ERROR,
 } from '@/lib/instance-api'
-import {
-  networkErrorMessage,
-  SUBNET_OVERLAPS_COPY,
-} from '@/lib/network-error-copy'
+import { networkErrorMessage, SUBNET_OVERLAPS_COPY } from '@/lib/network-error-copy'
 import {
   buildDatacenterPolicyMap,
   DATACENTER_PRIORITY_MAX,
   DATACENTER_PRIORITY_MIN,
   findDatacenterWinnerHint,
   formatDatacenterWinnerHint,
-  parseDatacenterPriorityDraft,
+  formatPriorityRivals,
+  priorityMatters,
+  priorityRivals,
+  PRIORITY_TIE_ADVICE,
+  priorityTies,
+  priorityToSave,
+  sharedServerNetworks,
 } from '@/lib/datacenter-routing'
 import {
   useAddDatacenterMembers,
@@ -66,10 +69,7 @@ import {
 import { useOrgFabric } from '@/lib/queries/fabric'
 import { useOrganizationManaged } from '@/lib/queries/managed'
 import { useOrgServers, useTimezones } from '@/lib/queries/servers'
-import {
-  networkFabricHref,
-  serversDatacentersHref,
-} from '@/lib/org-navigation'
+import { serversFabricHref, serversDatacentersHref } from '@/lib/org-navigation'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import {
@@ -77,12 +77,7 @@ import {
   resolveServerConnectionStatus,
 } from '@/lib/server-connection-status'
 import { colors, spacing, webPointer } from '@/lib/theme'
-import {
-  addressFamilyLabel,
-  cidrsOverlap,
-  isValidCidr,
-  normalizeCidr,
-} from '@/lib/cidr'
+import { addressFamilyLabel, cidrsOverlap, isValidCidr, normalizeCidr } from '@/lib/cidr'
 import {
   candidateMemberNetworks,
   datacenterGeoFromMetadata,
@@ -111,6 +106,7 @@ import {
 } from '@/lib/host-defaults'
 import { TURBOFABRIC_PRODUCT_NAME } from '@/lib/platform-copy'
 import { userErrorMessage } from '@/lib/user-error'
+import { confirmationName } from '@/lib/confirm-name'
 
 function serverTitle(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id
@@ -171,14 +167,14 @@ function DatacenterIdentityPanel({
   if (!canManage) return null
 
   return (
-    <SectionPanel title="Datacenter">
+    <SectionPanel title="Datacenter Network">
       <TextField
         label="Display name"
         value={name}
         onChangeText={onDisplayNameChange}
         placeholder="e.g. AMS-1"
         editable={!pending}
-        accessibilityLabel="Datacenter display name"
+        accessibilityLabel="Datacenter network display name"
       />
       <TextField
         label="Description"
@@ -186,14 +182,14 @@ function DatacenterIdentityPanel({
         onChangeText={onDescriptionChange}
         placeholder="Optional notes"
         editable={!pending}
-        accessibilityLabel="Datacenter description"
+        accessibilityLabel="Datacenter network description"
       />
       <Button
         label="Save"
         variant="primary"
         busy={pending}
         onPress={onSave}
-        accessibilityLabel="Save datacenter"
+        accessibilityLabel="Save datacenter network"
       />
     </SectionPanel>
   )
@@ -284,9 +280,7 @@ function SubnetCard({
       <ExpandToggle
         expanded={expanded}
         accessibilityLabel={
-          expanded
-            ? `Collapse subnet ${subnet.cidr}`
-            : `Expand subnet ${subnet.cidr}`
+          expanded ? `Collapse subnet ${subnet.cidr}` : `Expand subnet ${subnet.cidr}`
         }
         onPress={() => setExpanded((prev) => !prev)}
       >
@@ -316,15 +310,14 @@ function SubnetCard({
             <SubnetLabelReadout name={subnet.name} />
           )}
           {canManage && blocked ? (
-            <Text style={panelStyles.muted}>
-              Unassign the pinned servers first.
-            </Text>
+            <Text style={panelStyles.muted}>Unassign the pinned servers first.</Text>
           ) : null}
           {canManage ? (
-            <ConfirmButton
-              label="Delete subnet"
-              confirmLabel="Confirm delete"
-              prompt={`Delete subnet ${subnet.cidr}?`}
+            <TypeNameDeleteButton
+              label="Delete Subnet"
+              thing="Subnet"
+              name={subnet.cidr}
+              description="The subnet is removed from this datacenter network."
               disabled={blocked || pending}
               onConfirm={onDelete}
             />
@@ -385,9 +378,7 @@ function SubnetsPanel({
               subnet={subnet}
               canManage={canManage}
               pending={pending}
-              onDraftLabelChange={(value) =>
-                onDraftLabelChange(subnet.id, value)
-              }
+              onDraftLabelChange={(value) => onDraftLabelChange(subnet.id, value)}
               onSaveLabel={() => onSaveLabel(subnet.id)}
               onDelete={() => onDeleteSubnet(subnet.id)}
             />
@@ -402,11 +393,7 @@ function SubnetsPanel({
             value={addCidr}
             onChangeText={onAddCidrChange}
             placeholder="203.0.113.0/24"
-            hint={
-              normalizedAdd && normalizedAdd !== addCidr.trim()
-                ? normalizedAdd
-                : undefined
-            }
+            hint={normalizedAdd && normalizedAdd !== addCidr.trim() ? normalizedAdd : undefined}
             editable={!pending}
             accessibilityLabel="New subnet CIDR"
             autoCapitalize="none"
@@ -435,12 +422,24 @@ function SubnetsPanel({
   )
 }
 
-function priorityHint(winnerHint: string | null): string {
-  const base = `Integer ${DATACENTER_PRIORITY_MIN}–${DATACENTER_PRIORITY_MAX}, lower wins; default ${DEFAULT_DATACENTER_PRIORITY}. When two servers share more than one trusted datacenter, the lowest priority carries their traffic.`
-  if (!winnerHint) {
-    return `${base} No server pair currently shares this datacenter with another, so priority changes nothing yet.`
-  }
-  return `${base} ${winnerHint}`
+/** What the Routing panel says about priority; `null` hides the field. */
+export type PriorityView = Readonly<{
+  /** "Backhaul (priority 10) and Office LAN (priority 200)". */
+  rivals: string
+  /** Ladder reading for one server pair; omitted while tied. */
+  winnerHint: string | null
+  /** Rivals with the same number, or `null` when there is no tie. */
+  tiedWith: string | null
+}>
+
+function priorityHint(view: PriorityView): string {
+  const base = `Integer ${DATACENTER_PRIORITY_MIN}–${DATACENTER_PRIORITY_MAX}, lower wins; default ${DEFAULT_DATACENTER_PRIORITY}. Servers on this network are also on ${view.rivals}; the lowest number carries traffic between them.`
+  return view.winnerHint ? `${base} ${view.winnerHint}` : base
+}
+
+function routingPanelHint(trusted: boolean, priority: string | null): string {
+  const trust = trusted ? 'Trusted' : 'Untrusted'
+  return priority === null ? trust : `Priority ${priority} · ${trust}`
 }
 
 /**
@@ -456,7 +455,7 @@ function RoutingPanel({
   priorityError,
   trusted,
   hasManagedMembers,
-  winnerHint,
+  priorityView,
   canManage,
   pending,
   loaded,
@@ -471,7 +470,8 @@ function RoutingPanel({
   trusted: boolean
   /** Toggling trust off recomputes stored transports for these members. */
   hasManagedMembers: boolean
-  winnerHint: string | null
+  /** `null` when priority cannot change anything for this network (field hidden). */
+  priorityView: PriorityView | null
   canManage: boolean
   pending: boolean
   loaded: boolean
@@ -486,7 +486,10 @@ function RoutingPanel({
   return (
     <SectionPanel
       title="Routing"
-      hint={trusted ? `Priority ${priorityText || DEFAULT_DATACENTER_PRIORITY} · Trusted` : `Priority ${priorityText || DEFAULT_DATACENTER_PRIORITY} · Untrusted`}
+      hint={routingPanelHint(
+        trusted,
+        priorityView ? priorityText || String(DEFAULT_DATACENTER_PRIORITY) : null
+      )}
       collapsible
       defaultCollapsed
     >
@@ -501,26 +504,37 @@ function RoutingPanel({
         disabled={controlsDisabled}
       />
       <Text style={panelStyles.muted}>
-        Only applies when both servers have an address in the same datacenter in
-        both families.
+        Only applies when both servers have an address on the same datacenter network in both
+        families.
       </Text>
 
-      <TextField
-        label="Priority"
-        value={priorityText}
-        onChangeText={onChangePriority}
-        placeholder={String(DEFAULT_DATACENTER_PRIORITY)}
-        hint={priorityHint(winnerHint)}
-        error={priorityError}
-        editable={!controlsDisabled}
-        keyboardType="number-pad"
-        accessibilityLabel="Datacenter routing priority"
-        mono
-      />
+      {priorityView ? (
+        <>
+          <TextField
+            label="Priority"
+            value={priorityText}
+            onChangeText={onChangePriority}
+            placeholder={String(DEFAULT_DATACENTER_PRIORITY)}
+            hint={priorityHint(priorityView)}
+            error={priorityError}
+            editable={!controlsDisabled}
+            keyboardType="number-pad"
+            accessibilityLabel="Datacenter network routing priority"
+            mono
+          />
+          {priorityView.tiedWith ? (
+            <InlineNotice
+              tone="warning"
+              title={`Same priority as ${priorityView.tiedWith}.`}
+              body={PRIORITY_TIE_ADVICE}
+            />
+          ) : null}
+        </>
+      ) : null}
 
       <SettingRow
         label={trusted ? 'Trusted' : 'Untrusted'}
-        description={`Trusted means this L2 is under your control. Across an untrusted datacenter, server-to-server traffic is forced through ${TURBOFABRIC_PRODUCT_NAME} and encrypted, and a failover replica is refused (failover_requires_trusted_datacenter) — mark a shared retail LAN or a provider segment untrusted.`}
+        description={`Trusted: servers on this network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. Untrusted: ${TURBOFABRIC_PRODUCT_NAME} runs over it, encrypted, and database failover replicas are refused. Mark a network you share with others untrusted. Marking it untrusted is refused while it carries a container network that spans servers and ${TURBOFABRIC_PRODUCT_NAME} is off.`}
         align="start"
       >
         <Toggle
@@ -528,7 +542,7 @@ function RoutingPanel({
           disabled={controlsDisabled}
           onLabel="Trusted"
           offLabel="Untrusted"
-          accessibilityLabel="Datacenter trusted"
+          accessibilityLabel="Datacenter network trusted"
           onValueChange={onChangeTrusted}
         />
       </SettingRow>
@@ -536,7 +550,7 @@ function RoutingPanel({
         <InlineNotice
           tone="warning"
           title="Saving recomputes managed transports."
-          body={`Servers in this datacenter host managed database members. Stored replication transports and ProxySQL backends will be recomputed on save — pairs that only share this datacenter move to ${TURBOFABRIC_PRODUCT_NAME} or public TLS, and failover replicas that depended on it stop being eligible.`}
+          body={`Servers on this datacenter network host managed database members. Stored replication transports and ProxySQL backends will be recomputed on save — pairs that only share this datacenter network move to the encrypted ${TURBOFABRIC_PRODUCT_NAME} tunnel over this network, or to public TLS when ${TURBOFABRIC_PRODUCT_NAME} is off, and failover replicas that depended on it stop being eligible.`}
         />
       ) : null}
 
@@ -565,12 +579,9 @@ function memberPanelHint(pinCount: number, serverCount: number): string {
   return `${pinCount} pins · ${serverCount} servers`
 }
 
-function pinUnassignAccessibilityLabel(
-  pinCount: number,
-  serverLabel: string,
-): string {
+function pinUnassignAccessibilityLabel(pinCount: number, serverLabel: string): string {
   if (pinCount > 1) {
-    return `Unassign all pins for ${serverLabel} in this datacenter`
+    return `Unassign all pins for ${serverLabel} on this datacenter network`
   }
   return 'Unassign'
 }
@@ -582,7 +593,7 @@ function pinUnassignText(pinCount: number): string {
 
 function pinSubnetCidr(
   pin: DatacenterMemberPin,
-  subnets: readonly DatacenterSubnetRecord[],
+  subnets: readonly DatacenterSubnetRecord[]
 ): string | null {
   if (pin.networkId) {
     const byId = subnets.find((subnet) => subnet.id === pin.networkId)
@@ -645,9 +656,7 @@ function MemberPinCard({
           {server ? (
             <Text style={panelStyles.detailLine}>
               <Text style={panelStyles.detailLabel}>Status: </Text>
-              {serverConnectionStatusLabel(
-                resolveServerConnectionStatus(server),
-              )}
+              {serverConnectionStatusLabel(resolveServerConnectionStatus(server))}
             </Text>
           ) : null}
           <Text style={panelStyles.detailLine}>
@@ -696,9 +705,7 @@ function MemberServersPanel({
   onUnassign: (serverId: string) => void
 }>) {
   const pinnedAddresses = pins.map((pin) => pin.address)
-  const selectedCandidate = candidateServers.find(
-    (server) => server.id === assignServerId,
-  )
+  const selectedCandidate = candidateServers.find((server) => server.id === assignServerId)
   const candidateNetworks = selectedCandidate
     ? candidateMemberNetworks(selectedCandidate, pinnedAddresses, subnets)
     : []
@@ -710,34 +717,24 @@ function MemberServersPanel({
     value: network.address,
     label: network.address,
   }))
-  const addressIsCandidate = candidateNetworks.some(
-    (network) => network.address === assignAddress,
-  )
+  const addressIsCandidate = candidateNetworks.some((network) => network.address === assignAddress)
   const uniqueServerCount = new Set(pins.map((pin) => pin.serverId)).size
   const pinCountByServer = new Map<string, number>()
   for (const pin of pins) {
-    pinCountByServer.set(
-      pin.serverId,
-      (pinCountByServer.get(pin.serverId) ?? 0) + 1,
-    )
+    pinCountByServer.set(pin.serverId, (pinCountByServer.get(pin.serverId) ?? 0) + 1)
   }
 
   const selectAssignServer = (serverId: string) => {
     onSelectAssign(serverId)
     const next = candidateServers.find((server) => server.id === serverId)
-    const networks = next
-      ? candidateMemberNetworks(next, pinnedAddresses, subnets)
-      : []
+    const networks = next ? candidateMemberNetworks(next, pinnedAddresses, subnets) : []
     if (networks.length === 1 && networks[0]) {
       onSelectAddress(networks[0].address)
     }
   }
 
   return (
-    <SectionPanel
-      title="Member servers"
-      hint={memberPanelHint(pins.length, uniqueServerCount)}
-    >
+    <SectionPanel title="Member servers" hint={memberPanelHint(pins.length, uniqueServerCount)}>
       {pins.length === 0 ? (
         <EmptyState title="None yet." />
       ) : (
@@ -760,9 +757,7 @@ function MemberServersPanel({
       {canManage ? (
         <View style={styles.assignBlock}>
           {candidateServers.length === 0 ? (
-            <Text style={panelStyles.muted}>
-              {memberAssignEmptyCopy(subnets.length)}
-            </Text>
+            <Text style={panelStyles.muted}>{memberAssignEmptyCopy(subnets.length)}</Text>
           ) : (
             <>
               <FormField label="Server">
@@ -771,7 +766,7 @@ function MemberServersPanel({
                   options={serverOptions}
                   placeholder="Select a server…"
                   disabled={pending}
-                  accessibilityLabel="Add server"
+                  accessibilityLabel="Server to add to this datacenter network"
                   onChange={selectAssignServer}
                 />
               </FormField>
@@ -791,12 +786,7 @@ function MemberServersPanel({
               <Button
                 label="Add"
                 variant="primary"
-                disabled={
-                  !assignServerId ||
-                  !assignAddress ||
-                  !addressIsCandidate ||
-                  pending
-                }
+                disabled={!assignServerId || !assignAddress || !addressIsCandidate || pending}
                 onPress={onAssign}
               />
             </>
@@ -820,7 +810,7 @@ type MeshFromDatacenterRow = {
 function resolveOtherDatacenterLabel(
   mesh: ReturnType<typeof resolveSiteLinks>,
   datacenterId: string,
-  nameById: ReadonlyMap<string, string>,
+  nameById: ReadonlyMap<string, string>
 ): string {
   const otherIds = mesh.datacenterIds.filter((id) => id !== datacenterId)
   if (otherIds.length === 0 && mesh.hasUnassignedPeers) {
@@ -832,7 +822,7 @@ function resolveOtherDatacenterLabel(
       datacenterIds: otherIds,
       hasUnassignedPeers: mesh.hasUnassignedPeers,
     },
-    nameById,
+    nameById
   )
 }
 
@@ -856,9 +846,7 @@ function buildMeshRows({
   const rows: MeshFromDatacenterRow[] = []
   for (const relay of relays) {
     const server = servers.find(
-      (row) =>
-        row.id === relay.serverId &&
-        serverIsDatacenterMember(row, datacenterId),
+      (row) => row.id === relay.serverId && serverIsDatacenterMember(row, datacenterId)
     )
     if (!server) continue
     const viaLabels = fabricRoutedViaLabels(relay, serverNameById)
@@ -868,11 +856,7 @@ function buildMeshRows({
       role: relay.role,
       address: relay.address,
       isPrimary: primaryGatewayByDatacenter.get(datacenterId) === relay.serverId,
-      otherDatacenterLabel: resolveOtherDatacenterLabel(
-        mesh,
-        datacenterId,
-        nameById,
-      ),
+      otherDatacenterLabel: resolveOtherDatacenterLabel(mesh, datacenterId, nameById),
       viaLabel: viaLabels.length > 0 ? viaLabels.join(', ') : null,
     })
   }
@@ -880,23 +864,20 @@ function buildMeshRows({
   return rows
 }
 
-function datacenterLoadError(
-  isError: boolean,
-  error: unknown,
-): string | null {
+function datacenterLoadError(isError: boolean, error: unknown): string | null {
   if (!isError) return null
   if (error instanceof Error) return userErrorMessage(error, '')
-  return 'Failed to load datacenter'
+  return 'Failed to load datacenter network'
 }
 
 function deleteDatacenterErrorMessage(error: unknown): string {
   if (errorIncludes(error, DATACENTER_HAS_MEMBERS_ERROR)) {
-    return 'Unassign every server from this datacenter before deleting it.'
+    return 'Unassign every server from this datacenter network before deleting it.'
   }
   if (errorIncludes(error, DATACENTER_HAS_NETWORKS_ERROR)) {
-    return 'This datacenter still has extra networks. Remove those first.'
+    return 'This datacenter network still has extra networks. Remove those first.'
   }
-  return mutationErrorMessage(error, 'Failed to delete datacenter')
+  return mutationErrorMessage(error, 'Failed to delete datacenter network')
 }
 
 function MeshFromDatacenterPanel({
@@ -917,27 +898,15 @@ function MeshFromDatacenterPanel({
   const missingCidr = hasGateway && subnetCount === 0
 
   return (
-    <SectionPanel
-      title={TURBOFABRIC_PRODUCT_NAME}
-      hint={`${rows.length} relays`}
-    >
-      {!canManage ? (
-        <Text style={panelStyles.muted}>
-          Manage permission required.
-        </Text>
-      ) : null}
-      {canManage && loading && rows.length === 0 ? (
-        <LoadingState label="Loading mesh…" />
-      ) : null}
-      {canManage && !loading && rows.length === 0 ? (
-        <EmptyState title="No relays here." />
-      ) : null}
+    <SectionPanel title={TURBOFABRIC_PRODUCT_NAME} hint={`${rows.length} relays`}>
+      {!canManage ? <Text style={panelStyles.muted}>Manage permission required.</Text> : null}
+      {canManage && loading && rows.length === 0 ? <LoadingState label="Loading mesh…" /> : null}
+      {canManage && !loading && rows.length === 0 ? <EmptyState title="No relays here." /> : null}
 
       {canManage && missingCidr ? (
         <View style={panelStyles.calloutWarning}>
           <Text style={panelStyles.calloutWarningText}>
-            This datacenter has no subnets — apply will fail until a prefix is
-            added.
+            This datacenter network has no subnets — apply will fail until a prefix is added.
           </Text>
         </View>
       ) : null}
@@ -948,22 +917,18 @@ function MeshFromDatacenterPanel({
             <Pressable
               key={row.serverId}
               style={[panelStyles.detailCard, webPointer]}
-              onPress={() => router.push(networkFabricHref(orgId) as Href)}
+              onPress={() => router.push(serversFabricHref(orgId) as Href)}
             >
               <View style={styles.gatewayTitleRow}>
                 <Text style={panelStyles.detailTitle}>{row.serverLabel}</Text>
-                {row.isPrimary ? (
-                  <Text style={styles.primaryBadge}>Primary</Text>
-                ) : null}
+                {row.isPrimary ? <Text style={styles.primaryBadge}>Primary</Text> : null}
               </View>
               <Text style={panelStyles.detailLine}>
-                <Text style={panelStyles.detailLabel}>Role: </Text>
+                <Text style={panelStyles.detailLabel}>LAN Ranges: </Text>
                 {relayRoleLabel(row.role)}
               </Text>
               <Text style={panelStyles.detailLine}>
-                <Text style={panelStyles.detailLabel}>
-                  Other datacenters:{' '}
-                </Text>
+                <Text style={panelStyles.detailLabel}>Other Datacenter Networks: </Text>
                 {row.otherDatacenterLabel}
               </Text>
               {row.viaLabel ? (
@@ -973,9 +938,7 @@ function MeshFromDatacenterPanel({
                 </Text>
               ) : null}
               <Text style={panelStyles.detailLine}>
-                <Text style={panelStyles.detailLabel}>
-                  TurboFabric address:{' '}
-                </Text>
+                <Text style={panelStyles.detailLabel}>TurboFabric address: </Text>
                 {row.address}
               </Text>
             </Pressable>
@@ -1000,10 +963,7 @@ function DatacenterSshPortPanel({
   const [draft, setDraft] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const sshText =
-    draft ??
-    (datacenter?.options?.sshPort != null
-      ? String(datacenter.options.sshPort)
-      : '')
+    draft ?? (datacenter?.options?.sshPort != null ? String(datacenter.options.sshPort) : '')
 
   const save = () => {
     if (sshText.trim().length === 0) {
@@ -1013,9 +973,7 @@ function DatacenterSshPortPanel({
     }
     const parsed = parseSshPortDraft(sshText)
     if (parsed == null) {
-      setLocalError(
-        'SSH port must be a whole number from 1 to 65535, or empty to inherit.',
-      )
+      setLocalError('SSH port must be a whole number from 1 to 65535, or empty to inherit.')
       return
     }
     setLocalError(null)
@@ -1023,12 +981,7 @@ function DatacenterSshPortPanel({
   }
 
   return (
-    <SectionPanel
-      title="SSH port"
-      hint="Inherited by member servers"
-      collapsible
-      defaultCollapsed
-    >
+    <SectionPanel title="SSH port" hint="Inherited by member servers" collapsible defaultCollapsed>
       <TextField
         label="SSH port"
         value={sshText}
@@ -1037,7 +990,7 @@ function DatacenterSshPortPanel({
         keyboardType="number-pad"
         placeholder={String(DEFAULT_SSH_PORT)}
         error={localError}
-        accessibilityLabel="Datacenter SSH port"
+        accessibilityLabel="Datacenter network SSH port"
       />
       <Text style={panelStyles.muted}>
         Empty inherits the organization default (then {String(DEFAULT_SSH_PORT)}
@@ -1104,7 +1057,7 @@ function DatacenterNtpPanel({
         onChangeText={setDraftServers}
         editable={!readOnly && !pending && Boolean(datacenter)}
         placeholder="time.cloudflare.com, pool.ntp.org"
-        accessibilityLabel="Datacenter NTP servers"
+        accessibilityLabel="Datacenter network NTP servers"
       />
       <TextField
         label="Fallback NTP servers"
@@ -1112,11 +1065,11 @@ function DatacenterNtpPanel({
         onChangeText={setDraftFallback}
         editable={!readOnly && !pending && Boolean(datacenter)}
         placeholder="Optional fallback hosts"
-        accessibilityLabel="Datacenter fallback NTP servers"
+        accessibilityLabel="Datacenter network fallback NTP servers"
       />
       <Text style={panelStyles.muted}>
-        Empty + off inherits the organization NTP default. Apply still happens
-        on each server Time tab.
+        Empty + off inherits the organization NTP default. Apply still happens on each server Time
+        tab.
       </Text>
       {readOnly ? (
         <Text style={panelStyles.muted}>Manage permission required.</Text>
@@ -1202,11 +1155,14 @@ function DatacenterTimezonePanel({
 }
 
 function DatacenterDeletePanel({
+  name,
   memberCount,
   canManage,
   deleting,
   onConfirm,
 }: Readonly<{
+  /** The name typed to delete: the datacenter's name, else its id. */
+  name: string
   memberCount: number
   canManage: boolean
   deleting: boolean
@@ -1219,18 +1175,15 @@ function DatacenterDeletePanel({
   return (
     <SectionPanel title="Delete" collapsible defaultCollapsed>
       {blocked ? (
-        <Text style={panelStyles.muted}>
-          Unassign every server first.
-        </Text>
+        <Text style={panelStyles.muted}>Unassign every server first.</Text>
       ) : (
-        <Text style={panelStyles.muted}>
-          Permanently remove this empty datacenter.
-        </Text>
+        <Text style={panelStyles.muted}>Permanently remove this empty datacenter network.</Text>
       )}
-      <ConfirmButton
-        label="Delete datacenter"
-        confirmLabel="Confirm delete"
-        prompt="Permanently delete this datacenter?"
+      <TypeNameDeleteButton
+        label="Delete Datacenter Network"
+        thing="Datacenter Network"
+        name={name}
+        description="The datacenter network is removed for good."
         busy={deleting}
         disabled={blocked}
         onConfirm={onConfirm}
@@ -1241,7 +1194,7 @@ function DatacenterDeletePanel({
 
 function applySubnetLabelDrafts(
   subnets: readonly DatacenterSubnetRecord[],
-  drafts: ReadonlyMap<string, string>,
+  drafts: ReadonlyMap<string, string>
 ): DatacenterSubnetRecord[] {
   return subnets.map((subnet) => {
     const draft = drafts.get(subnet.id)
@@ -1264,20 +1217,15 @@ export function DatacenterDetailSection({
   const [assignAddress, setAssignAddress] = useState('')
   const [draftName, setDraftName] = useState<string | null>(null)
   const [draftDescription, setDraftDescription] = useState<string | null>(null)
-  const [draftTimezone, setDraftTimezone] = useState<string | null | undefined>(
-    undefined,
-  )
+  const [draftTimezone, setDraftTimezone] = useState<string | null | undefined>(undefined)
   const [draftEnforce, setDraftEnforce] = useState<boolean | null>(null)
-  const [draftPreference, setDraftPreference] =
-    useState<DatacenterAddressPreference | null>(null)
+  const [draftPreference, setDraftPreference] = useState<DatacenterAddressPreference | null>(null)
   const [draftPriority, setDraftPriority] = useState<string | null>(null)
   const [priorityError, setPriorityError] = useState<string | null>(null)
   const [draftTrusted, setDraftTrusted] = useState<boolean | null>(null)
   const [addCidr, setAddCidr] = useState('')
   const [addLabel, setAddLabel] = useState('')
-  const [subnetLabelDrafts, setSubnetLabelDrafts] = useState(
-    () => new Map<string, string>(),
-  )
+  const [subnetLabelDrafts, setSubnetLabelDrafts] = useState(() => new Map<string, string>())
 
   const datacenterQuery = useDatacenter(orgId, datacenterId, {
     enabled: Boolean(datacenterId),
@@ -1304,29 +1252,23 @@ export function DatacenterDetailSection({
   const updateSubnetMutation = useUpdateDatacenterSubnet(orgId, datacenterId)
   const deleteSubnetMutation = useDeleteDatacenterSubnet(orgId, datacenterId)
 
-  const datacenter: DatacenterDetailRecord | undefined =
-    datacenterQuery.data?.datacenter
+  const datacenter: DatacenterDetailRecord | undefined = datacenterQuery.data?.datacenter
   const members = useMemo(
     () => datacenterQuery.data?.members ?? [],
-    [datacenterQuery.data?.members],
+    [datacenterQuery.data?.members]
   )
   const servers = orEmptyArray(serversQuery.data?.servers)
-  const subnets = applySubnetLabelDrafts(
-    datacenter?.subnets ?? [],
-    subnetLabelDrafts,
-  )
+  const subnets = applySubnetLabelDrafts(datacenter?.subnets ?? [], subnetLabelDrafts)
   const pinnedAddresses = members.map((pin) => pin.address)
   const serversById = useMemo(
     () => new Map(servers.map((server) => [server.id, server])),
-    [servers],
+    [servers]
   )
 
   const candidateServers = useMemo(() => {
-    return listServersWithCandidateAddresses(
-      servers,
-      pinnedAddresses,
-      subnets,
-    ).sort((a, b) => serverTitle(a).localeCompare(serverTitle(b)))
+    return listServersWithCandidateAddresses(servers, pinnedAddresses, subnets).sort((a, b) =>
+      serverTitle(a).localeCompare(serverTitle(b))
+    )
   }, [servers, pinnedAddresses, subnets])
 
   const serverById = new Map(
@@ -1336,12 +1278,10 @@ export function DatacenterDetailSection({
         connected: server.connected,
         datacenters: server.datacenters ?? [],
       },
-    ]),
+    ])
   )
   const nameById = useMemo(() => {
-    const map = new Map(
-      allDatacenters.map((dc) => [dc.id, dc.name?.trim() || dc.id]),
-    )
+    const map = new Map(allDatacenters.map((dc) => [dc.id, dc.name?.trim() || dc.id]))
     if (datacenter) {
       map.set(datacenterId, datacenter.name?.trim() || datacenterId)
     }
@@ -1349,10 +1289,7 @@ export function DatacenterDetailSection({
   }, [allDatacenters, datacenter, datacenterId])
 
   const mesh = resolveSiteLinks(relays, serverById)
-  const primaryGatewayByDatacenter = resolvePrimaryGatewayByDatacenter(
-    relays,
-    serverById,
-  )
+  const primaryGatewayByDatacenter = resolvePrimaryGatewayByDatacenter(relays, serverById)
   const serverNameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const server of servers) {
@@ -1374,13 +1311,11 @@ export function DatacenterDetailSection({
   if (draftTimezone !== undefined) {
     effectiveTimezone = draftTimezone
   }
-  const enforce =
-    draftEnforce ?? (datacenter?.options?.enforceServerTimezone ?? false)
+  const enforce = draftEnforce ?? datacenter?.options?.enforceServerTimezone ?? false
   const addressPreference: DatacenterAddressPreference =
     draftPreference ?? datacenter?.options?.addressPreference ?? 'ipv6'
   // Effective values — the API already applied the defaults on the top level.
-  const priorityText =
-    draftPriority ?? (datacenter ? String(datacenter.priority) : '')
+  const priorityText = draftPriority ?? (datacenter ? String(datacenter.priority) : '')
   const trusted = draftTrusted ?? datacenter?.trusted ?? true
   const policies = useMemo(
     () =>
@@ -1388,21 +1323,31 @@ export function DatacenterDetailSection({
         allDatacenters.map((dc) =>
           dc.id === datacenterId && datacenter
             ? { id: dc.id, priority: datacenter.priority, trusted: datacenter.trusted }
-            : dc,
-        ),
+            : dc
+        )
       ),
-    [allDatacenters, datacenter, datacenterId],
+    [allDatacenters, datacenter, datacenterId]
   )
-  const winnerHint = useMemo(() => {
+  const priorityView = useMemo((): PriorityView | null => {
+    const shared = sharedServerNetworks(servers)
+    if (!priorityMatters(datacenterId, trusted, shared, policies)) return null
+    const ownPriority = policies.get(datacenterId)?.priority ?? DEFAULT_DATACENTER_PRIORITY
+    const ties = priorityTies(datacenterId, ownPriority, shared, policies)
     const hint = findDatacenterWinnerHint(datacenterId, servers, policies)
-    return hint ? formatDatacenterWinnerHint(hint, nameById, policies) : null
-  }, [datacenterId, servers, policies, nameById])
-  const memberServerIds = useMemo(
-    () => new Set(members.map((pin) => pin.serverId)),
-    [members],
-  )
-  const hasManagedMembers = orEmptyArray(managedQuery.data?.managed).some(
-    (cluster) => cluster.members.some((m) => memberServerIds.has(m.serverId)),
+    return {
+      rivals: formatPriorityRivals(
+        priorityRivals(datacenterId, shared, policies),
+        nameById,
+        policies
+      ),
+      winnerHint:
+        hint && ties.length === 0 ? formatDatacenterWinnerHint(hint, nameById, policies) : null,
+      tiedWith: ties.length > 0 ? formatPriorityRivals(ties, nameById, policies) : null,
+    }
+  }, [datacenterId, trusted, servers, policies, nameById])
+  const memberServerIds = useMemo(() => new Set(members.map((pin) => pin.serverId)), [members])
+  const hasManagedMembers = orEmptyArray(managedQuery.data?.managed).some((cluster) =>
+    cluster.members.some((m) => memberServerIds.has(m.serverId))
   )
   const identityName = draftName ?? datacenter?.name ?? ''
   const identityDescription = draftDescription ?? datacenter?.description ?? ''
@@ -1415,10 +1360,7 @@ export function DatacenterDetailSection({
     deleteSubnetMutation.isPending
   const readOnly = !canManage
 
-  const queryError = datacenterLoadError(
-    datacenterQuery.isError,
-    datacenterQuery.error,
-  )
+  const queryError = datacenterLoadError(datacenterQuery.isError, datacenterQuery.error)
   const displayError =
     error ??
     addMembersMutation.actionError ??
@@ -1432,12 +1374,12 @@ export function DatacenterDetailSection({
 
   const title =
     datacenter?.name?.trim() ||
-    (datacenterQuery.isLoading ? 'Datacenter' : 'Unnamed datacenter')
+    (datacenterQuery.isLoading ? 'Datacenter Network' : 'Unnamed datacenter network')
 
   const saveMergedOptions = (
     patch: Parameters<typeof mergeDatacenterOptions>[1],
     onSuccess: () => void,
-    fallback: string,
+    fallback: string
   ) => {
     if (!datacenter) {
       setError(fallback)
@@ -1453,7 +1395,7 @@ export function DatacenterDetailSection({
         onError: (err) => {
           setError(mutationErrorMessage(err, fallback))
         },
-      },
+      }
     )
   }
 
@@ -1461,14 +1403,10 @@ export function DatacenterDetailSection({
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>{title}</Text>
       {datacenter?.description?.trim() ? (
-        <Text style={panelStyles.pageCopy}>
-          {datacenter.description.trim()}
-        </Text>
+        <Text style={panelStyles.pageCopy}>{datacenter.description.trim()}</Text>
       ) : null}
 
-      {displayError ? (
-        <Text style={panelStyles.error}>{displayError}</Text>
-      ) : null}
+      {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
 
       <DatacenterIdentityPanel
         name={identityName}
@@ -1490,18 +1428,16 @@ export function DatacenterDetailSection({
                 setDraftDescription(null)
               },
               onError: (err) => {
-                setError(
-                  mutationErrorMessage(err, 'Failed to save datacenter'),
-                )
+                setError(mutationErrorMessage(err, 'Failed to save datacenter network'))
               },
-            },
+            }
           )
         }}
       />
 
       {datacenter ? (
         <LocationEditorPanel
-          subject="datacenter"
+          subject="datacenter network"
           location={datacenter.location}
           detectedGeo={datacenterGeoFromMetadata(datacenter.metadata)}
           canManage={canManage}
@@ -1567,11 +1503,9 @@ export function DatacenterDetailSection({
                 })
               },
               onError: (err) => {
-                setError(
-                  mutationErrorMessage(err, 'Failed to save subnet label'),
-                )
+                setError(mutationErrorMessage(err, 'Failed to save subnet label'))
               },
-            },
+            }
           )
         }}
         onDeleteSubnet={(networkId) => {
@@ -1601,18 +1535,15 @@ export function DatacenterDetailSection({
         onAssign={() => {
           if (!assignServerId || !assignAddress) return
           setError(null)
-          addMembersMutation.mutate(
-            [{ serverId: assignServerId, address: assignAddress }],
-            {
-              onSuccess: () => {
-                setAssignServerId('')
-                setAssignAddress('')
-              },
-              onError: (err) => {
-                setError(assignMemberErrorMessage(err))
-              },
+          addMembersMutation.mutate([{ serverId: assignServerId, address: assignAddress }], {
+            onSuccess: () => {
+              setAssignServerId('')
+              setAssignAddress('')
             },
-          )
+            onError: (err) => {
+              setError(assignMemberErrorMessage(err))
+            },
+          })
         }}
         onUnassign={(serverId) => {
           setError(null)
@@ -1638,7 +1569,7 @@ export function DatacenterDetailSection({
         priorityError={priorityError}
         trusted={trusted}
         hasManagedMembers={hasManagedMembers}
-        winnerHint={winnerHint}
+        priorityView={priorityView}
         canManage={canManage}
         pending={pending}
         loaded={Boolean(datacenter)}
@@ -1651,7 +1582,10 @@ export function DatacenterDetailSection({
         onSave={() => {
           // The instance drops an out-of-range priority instead of clamping,
           // so an unvalidated save would look like a no-op. Reject here.
-          const parsed = parseDatacenterPriorityDraft(priorityText)
+          const parsed = priorityToSave(
+            priorityView ? priorityText : null,
+            datacenter?.priority ?? DEFAULT_DATACENTER_PRIORITY
+          )
           if (!parsed.ok) {
             setPriorityError(parsed.reason)
             return
@@ -1664,7 +1598,7 @@ export function DatacenterDetailSection({
               setDraftPriority(null)
               setDraftTrusted(null)
             },
-            'Failed to save routing policy',
+            'Failed to save routing policy'
           )
         }}
       />
@@ -1688,7 +1622,7 @@ export function DatacenterDetailSection({
               setDraftTimezone(undefined)
               setDraftEnforce(null)
             },
-            'Failed to save datacenter timezone',
+            'Failed to save datacenter network timezone'
           )
         }
       />
@@ -1698,11 +1632,7 @@ export function DatacenterDetailSection({
         readOnly={readOnly}
         pending={pending}
         onSave={(sshPort, onSuccess) =>
-          saveMergedOptions(
-            { sshPort },
-            onSuccess,
-            'Failed to save SSH port',
-          )
+          saveMergedOptions({ sshPort }, onSuccess, 'Failed to save SSH port')
         }
       />
 
@@ -1716,6 +1646,7 @@ export function DatacenterDetailSection({
       />
 
       <DatacenterDeletePanel
+        name={confirmationName(datacenter?.name, datacenterId)}
         memberCount={members.length}
         canManage={canManage}
         deleting={deleteMutation.isPending}

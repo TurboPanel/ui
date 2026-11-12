@@ -6,13 +6,13 @@ import {
   Badge,
   Button,
   ButtonRow,
-  ConfirmButton,
   EmptyState,
   InlineNotice,
   LoadingState,
   MonoText,
   SectionPanel,
   SegmentedControl,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import { githubManifestReturnNotice, readGithubManifestReturn } from '@/lib/github-manifest-return'
 import type { ForgeSummary } from '@/lib/instance-api'
@@ -118,9 +118,11 @@ function GitAppRow({
           {app.readOnly ? null : (
             <>
               <Button label="Edit" variant="secondary" size="sm" onPress={onEdit} />
-              <ConfirmButton
+              <TypeNameDeleteButton
                 label="Delete"
-                prompt="Delete this application? Accounts connected through it are disconnected."
+                thing="Git Source"
+                name={app.name}
+                description="Accounts connected through it are disconnected."
                 busy={remove.isPending}
                 onConfirm={() => {
                   setError(null)

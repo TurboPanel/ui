@@ -123,10 +123,32 @@ export function useUpdateProject(orgId: string, projectId: string) {
   })
 }
 
+/**
+ * Sets one project's icon from a list (the Projects tiles), where the project
+ * is not fixed when the hook is called. Refreshes that project and the list.
+ */
+export function useUpdateProjectIcon(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({ projectId, icon }: Readonly<{ projectId: string; icon: string | null }>) =>
+      updateProject(projectId, { icon }),
+    onSuccess: async (_data, { projectId }) => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).projects.detail(projectId),
+      })
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).projects.all,
+      })
+    },
+  })
+}
+
 export function useDeleteProject(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: deleteProject,
+    /** `confirmName` is the project's name as typed; the control plane refuses without it. */
+    mutationFn: ({ id, confirmName }: Readonly<{ id: string; confirmName: string }>) =>
+      deleteProject(id, { confirmName }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.all,
@@ -194,7 +216,11 @@ export function useUpdateProjectPrincipalAssignments(orgId: string, projectId: s
 export function useDeleteProjectPrincipal(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (principalId: string) => deleteProjectPrincipal(projectId, principalId),
+    mutationFn: ({
+      principalId,
+      confirmName,
+    }: Readonly<{ principalId: string; confirmName: string }>) =>
+      deleteProjectPrincipal(projectId, principalId, confirmName),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).projects.principals(projectId),

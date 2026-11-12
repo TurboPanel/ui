@@ -30,6 +30,8 @@ import {
 } from '@/lib/project-navigation'
 import { managedProjectTabs } from '@/lib/managed-navigation'
 import { useUpdateProject } from '@/lib/queries'
+import { useOrganizationRecord } from '@/lib/queries/auth'
+import { isEmojiIconAllowedOf } from '@/lib/icons'
 import { showsBreadcrumb } from '@/lib/header-breadcrumb'
 import { colors, spacing, webPointer } from '@/lib/theme'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
@@ -87,6 +89,7 @@ function ProjectHeader() {
     setError,
   } = useProjectContext()
   const updateProject = useUpdateProject(orgId, projectId)
+  const isEmojiIconAllowed = isEmojiIconAllowedOf(useOrganizationRecord(orgId))
   const [editName, setEditName] = useState('')
 
   useEffect(() => {
@@ -119,18 +122,11 @@ function ProjectHeader() {
 
   return (
     <View style={styles.header}>
-      <View
-        style={styles.headerRow}
-        accessibilityRole="header"
-        accessibilityLabel="Project"
-      >
-        <View
-          style={styles.breadcrumb}
-          accessibilityLabel="Breadcrumb"
-        >
+      <View style={styles.headerRow} accessibilityRole="header" accessibilityLabel="Project">
+        <View style={styles.breadcrumb} accessibilityLabel="Breadcrumb">
           <ProjectHeaderLead />
           <View style={styles.currentCrumb}>
-            <ProjectTitleIcon project={project} compact />
+            <ProjectTitleIcon project={project} compact isEmojiIconAllowed={isEmojiIconAllowed} />
             {showMutableChrome ? (
               <TextInput
                 value={editName}
@@ -144,25 +140,18 @@ function ProjectHeader() {
                 placeholder="Project name"
                 placeholderTextColor={colors.textMuted}
                 accessibilityLabel="Project name"
-                style={[
-                  styles.titleInput,
-                  Platform.OS === 'web' ? titleInputWebStyle : null,
-                ]}
+                style={[styles.titleInput, Platform.OS === 'web' ? titleInputWebStyle : null]}
               />
             ) : (
               <View style={styles.titleReadOnly}>
-                <Text style={styles.titleText}>
-                  {project.name?.trim() || 'Unnamed project'}
-                </Text>
+                <Text style={styles.titleText}>{project.name?.trim() || 'Unnamed project'}</Text>
                 {isSystemProject ? <PlatformBadge /> : null}
               </View>
             )}
           </View>
         </View>
       </View>
-      {isSystemProject ? (
-        <Text style={styles.platformEyebrow}>Platform managed</Text>
-      ) : null}
+      {isSystemProject ? <Text style={styles.platformEyebrow}>Platform managed</Text> : null}
       {saving ? <Text style={panelStyles.muted}>Saving…</Text> : null}
     </View>
   )

@@ -25,6 +25,10 @@ import {
   fetchTimezones,
   formatEntityMetricId,
   isForbiddenError,
+  issueServerReenrollTicket,
+  repairColocatedServerConnection,
+  reissueLicenseTicket,
+  revokeServerReenrollTickets,
   isHttpStatusError,
   MetricsBackendUnavailableError,
   MetricsRouteMissingError,
@@ -91,7 +95,7 @@ export function useOrgServers(
 ) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.list,
-    queryFn: fetchOrgServers,
+    queryFn: () => fetchOrgServers(),
     enabled: (options?.enabled ?? true) && orgId.length > 0,
     staleTime: options?.staleTime,
     refetchInterval: options?.refetchInterval,
@@ -635,11 +639,12 @@ function deleteServerOptions(
   input: Readonly<{
     forgetResources?: boolean
     principals?: readonly PrincipalRemovalChoice[]
+    confirmName: string
   }>
 ) {
   const principals = input.principals ?? []
-  if (!input.forgetResources && principals.length === 0) return undefined
   return {
+    confirmName: input.confirmName,
     ...(input.forgetResources ? { forgetResources: true } : {}),
     ...(principals.length > 0 ? { principals } : {}),
   }
@@ -653,6 +658,8 @@ export function useDeleteServer(orgId: string) {
         serverId: string
         forgetResources?: boolean
         principals?: readonly PrincipalRemovalChoice[]
+        /** The server's name as typed (name, else hostname, else id). */
+        confirmName: string
       }>
     ) => deleteServer(input.serverId, orgId, deleteServerOptions(input)),
     onSuccess: async () => {
@@ -672,6 +679,45 @@ export function useRevokeServerDaemonKey(orgId: string, serverId: string) {
     onSuccess: async () => {
       await invalidateServerQueries(queryClient, orgId, serverId)
     },
+  })
+}
+
+/** Issue a Re-Enroll Token. The secret is show-once: keep it in component state, never in the cache. */
+export function useIssueServerReenrollTicket(serverId: string) {
+  return useApiMutation({
+    mutationFn: () => issueServerReenrollTicket(serverId),
+    fallbackError: 'Failed to issue a Re-Enroll Token',
+  })
+}
+
+/** Repair Connection on the co-located server: new credentials for its daemon. */
+export function useRepairColocatedConnection(orgId: string, serverId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: () => repairColocatedServerConnection(serverId),
+    onSuccess: async () => {
+      await invalidateServerQueries(queryClient, orgId, serverId)
+    },
+    fallbackError: 'Failed to repair the connection',
+  })
+}
+
+export function useRevokeServerReenrollTickets(serverId: string) {
+  return useApiMutation({
+    mutationFn: () => revokeServerReenrollTickets(serverId),
+    fallbackError: 'Failed to revoke the Re-Enroll Token',
+  })
+}
+
+/** Reissue an unused key: the old token stops working. The new secret is show-once. */
+export function useReissueLicenseTicket(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: reissueLicenseTicket,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).servers.licenses })
+    },
+    fallbackError: 'Failed to reissue the key',
   })
 }
 
@@ -870,9 +916,14 @@ export function useCreateLicense(orgId: string) {
 
 /**
  * Owner-only registration keys. Manage-gated 403 is swallowed so non-owners
- * are not signed out by the global forbidden handler.
+ * are not signed out by the global forbidden handler. `pollMs` asks faster
+ * while a screen watches one key (the Add Server wizard following its new
+ * server's enrolment); otherwise the list refreshes only while a key is unused.
  */
-export function useOrgLicenses(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
+export function useOrgLicenses(
+  orgId: string,
+  options?: Readonly<{ enabled?: boolean; pollMs?: number | false }>
+) {
   return useQuery({
     queryKey: queryKeys.org(orgId).servers.licenses,
     queryFn: async () => {
@@ -888,6 +939,7 @@ export function useOrgLicenses(orgId: string, options?: Readonly<{ enabled?: boo
     enabled: (options?.enabled ?? true) && orgId.length > 0,
     retry: false,
     refetchInterval: (query) => {
+      if (options?.pollMs) return options.pollMs
       const pending = unboundPendingKeys(query.state.data?.licenses ?? [])
       return pending.length > 0 ? SERVERS_REFRESH_MS : false
     },

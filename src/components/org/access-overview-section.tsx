@@ -1,11 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { OrgMembersPanel } from '@/components/org/org-members-panel'
 import {
@@ -37,10 +31,7 @@ import {
   useRevokeInvitation,
   useTeams,
 } from '@/lib/queries/access'
-import {
-  getAccessManagementPermissionKey,
-  useCan,
-} from '@/lib/query-client'
+import { getAccessManagementPermissionKey, useCan } from '@/lib/query-client'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -91,11 +82,7 @@ function TeamScopePicker({
   if (isLoading) {
     body = <LoadingState label="Loading teams..." />
   } else if (isError) {
-    body = (
-      <Text style={panelStyles.error}>
-        {errorMessage(error, 'Failed to load teams')}
-      </Text>
-    )
+    body = <Text style={panelStyles.error}>{errorMessage(error, 'Failed to load teams')}</Text>
   } else if (items.length === 0) {
     body = <EmptyState title="No teams in this organization." />
   } else {
@@ -156,7 +143,7 @@ function InviteTeammatePanel({
   onSubmit: () => void
 }>) {
   return (
-    <SectionPanel title="Invite a teammate" hint="Send an email invitation">
+    <SectionPanel title="Invite a Teammate" hint="Send an email invitation">
       <View style={styles.form}>
         <TextField
           label="Email"
@@ -175,9 +162,7 @@ function InviteTeammatePanel({
           selectedItemId={teamId}
           onSelect={onTeamSelect}
         />
-        {submitError ? (
-          <Text style={panelStyles.error}>{submitError}</Text>
-        ) : null}
+        {submitError ? <Text style={panelStyles.error}>{submitError}</Text> : null}
         <Button
           label="Send invitation"
           busyLabel="Sending..."
@@ -210,9 +195,7 @@ function PendingInvitationsPanel({
     body = <LoadingState label="Loading invitations..." />
   } else if (isError) {
     body = (
-      <Text style={panelStyles.error}>
-        {errorMessage(error, 'Failed to load invitations')}
-      </Text>
+      <Text style={panelStyles.error}>{errorMessage(error, 'Failed to load invitations')}</Text>
     )
   } else if (invitations.length === 0) {
     body = <EmptyState title="No pending invitations." />
@@ -246,7 +229,7 @@ function PendingInvitationsPanel({
   }
 
   return (
-    <SectionPanel title="Pending invitations" hint="Unexpired invites">
+    <SectionPanel title="Pending Invitations" hint="Unexpired invites">
       {body}
     </SectionPanel>
   )
@@ -273,9 +256,7 @@ function AccessGrantCard({
           <View style={styles.badgeRow}>
             {/* Deny grants are not supported — every grant is an allow grant. */}
             <Badge label={grant.effect} tone="ok" />
-            <Text style={panelStyles.detailLine}>
-              permission: {grant.permissionKey}
-            </Text>
+            <Text style={panelStyles.detailLine}>permission: {grant.permissionKey}</Text>
           </View>
         </View>
         {canManage ? (
@@ -316,9 +297,7 @@ function AccessGrantsPanel({
     body = <LoadingState />
   } else if (isError) {
     body = (
-      <Text style={panelStyles.error}>
-        {errorMessage(error, 'Failed to load access grants')}
-      </Text>
+      <Text style={panelStyles.error}>{errorMessage(error, 'Failed to load access grants')}</Text>
     )
   } else if (grants.length === 0) {
     body = <EmptyState title="No access grants yet." />
@@ -339,10 +318,8 @@ function AccessGrantsPanel({
   }
 
   return (
-    <SectionPanel title="Access grants" hint="Active allow grants">
-      {actionError ? (
-        <Text style={panelStyles.error}>{actionError}</Text>
-      ) : null}
+    <SectionPanel title="Access Grants" hint="Active allow grants">
+      {actionError ? <Text style={panelStyles.error}>{actionError}</Text> : null}
       {body}
     </SectionPanel>
   )
@@ -404,10 +381,7 @@ function AddGrantForm({
             return (
               <Pressable
                 key={permission.key}
-                style={[
-                  styles.pickerRow,
-                  selected && styles.pickerRowSelected,
-                ]}
+                style={[styles.pickerRow, selected && styles.pickerRowSelected]}
                 onPress={() => onPermissionSelect(permission.key)}
               >
                 <Text style={styles.pickerTitle}>{permission.displayName}</Text>
@@ -418,9 +392,7 @@ function AddGrantForm({
         )}
       </ScrollView>
 
-      {submitError ? (
-        <Text style={panelStyles.error}>{submitError}</Text>
-      ) : null}
+      {submitError ? <Text style={panelStyles.error}>{submitError}</Text> : null}
       <Button
         label="Create grant"
         busyLabel="Creating..."
@@ -432,9 +404,7 @@ function AddGrantForm({
   )
 }
 
-export function AccessOverviewSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function AccessOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
   const [scopeKind, setScopeKind] = useState<AccessScopeKind>('organization')
   const [selectedItemId, setSelectedItemId] = useState(orgId)
 
@@ -449,7 +419,7 @@ export function AccessOverviewSection({
             id: row.id,
             label: row.name?.trim() || row.id,
           })),
-    [scopeKind, orgId, teams],
+    [scopeKind, orgId, teams]
   )
 
   useEffect(() => {
@@ -476,9 +446,7 @@ export function AccessOverviewSection({
 
   const [subjectKind, setSubjectKind] = useState<SubjectKind>('user')
   const [subjectId, setSubjectId] = useState('')
-  const [selectedPermissionKey, setSelectedPermissionKey] = useState<PermissionKey | null>(
-    null,
-  )
+  const [selectedPermissionKey, setSelectedPermissionKey] = useState<PermissionKey | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -491,7 +459,7 @@ export function AccessOverviewSection({
         id: row.id,
         label: row.name?.trim() || row.id,
       })),
-    [teams],
+    [teams]
   )
 
   useEffect(() => {
@@ -519,8 +487,8 @@ export function AccessOverviewSection({
   const createGrantMutation = useCreateAccessGrant(resourceId)
   const revokeGrantMutation = useRevokeAccessGrant(resourceId)
 
-  const compatiblePermissions = (permissionsQuery.data?.permissions ?? []).filter(
-    (permission) => PERMISSIONS_BY_SCOPE[scopeKind].includes(permission.key),
+  const compatiblePermissions = (permissionsQuery.data?.permissions ?? []).filter((permission) =>
+    PERMISSIONS_BY_SCOPE[scopeKind].includes(permission.key)
   )
 
   const onRevokeGrant = (grantId: string) => {
@@ -530,9 +498,7 @@ export function AccessOverviewSection({
     setActionError(null)
     revokeGrantMutation.mutate(grantId, {
       onError: () => {
-        setActionError(
-          revokeGrantMutation.actionError ?? 'Failed to revoke access grant',
-        )
+        setActionError(revokeGrantMutation.actionError ?? 'Failed to revoke access grant')
       },
     })
   }
@@ -567,9 +533,7 @@ export function AccessOverviewSection({
         setSelectedPermissionKey(null)
       },
       onError: () => {
-        setSubmitError(
-          createGrantMutation.actionError ?? 'Failed to create access grant',
-        )
+        setSubmitError(createGrantMutation.actionError ?? 'Failed to create access grant')
       },
     })
   }
@@ -592,11 +556,9 @@ export function AccessOverviewSection({
           setInviteEmail('')
         },
         onError: () => {
-          setInviteError(
-            createInvitationMutation.actionError ?? 'Failed to send invitation',
-          )
+          setInviteError(createInvitationMutation.actionError ?? 'Failed to send invitation')
         },
-      },
+      }
     )
   }
 
@@ -607,13 +569,11 @@ export function AccessOverviewSection({
   const grants = grantsQuery.data?.access ?? []
   const pendingInvitations = orEmptyArray(invitationsQuery.data?.invitations)
   const revokingInvitationId =
-    revokeInvitationMutation.isPending &&
-    typeof revokeInvitationMutation.variables === 'string'
+    revokeInvitationMutation.isPending && typeof revokeInvitationMutation.variables === 'string'
       ? revokeInvitationMutation.variables
       : null
   const revokingGrantId =
-    revokeGrantMutation.isPending &&
-    typeof revokeGrantMutation.variables === 'string'
+    revokeGrantMutation.isPending && typeof revokeGrantMutation.variables === 'string'
       ? revokeGrantMutation.variables
       : null
 
@@ -678,9 +638,7 @@ export function AccessOverviewSection({
           onSelect={setSelectedItemId}
         />
       ) : (
-        <Text style={panelStyles.muted}>
-          Managing access for organization {orgId}.
-        </Text>
+        <Text style={panelStyles.muted}>Managing access for organization {orgId}.</Text>
       )}
 
       <AccessGrantsPanel
@@ -695,12 +653,7 @@ export function AccessOverviewSection({
       />
 
       {canManage ? (
-        <SectionPanel
-          title="Add grant"
-          hint="Assign a permission"
-          collapsible
-          defaultCollapsed
-        >
+        <SectionPanel title="Add Grant" hint="Assign a permission" collapsible defaultCollapsed>
           <AddGrantForm
             subjectKind={subjectKind}
             subjectId={subjectId}

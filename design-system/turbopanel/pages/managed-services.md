@@ -53,16 +53,16 @@ Topology rows ordered primary first then `ordinal`:
 
 ```
 ● Primary            web-01 · Frankfurt · Local                 Read/write · Running
-● Replica · Failover web-04 · Frankfurt · Datacenter LAN Serves reads  Streaming · 1.4 MB behind
+● Replica · Failover web-04 · Frankfurt · Datacenter network Serves reads  Streaming · 1.4 MB behind
 ○ Replica · Remote read replica edge-02 · Ashburn · TurboFabric direct Serves reads · Manual DR candidate  Catching up · 22s behind
 ```
 
 - `[ Failover replica ] [ Remote/read replica ]` selector on add (default Failover replica); **Serve read traffic** toggle
-- Transport vocabulary: **Local** / **Datacenter LAN** / **TurboFabric direct** / **Public Internet + TLS**
-- A `datacenter` transport **names the winning datacenter**: `Datacenter LAN · Backhaul (priority 10)` — derived client-side by `describeDatacenterTransport` (`partitionSharedDatacenters(member, primary, policies).trusted[0]`, policies from `useDatacenters` `priority` / `trusted`). Same line in the add-replica picker's predicted transport. Display hint only — no new API field; the stored transport and instance 422s stay authoritative
+- Transport vocabulary: **Local** / **Datacenter network** / **TurboFabric direct** / **Public Internet + TLS**
+- A `datacenter` transport **names the winning datacenter network**: `Datacenter network · Backhaul (priority 10)` — derived client-side by `describeDatacenterTransport` (`partitionSharedDatacenters(member, primary, policies).trusted[0]`, policies from `useDatacenters` `priority` / `trusted`). Same line in the add-replica picker's predicted transport. Display hint only — no new API field; the stored transport and instance 422s stay authoritative
 - The untrusted refusal keeps its own code: `failover_requires_trusted_datacenter` → `FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY`; the picker shows `replicaIneligibleReasonLabel('untrusted-datacenter')` with a **Set up private network** link to the untrusted datacenter
 - Unbounded replicas (no max-2 cap)
-- Failover: only servers sharing the primary's datacenter with a usable subnet; Remote/read: any org server
+- Failover: only servers sharing the primary's datacenter network with a usable subnet; Remote/read: any org server
 - **Ineligible servers always say *why*** (`already-member` / `offline` / `no-datacenter` / `untrusted-datacenter` / `no-private-cidr` / `no-private-path`) with **Set up private network** links for network reasons — never silent disable
 - Traffic chips: **Read/write** (primary), **Serves reads** / **Standby only** (replicas); remote/read rows also show **Manual DR candidate**
 - Remove replica = two-press (destroys replica data volume)
@@ -75,7 +75,7 @@ Topology rows ordered primary first then `ordinal`:
 - **Read endpoint** only when any member is `readEligible` — same host/port
 - TLS: `sslmode=verify-full` required + **Download CA certificate** (never private key)
 - Masked DSN + Copy; pointer to **Connect to a service**
-- When the detail carries `connections[]`: one copyable string per address clients use, labelled `Public: <host>` / `Datacenter <name>: <host>`, main first and marked **(main)** from its `primary` flag, each copy button named by its address; otherwise the single DSN
+- When the detail carries `connections[]`: one copyable string per address clients use, labelled `Public: <host>` / `Datacenter Network <name>: <host>`, main first and marked **(main)** from its `primary` flag, each copy button named by its address; otherwise the single DSN
 - `addressNeeded`: warning line + **Set the address clients use** link to the server's Network tab
 - External access switch Yes hint keeps the safety fact (ports open on all of the server's addresses; the firewall decides who reaches them); while Yes it links to the Addresses clients use card, only where that card can show; it never lists addresses itself
 

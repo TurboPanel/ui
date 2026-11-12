@@ -35,6 +35,7 @@ import {
   type ControlPlaneAccount,
 } from '@/lib/control-plane-accounts'
 import { headerLayoutFor } from '@/lib/header-layout'
+import { unreadBadgeLabel } from '@/lib/notification-preferences'
 import { useUnreadNotificationCount } from '@/lib/notifications'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
@@ -60,7 +61,7 @@ function accountMenuA11yLabel(
     return `Account menu for ${email}`
   }
   if (unreadCount > 0) {
-    return `Account and notifications for ${email}, ${unreadCount} unread`
+    return `Account and notifications for ${email}, ${unreadBadgeLabel(unreadCount)} unread`
   }
   return `Account and notifications for ${email}`
 }

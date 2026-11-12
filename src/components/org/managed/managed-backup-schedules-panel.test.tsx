@@ -35,6 +35,7 @@ vi.mock('@/components/ui', () => ({
   ButtonRow: ({ children }: Props) => <div>{children}</div>,
   Checkbox: () => null,
   ConfirmButton: ({ label }: Props) => <button type="button">{label as string}</button>,
+  TypeNameDeleteButton: ({ label }: Props) => <button type="button">{label as string}</button>,
   EmptyState: ({ title }: Props) => <p>{title as string}</p>,
   FormField: ({ label, error, children }: Props) => (
     <div>

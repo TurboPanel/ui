@@ -7,6 +7,13 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   params: { current: {} as Record<string, string> },
   createProject: vi.fn(),
+  org: undefined as { isEmojiIconAllowed?: boolean } | undefined,
+  picker: null as null | {
+    value: string | null
+    isEmojiIconAllowed: boolean
+    onSave: (icon: string | null) => Promise<string | null>
+    onClose: () => void
+  },
   inspection: {
     current: { data: undefined, isPending: true, isSuccess: false, error: null } as Record<
       string,
@@ -28,6 +35,12 @@ vi.mock('expo-router', () => ({
 vi.mock('@/lib/workspace-scope-context', () => ({ useOptionalWorkspaceScope: () => null }))
 vi.mock('@/lib/org-default-environment', () => ({
   useOrgDefaultEnvironmentName: () => ({ defaultEnvironmentName: 'production' }),
+}))
+vi.mock('@/lib/org-project-settings', () => ({
+  useOrgProjectFormDefaults: () => ({
+    openEnvironmentSectionByDefault: false,
+    openWorkspaceSectionByDefault: false,
+  }),
 }))
 vi.mock('@/lib/queries', () => ({
   useWorkspaces: () => ({
@@ -52,6 +65,13 @@ vi.mock('@/lib/queries', () => ({
   }),
   useRepositoryInspection: () => mocks.inspection.current,
 }))
+vi.mock('@/lib/queries/auth', () => ({ useOrganizationRecord: () => mocks.org }))
+vi.mock('@/components/org/icon-picker-sheet', () => ({
+  IconPickerSheet: (props: NonNullable<typeof mocks.picker>) => {
+    mocks.picker = props
+    return <div data-testid="picker" />
+  },
+}))
 vi.mock('@/lib/system-inventory', () => ({
   userWorkspaces: (rows: unknown[]) => rows,
 }))
@@ -59,15 +79,24 @@ vi.mock('@/components/org/project-create/details-step', () => ({
   DetailsStep: ({
     displayName,
     onDisplayNameChange,
+    icon,
   }: {
     displayName: string
     onDisplayNameChange: (value: string) => void
+    icon?: { value: string | null; onChoose: () => void }
   }) => (
-    <input
-      aria-label="Project name"
-      value={displayName}
-      onChange={(event) => onDisplayNameChange(event.target.value)}
-    />
+    <>
+      <input
+        aria-label="Project name"
+        value={displayName}
+        onChange={(event) => onDisplayNameChange(event.target.value)}
+      />
+      {icon ? (
+        <button type="button" aria-label="Choose an icon" onClick={icon.onChoose}>
+          {icon.value ?? 'default'}
+        </button>
+      ) : null}
+    </>
   ),
 }))
 vi.mock('@/components/org/project-create/repository-step', () => ({
@@ -143,6 +172,8 @@ beforeEach(() => {
   mocks.params.current = {}
   mocks.createProject.mockResolvedValue({ ok: true, value: { id: 'p1' } })
   mocks.inspection.current = { data: undefined, isPending: true, isSuccess: false, error: null }
+  mocks.org = undefined
+  mocks.picker = null
 })
 
 afterEach(() => {
@@ -169,7 +200,7 @@ describe('ProjectCreateSection', () => {
     await press('Continue')
     expect(screen.getByText('Compose editor on compose')).toBeTruthy()
     await press('Back')
-    expect(screen.getByRole('heading', { name: 'New project' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'New Project' })).toBeTruthy()
   })
 
   it('creates a managed database from the inline pick and opens the project', async () => {
@@ -186,6 +217,73 @@ describe('ProjectCreateSection', () => {
       code: 'postgres',
     })
     expect(mocks.replace).toHaveBeenCalledWith('/o/projects/p1')
+  })
+
+  it('keeps the icon picked beside the name and sends it with a new project', async () => {
+    mocks.org = { isEmojiIconAllowed: true }
+    const { rerender } = render(<ProjectCreateSection orgId="o" />)
+    name('Site')
+    expect(screen.queryByTestId('picker')).toBeNull()
+    await press('Choose an icon')
+    expect(mocks.picker).toMatchObject({ value: null, isEmojiIconAllowed: true })
+    await act(async () => {
+      await expect(mocks.picker!.onSave('🚀')).resolves.toBeNull()
+      mocks.picker!.onClose()
+    })
+    expect(screen.queryByTestId('picker')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Choose an icon' }).textContent).toBe('🚀')
+    await press('From a Git repository')
+    await press('Pick acme/site')
+    mocks.inspection.current = {
+      data: {
+        commitSha: 'abc1234',
+        files: [
+          { path: 'package.json', found: true, content: '{"scripts":{"start":"node s.js"}}' },
+        ],
+        entries: [],
+      },
+      isPending: false,
+      isSuccess: true,
+      error: null,
+    }
+    rerender(<ProjectCreateSection orgId="o" />)
+    await press('Continue')
+    const [body] = mocks.createProject.mock.calls[0] as [Record<string, unknown>]
+    expect(body).toMatchObject({ type: 'docker-compose', icon: '🚀' })
+  })
+
+  it('shows no icon button on a control plane without organization icons', () => {
+    mocks.org = {}
+    render(<ProjectCreateSection orgId="o" />)
+    expect(screen.queryByRole('button', { name: 'Choose an icon' })).toBeNull()
+  })
+
+  it('offers emoji in the picker only when the organization allows them', async () => {
+    mocks.org = { isEmojiIconAllowed: false }
+    render(<ProjectCreateSection orgId="o" />)
+    await press('Choose an icon')
+    expect(mocks.picker?.isEmojiIconAllowed).toBe(false)
+  })
+
+  it('hides the icon button for a managed database and sends no icon with it', async () => {
+    mocks.org = { isEmojiIconAllowed: true }
+    render(<ProjectCreateSection orgId="o" />)
+    name('Data')
+    await press('Choose an icon')
+    await act(async () => {
+      await mocks.picker!.onSave('rocket')
+      mocks.picker!.onClose()
+    })
+    await press('Managed database')
+    expect(screen.queryByRole('button', { name: 'Choose an icon' })).toBeNull()
+    await press('PostgreSQL')
+    await press('Create project')
+    expect(mocks.createProject).toHaveBeenCalledWith({
+      type: 'managed',
+      workspaceId: 'w1',
+      name: 'Data',
+      code: 'postgres',
+    })
   })
 
   it('needs a name before it moves on', async () => {

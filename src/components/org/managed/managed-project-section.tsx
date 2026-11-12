@@ -1,12 +1,14 @@
+import { ManagedBackupLoginSection } from '@/components/org/managed/managed-backup-login-panel'
 import {
   Button,
   ButtonRow,
-  ConfirmButton,
   EmptyState,
   LoadingState,
   SegmentedControl,
   TextField,
+  TypeNameDeleteButton,
 } from '@/components/ui'
+import { environmentConfirmName } from '@/lib/environment-delete'
 import { ManagedBackupsPanel } from '@/components/org/managed/managed-backups-panel'
 import { ManagedBackupSchedulesPanel } from '@/components/org/managed/managed-backup-schedules-panel'
 import { ManagedBindingsPanel } from '@/components/org/managed/managed-bindings-panel'
@@ -20,6 +22,8 @@ import {
   type ManagedSettingsSection,
 } from '@/components/org/managed/managed-settings-panel'
 import { ManagedStatusPanel } from '@/components/org/managed/managed-status-panel'
+import { allDatabasesOffSwitch } from '@/components/org/managed/managed-login-databases'
+import { ManagedAdminToolsPanel } from '@/components/org/managed/managed-admin-tools-panel'
 import { ManagedUsersPanel } from '@/components/org/managed/managed-users-panel'
 import {
   defaultManagedVersionSelection,
@@ -67,6 +71,7 @@ import {
   useDeleteManagedDatabase,
   useDeleteManagedUser,
   useEnvironmentManaged,
+  useManagedAdminTools,
   useManagedBackups,
   useManagedDatabases,
   useManagedStatus,
@@ -86,7 +91,7 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useCallback, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
@@ -295,6 +300,7 @@ export function ManagedSetupPanel({
               onPress={() => setServerId(server.id)}
               accessibilityRole="radio"
               accessibilityState={{ selected, disabled: offline || submitting }}
+              aria-checked={selected}
               accessibilityLabel={server.name?.trim() || server.hostname || server.id}
             >
               <Text style={styles.serverLabel}>
@@ -598,7 +604,9 @@ export function ManagedEnvironmentReadyPanels({
           orgId={orgId}
           environmentId={environmentId}
           engine={managed.engine}
+          serverId={managed.serverId}
           rootUsername={detail.rootUsername}
+          allDatabasesOff={allDatabasesOffSwitch(detail.allowAllDatabasesLogins)}
           databases={databases}
           users={users}
           canManage={canManage}
@@ -687,8 +695,8 @@ export function ManagedEnvironmentReadyPanels({
             }
             registerCommand(result.value.commandId, action, result.value.serverId)
           }}
-          onDelete={async () => {
-            const result = await deleteManagedMutation.mutateAsync()
+          onDelete={async (typedName) => {
+            const result = await deleteManagedMutation.mutateAsync(typedName)
             if (result.deleted) {
               invalidateManagedData()
               ignorePromise(managedQuery.refetch())
@@ -724,7 +732,9 @@ function ManagedDataPanels({
   orgId,
   environmentId,
   engine,
+  serverId,
   rootUsername,
+  allDatabasesOff,
   databases,
   users,
   canManage,
@@ -742,7 +752,9 @@ function ManagedDataPanels({
   orgId: string
   environmentId: string
   engine: string | null
+  serverId: string | null
   rootUsername: string | null
+  allDatabasesOff: 'organization' | 'cluster' | null
   databases: string[]
   users: ManagedUserRecord[]
   canManage: boolean
@@ -759,6 +771,11 @@ function ManagedDataPanels({
 }>) {
   const updateUserMutation = useUpdateManagedUser(orgId, environmentId)
   const appLoginsMutation = useCreateManagedAppLogins(orgId, environmentId)
+  const adminTools = useManagedAdminTools(orgId, environmentId).data
+  const adminToolLoginIds = useMemo(
+    () => new Set((adminTools?.tools ?? []).map((tool) => tool.loginId)),
+    [adminTools]
+  )
   return (
     <>
       <ManagedCredentialsPanel
@@ -795,8 +812,8 @@ function ManagedDataPanels({
           }
           registerCommand(result.value.commandId, 'Create database')
         }}
-        onDeleteDatabase={async (name) => {
-          const result = await deleteDatabaseMutation.run(name)
+        onDeleteDatabase={async (name, confirmName) => {
+          const result = await deleteDatabaseMutation.run({ name, confirmName })
           if (!result.ok) {
             throw new Error(result.error ?? 'Failed to delete database')
           }
@@ -842,12 +859,30 @@ function ManagedDataPanels({
         onReload={async () => {
           await Promise.all([usersQuery.refetch(), databasesQuery.refetch()])
         }}
+        allDatabasesOff={allDatabasesOff}
+        adminToolLoginIds={adminToolLoginIds}
         onCreateAppLogins={async (databaseName, body) => {
           const result = await appLoginsMutation.run({ databaseName, body })
           if (!result.ok) throw new Error(result.error ?? 'Failed to add the app logins')
           registerCommand(result.value.commandId, 'Add app logins')
           return { logins: result.value.logins, notes: result.value.notes }
         }}
+      />
+      <ManagedAdminToolsPanel
+        orgId={orgId}
+        environmentId={environmentId}
+        serverId={serverId}
+        engine={engine}
+        tools={adminTools?.tools}
+        canManage={canManage}
+        busy={inFlight}
+      />
+      <ManagedBackupLoginSection
+        orgId={orgId}
+        environmentId={environmentId}
+        canManage={canManage}
+        busy={inFlight}
+        registerCommand={registerCommand}
       />
     </>
   )
@@ -869,6 +904,7 @@ function EnvironmentToolbarActions({
   deleting,
   onRename,
   onNewEnvironment,
+  environmentName,
   onDeleteConfirm,
 }: Readonly<{
   canOwn: boolean
@@ -876,7 +912,9 @@ function EnvironmentToolbarActions({
   deleting: boolean
   onRename: () => void
   onNewEnvironment: () => void
-  onDeleteConfirm: () => void
+  /** The name typed to delete the environment. */
+  environmentName: string
+  onDeleteConfirm: (typedName: string) => Promise<unknown>
 }>) {
   if (!canOwn) {
     return null
@@ -886,10 +924,11 @@ function EnvironmentToolbarActions({
       <Button label="Rename" size="sm" onPress={onRename} />
       <Button label="New environment" size="sm" onPress={onNewEnvironment} />
       {showDelete ? (
-        <ConfirmButton
+        <TypeNameDeleteButton
           label="Delete"
-          confirmLabel={deleting ? 'Deleting…' : 'Confirm delete'}
-          prompt="Delete this environment?"
+          thing="Environment"
+          name={environmentName}
+          description="Its services, domains, containers and variables are removed."
           busy={deleting}
           onConfirm={onDeleteConfirm}
         />
@@ -1020,9 +1059,9 @@ function ActiveEnvironmentPanel({
     setShowCreate(false)
   }
 
-  const deleteActive = async () => {
+  const deleteActive = async (confirmName: string) => {
     onError(null)
-    const result = await deleteEnvironmentMutation.run(activeEnvironment.id)
+    const result = await deleteEnvironmentMutation.run({ id: activeEnvironment.id, confirmName })
     if (!result.ok) {
       onError(failedRunMessage(result, 'Failed to delete the environment'))
     }
@@ -1059,9 +1098,8 @@ function ActiveEnvironmentPanel({
           onNewEnvironment={() => {
             setShowCreate(true)
           }}
-          onDeleteConfirm={() => {
-            ignorePromise(deleteActive())
-          }}
+          environmentName={environmentConfirmName(activeEnvironment)}
+          onDeleteConfirm={deleteActive}
         />
       </View>
 

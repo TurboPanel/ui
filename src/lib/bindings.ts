@@ -16,6 +16,7 @@ export const MAX_BINDING_KEY_PREFIX_LENGTH = 64
 
 export type BindingPrefixedKeys = {
   url: string
+  sslMode: string
   caCert: string
   /** Sites run on the server itself only: path of the CA file kept for the site. */
   caFile: string
@@ -34,6 +35,7 @@ export type BindingPrefixedKeys = {
 export function bindingPrefixedKeys(prefix: string): BindingPrefixedKeys {
   return {
     url: `${prefix}_URL`,
+    sslMode: `${prefix}_SSL_MODE`,
     caCert: `${prefix}_CA_CERT`,
     caFile: `${prefix}_CA_FILE`,
     readSplit: `${prefix}_READ_SPLIT`,
@@ -45,18 +47,106 @@ export function bindingPrefixedKeys(prefix: string): BindingPrefixedKeys {
   }
 }
 
-/**
- * Engine default (unprefixed) keys — source of truth is
- * `spec.binding.unprefixed` in `turbopanel/src/features/managed/postgres.ts`,
- * `mysql.ts`, and `mariadb.ts`.
- */
-export const BINDING_ENGINE_DEFAULT_KEYS: Record<ManagedServiceEngine, string[]> = {
-  postgres: ['PGHOST', 'PGPORT', 'PGDATABASE', 'PGUSER', 'PGPASSWORD', 'PGSSLMODE'],
-  mysql: ['MYSQL_HOST', 'MYSQL_PORT', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'],
-  mariadb: ['MYSQL_HOST', 'MYSQL_PORT', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'],
+export const BINDING_PRESETS = [
+  'postgres',
+  'mysql',
+  'laravel',
+  'wordpress',
+  'metabase',
+  'uptime-kuma',
+] as const
+
+export type BindingPreset = (typeof BINDING_PRESETS)[number]
+
+export const BINDING_PRESET_LABELS: Record<BindingPreset, string> = {
+  postgres: 'Plain PostgreSQL',
+  mysql: 'Plain MySQL',
+  laravel: 'Laravel',
+  wordpress: 'WordPress',
+  metabase: 'Metabase',
+  'uptime-kuma': 'Uptime Kuma',
+}
+
+/** Presets offered per engine, plain one first. Mirrors `presets.ts` on the control plane. */
+const ENGINE_PRESETS: Record<ManagedServiceEngine, readonly BindingPreset[]> = {
+  postgres: ['postgres', 'laravel', 'metabase'],
+  mysql: ['mysql', 'laravel', 'wordpress', 'metabase', 'uptime-kuma'],
+  mariadb: ['mysql', 'laravel', 'wordpress', 'metabase', 'uptime-kuma'],
   redis: [],
   clickhouse: [],
 }
+
+/** Presets that fit an engine (empty for engines without bindings). */
+export function presetsForEngine(engine: ManagedServiceEngine): readonly BindingPreset[] {
+  return ENGINE_PRESETS[engine]
+}
+
+/** The plain preset of an engine, or null when the engine has none. */
+export function plainPresetForEngine(engine: ManagedServiceEngine): BindingPreset | null {
+  return ENGINE_PRESETS[engine][0] ?? null
+}
+
+/**
+ * Names each preset adds, per engine. Mirrors `PRESET_DEFINITIONS` in
+ * `turbopanel/src/features/bindings/presets.ts`. Names that exist only in some
+ * TLS modes (`PGSSLROOTCERT`) are listed because the preview cannot know the mode.
+ */
+const PRESET_NAMES: Record<BindingPreset, (engine: ManagedServiceEngine) => string[]> = {
+  postgres: () => [
+    'PGHOST',
+    'PGPORT',
+    'PGDATABASE',
+    'PGUSER',
+    'PGPASSWORD',
+    'PGSSLMODE',
+    'PGSSLROOTCERT',
+  ],
+  mysql: () => ['MYSQL_HOST', 'MYSQL_PORT', 'MYSQL_DATABASE', 'MYSQL_USER', 'MYSQL_PASSWORD'],
+  laravel: (engine) => [
+    'DB_CONNECTION',
+    'DB_HOST',
+    'DB_PORT',
+    'DB_DATABASE',
+    'DB_USERNAME',
+    'DB_PASSWORD',
+    'DB_URL',
+    engine === 'postgres' ? 'DB_SSLMODE' : 'MYSQL_ATTR_SSL_CA',
+  ],
+  wordpress: () => ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'],
+  metabase: () => [
+    'MB_DB_TYPE',
+    'MB_DB_HOST',
+    'MB_DB_PORT',
+    'MB_DB_DBNAME',
+    'MB_DB_USER',
+    'MB_DB_PASS',
+  ],
+  'uptime-kuma': () => [
+    'UPTIME_KUMA_DB_TYPE',
+    'UPTIME_KUMA_DB_HOSTNAME',
+    'UPTIME_KUMA_DB_PORT',
+    'UPTIME_KUMA_DB_NAME',
+    'UPTIME_KUMA_DB_USERNAME',
+    'UPTIME_KUMA_DB_PASSWORD',
+    'UPTIME_KUMA_DB_SSL',
+    'UPTIME_KUMA_DB_CA',
+  ],
+}
+
+/** Names a preset adds beside the prefixed set (no values). */
+export function presetKeyNames(preset: BindingPreset, engine: ManagedServiceEngine): string[] {
+  return PRESET_NAMES[preset](engine)
+}
+
+const PRESET_SECRET_NAMES: ReadonlySet<string> = new Set([
+  'PGPASSWORD',
+  'MYSQL_PASSWORD',
+  'DB_PASSWORD',
+  'DB_URL',
+  'MB_DB_PASS',
+  'UPTIME_KUMA_DB_PASSWORD',
+  'UPTIME_KUMA_DB_CA',
+])
 
 /** Suffixes / exact keys that materialize secrets (never reveal values). */
 export const BINDING_SECRET_KEY_SUFFIXES = [
@@ -68,7 +158,7 @@ export const BINDING_SECRET_KEY_SUFFIXES = [
 ] as const
 
 export function isBindingSecretKey(key: string): boolean {
-  if (key === 'PGPASSWORD' || key === 'MYSQL_PASSWORD') return true
+  if (PRESET_SECRET_NAMES.has(key)) return true
   return key.endsWith('_URL') || key.endsWith('_CA_CERT') || key.endsWith('_PASSWORD')
 }
 
@@ -106,24 +196,23 @@ export function validateBindingKeyPrefix(prefix: string): BindingKeyPrefixValida
 }
 
 /**
- * Keys the service will receive if the create form is submitted as-is.
+ * Keys the service will receive if the create form is submitted as-is, split
+ * into the prefixed set and the names the chosen preset adds.
  * Do not use this for existing bindings — render server `keys[]` instead.
  */
 export function previewBindingKeys(
   input: Readonly<{
     prefix: string
     engine: ManagedServiceEngine
-    emitEngineDefaults: boolean
+    preset: BindingPreset | null
   }>
-): string[] {
+): { prefixed: string[]; preset: string[] } {
   const validation = validateBindingKeyPrefix(input.prefix)
   const prefix = validation.ok
     ? validation.prefix
     : input.prefix.trim() || DEFAULT_BINDING_KEY_PREFIX
-  const prefixed = bindingPrefixedKeys(prefix)
-  const keys = Object.values(prefixed)
-  if (input.emitEngineDefaults) {
-    keys.push(...BINDING_ENGINE_DEFAULT_KEYS[input.engine])
+  return {
+    prefixed: Object.values(bindingPrefixedKeys(prefix)),
+    preset: input.preset ? presetKeyNames(input.preset, input.engine) : [],
   }
-  return keys
 }

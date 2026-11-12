@@ -11,6 +11,7 @@ import {
   databaseEngineLabel,
   databaseRoleLabel,
   databaseUserDatabasesLine,
+  ipScopeLabel,
   networkKindLabel,
   removalNoticeBody,
   replicaStatusLabel,
@@ -71,6 +72,8 @@ describe('server services display copy', () => {
     expect(networkKindLabel('docker')).toBe('Docker network')
     expect(networkKindLabel('compose')).toBe('App network (Compose)')
     expect(networkKindLabel('datacenter')).toBe('Datacenter network')
+    expect(ipScopeLabel('public')).toBe('Public')
+    expect(ipScopeLabel('datacenter')).toBe('Datacenter Network')
     expect(networkKindLabel('reserved')).toBe('Reserved address range')
     expect(networkKindLabel('managed')).toBe('Managed database network')
     expect(networkKindLabel('other')).toBe('Network')

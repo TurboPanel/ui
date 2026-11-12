@@ -14,6 +14,16 @@ const styles = themedStyles((p) => ({
   mono: { ...typeStyle('monoSemibold', 'mono'), color: p.text2 },
   note: { ...typeStyle('body', 'footnote'), color: p.text3 },
   warn: { ...typeStyle('body', 'footnote'), color: p.warn },
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: p.sep,
+    backgroundColor: p.surface2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 }))
 
 export type GeneralFormProps = Readonly<{
@@ -32,6 +42,16 @@ export type GeneralFormProps = Readonly<{
   onReset: () => void
 }>
 
+/** The project's icon row; absent for a managed database, which keeps the managed icon. */
+export type ProjectIconRow = Readonly<{
+  /** The icon as it draws now (the chosen one, or the type glyph). */
+  glyph: ReactNode
+  /** "Rocket", the emoji, or "Default". */
+  label: string
+  /** Opens the icon picker; null when the person may not change it. */
+  onChoose: (() => void) | null
+}>
+
 export type WorkspaceChoice = Readonly<{ id: string; label: string; current: boolean }>
 
 export type ProjectSettingsViewProps = Readonly<{
@@ -39,6 +59,8 @@ export type ProjectSettingsViewProps = Readonly<{
   /** The person may change settings; without it every control is read-only text. */
   canEdit: boolean
   general: GeneralFormProps
+  /** The icon row under the description; omitted for a managed database. */
+  icon?: ProjectIconRow
   workspaces: readonly WorkspaceChoice[]
   canMove: boolean
   moving: boolean
@@ -74,7 +96,13 @@ function GeneralSection({
   form,
   projectId,
   canEdit,
-}: Readonly<{ form: GeneralFormProps; projectId: string; canEdit: boolean }>) {
+  icon,
+}: Readonly<{
+  form: GeneralFormProps
+  projectId: string
+  canEdit: boolean
+  icon?: ProjectIconRow
+}>) {
   const s = styles(usePalette())
   return (
     <View style={s.section}>
@@ -114,6 +142,18 @@ function GeneralSection({
           </View>
         ) : null}
         <ListGroup>
+          {icon ? (
+            <ListRow
+              title="Icon"
+              sub="Shown on the project's tile and beside its name."
+              leading={<View style={s.iconBox}>{icon.glyph}</View>}
+              value={icon.onChoose ? `${icon.label} · Change` : icon.label}
+              onPress={icon.onChoose ?? undefined}
+              accessibilityLabel={
+                icon.onChoose ? `Icon: ${icon.label}. Change icon` : `Icon: ${icon.label}`
+              }
+            />
+          ) : null}
           <ListRow title="Project ID" value={projectId} />
         </ListGroup>
       </View>
@@ -260,7 +300,12 @@ export function ProjectSettingsView(props: ProjectSettingsViewProps) {
   const s = styles(usePalette())
   return (
     <View style={s.page}>
-      <GeneralSection form={props.general} projectId={props.projectId} canEdit={props.canEdit} />
+      <GeneralSection
+        form={props.general}
+        projectId={props.projectId}
+        canEdit={props.canEdit}
+        icon={props.managed ? undefined : props.icon}
+      />
       <WorkspaceSection
         choices={props.workspaces}
         canMove={props.canMove}

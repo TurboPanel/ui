@@ -285,9 +285,6 @@ describe('Linux user name rule', () => {
       'root',
       'www-data',
       'postgres',
-      'tp',
-      'tpdata',
-      'tpanything',
       'systemd-x',
       // The user's own group carries its name; these groups grant power.
       'sudo',
@@ -310,6 +307,19 @@ describe('Linux user name rule', () => {
     }
     expect(isSystemUserName(' Root ')).toBe(true)
     expect(isSystemUserName('shop')).toBe(false)
+  })
+
+  it('says why a tp name is kept, and matches no substring of an ordinary name', () => {
+    for (const name of ['tp', 'tpdata', 'tpanything', 'tpctrl', 'tptestacct']) {
+      expect(checkLinuxUserName(name)).toEqual({
+        ok: false,
+        msg: "Names starting with tp are kept for TurboPanel's own accounts",
+      })
+    }
+    for (const name of ['testuser', 'gitlab-user', 'ftpuser', 'roots', 'shop-tp']) {
+      expect(isSystemUserName(name)).toBe(false)
+      expect(checkLinuxUserName(name).ok).toBe(true)
+    }
   })
 
   it('refuses a name that is taken, by display name or system name, ignoring case and spaces', () => {

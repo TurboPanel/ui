@@ -101,3 +101,27 @@ export function pinnedCertificateGap<T extends PickerCertificate>(
     note: `This certificate doesn’t cover ${missing.join(' and ')}, so the deploy will be refused. Pick another or ${fix}.`,
   }
 }
+
+function sameNameSet(a: readonly string[], b: readonly string[]): boolean {
+  const left = new Set(a)
+  return left.size === new Set(b).size && b.every((name) => left.has(name))
+}
+
+/**
+ * What a save does with a pinned library certificate when the hostnames were
+ * changed and the pin no longer covers them: it is let go, so the old name's
+ * certificate does not stay selected for the new name. A Let's Encrypt pin
+ * also turns the free-certificate box on, so the new name gets its own; an
+ * uploaded one just falls back to Self-signed. Null when the names are the
+ * same as saved, nothing is pinned, or the pin still covers them (a wildcard).
+ */
+export function stalePinReset<T extends PickerCertificate>(
+  rows: readonly T[],
+  editor: Readonly<{ tlsId: string | null; hostnames: string; www: HostingWwwMode | null }>,
+  savedHostnamesText: string
+): Readonly<{ tlsId: null; getLetsEncrypt?: true }> | null {
+  if (sameNameSet(wwwHostnames(editor.hostnames), wwwHostnames(savedHostnamesText))) return null
+  const gap = pinnedCertificateGap(rows, editor.tlsId, editor.hostnames, editor.www)
+  if (gap === null) return null
+  return gap.row.source === 'lets_encrypt' ? { tlsId: null, getLetsEncrypt: true } : { tlsId: null }
+}

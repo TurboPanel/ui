@@ -300,6 +300,12 @@ describe('what a tile shows of the environments', () => {
     expect(shown.more).toBe(2)
   })
 
+  it('shows a lone environment even when it is neither primary nor pinned', () => {
+    const lone = tilePills({ environments: [row('a', false, false)] })
+    expect(lone.shown.map((e) => e.id)).toEqual(['a'])
+    expect(lone.more).toBe(0)
+  })
+
   it('has no count when everything is shown or nothing exists', () => {
     expect(tilePills({ environments: [row('a', true, false)] }).more).toBe(0)
     expect(tilePills({ environments: [] })).toEqual({ shown: [], more: 0 })
@@ -326,6 +332,8 @@ describe('summary line', () => {
   it('counts what is there and waits for the running count', () => {
     expect(summaryLine(4, 9, 7)).toBe('4 projects · 9 environments · 7 running')
     expect(summaryLine(1, 1, null)).toBe('1 project · 1 environment')
+    expect(summaryLine(5, null, 0)).toBe('5 projects')
+    expect(summaryLine(5, 0, 0)).toBe('5 projects · 0 environments · 0 running')
   })
 })
 
@@ -501,6 +509,14 @@ describe('the type filter', () => {
         label: 'Managed Databases 1',
         accessibilityLabel: 'Managed Databases, 1 project',
       },
+    ])
+  })
+
+  it('shows no count while the list still loads', () => {
+    expect(projectTypeOptions(null).map((option) => option.label)).toEqual([
+      'All',
+      'Apps',
+      'Managed Databases',
     ])
   })
 

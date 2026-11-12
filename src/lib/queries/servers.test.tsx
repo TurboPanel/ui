@@ -26,6 +26,7 @@ import {
   useRebootServer,
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
+  useRepairColocatedConnection,
   useServerDeletePreview,
   useServerPrincipals,
   useServerPrincipalRemovalPlan,
@@ -76,6 +77,7 @@ const {
   fetchOrgServerCapacity,
   resetServerUpdateStatus,
   revokeServerDaemonKey,
+  repairColocatedServerConnection,
   rebootServer,
   setServerHostname,
   setServerNtp,
@@ -113,6 +115,7 @@ const {
   fetchOrgServerCapacity: vi.fn(),
   resetServerUpdateStatus: vi.fn(),
   revokeServerDaemonKey: vi.fn(),
+  repairColocatedServerConnection: vi.fn(),
   rebootServer: vi.fn(),
   setServerHostname: vi.fn(),
   setServerNtp: vi.fn(),
@@ -155,6 +158,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     fetchOrgServerCapacity,
     resetServerUpdateStatus,
     revokeServerDaemonKey,
+    repairColocatedServerConnection,
     rebootServer,
     setServerHostname,
     setServerNtp,
@@ -324,6 +328,20 @@ describe('servers query hooks', () => {
         ],
       })
     ).toBe(false)
+  })
+
+  it('useOrgLicenses polls at the asked pace while a screen follows one key', async () => {
+    const client = createAppQueryClient()
+    fetchLicenses.mockResolvedValue({ licenses: [] })
+
+    renderHook(() => useOrgLicenses(orgId, { pollMs: 1000 }), {
+      wrapper: createWrapper(client),
+    })
+
+    const key = queryKeys.org(orgId).servers.licenses
+    await waitFor(() => {
+      expect(resolveRefetchInterval(client, key, { licenses: [] })).toBe(1000)
+    })
   })
 
   it('useFleetServerUsage returns null when metrics backend is unavailable', async () => {
@@ -986,6 +1004,27 @@ describe('servers query hooks', () => {
     })
   })
 
+  it('useRepairColocatedConnection repairs and invalidates server queries', async () => {
+    repairColocatedServerConnection.mockResolvedValueOnce({
+      ok: true,
+      serverId,
+      reasons: [],
+      clearedKey: false,
+    })
+    const client = createAppQueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+
+    const { result } = renderHook(() => useRepairColocatedConnection(orgId, serverId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    expect(repairColocatedServerConnection).toHaveBeenCalledWith(serverId)
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: queryKeys.org(orgId).servers.detail(serverId),
+    })
+  })
+
   it('useSetServerHostname enqueues hostname change', async () => {
     setServerHostname.mockResolvedValueOnce({
       ok: true,
@@ -1385,18 +1424,24 @@ describe('servers query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await result.current.run({ serverId })
-    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, undefined)
+    await result.current.run({ serverId, confirmName: 'web-1' })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, { confirmName: 'web-1' })
 
     deleteServer.mockResolvedValueOnce({ ok: true })
-    await result.current.run({ serverId, forgetResources: true })
-    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, { forgetResources: true })
+    await result.current.run({ serverId, forgetResources: true, confirmName: 'web-1' })
+    expect(deleteServer).toHaveBeenCalledWith(serverId, orgId, {
+      confirmName: 'web-1',
+      forgetResources: true,
+    })
     expect(invalidateSpy).toHaveBeenCalled()
 
     deleteServer.mockResolvedValueOnce({ ok: true })
     const choices = [{ principalId: 'p1', action: 'delete' as const }]
-    await result.current.run({ serverId, principals: choices })
-    expect(deleteServer).toHaveBeenLastCalledWith(serverId, orgId, { principals: choices })
+    await result.current.run({ serverId, principals: choices, confirmName: 'web-1' })
+    expect(deleteServer).toHaveBeenLastCalledWith(serverId, orgId, {
+      confirmName: 'web-1',
+      principals: choices,
+    })
   })
 
   it('useServerPrincipals and useServerPrincipalRemovalPlan load the server principals', async () => {

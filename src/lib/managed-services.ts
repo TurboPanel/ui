@@ -258,6 +258,8 @@ export type ManagedSettings = {
     extraEnv?: Record<string, string>
   }
   engineConfig?: string
+  /** Lets a login of this Database Cluster use All Databases; off until the owner opts in. */
+  allowAllDatabasesLogins?: boolean
   /** Retention (keep-N) for `managed.backup` — clamped to the engine's `maxRetentionKeep`. */
   backups?: {
     retentionKeep?: number
@@ -301,6 +303,8 @@ export type ManagedUserRecord = {
   appliedUsername: string
   nameScheme?: NameScheme
   databases: string[]
+  /** Reads every database of the cluster, including ones added later; absent on an older control plane. */
+  allDatabases?: boolean
   privileges: string[]
   connectionRole: ManagedConnectionRole
   /** Absent on a control plane that predates permission modes. */
@@ -513,6 +517,8 @@ export type ManagedDetailResponse = {
   externalAccess?: ManagedExternalAccessView | null
   settings: ManagedSettings | null
   ssl: ManagedSslView | null
+  /** The two All Databases switches; both must be on for a login to use it. Absent on an older control plane (treated as on). */
+  allowAllDatabasesLogins?: { organization: boolean; cluster: boolean }
   release: ManagedReleaseView | null
   server: ManagedServerSummary | null
   rootUsername: string | null
@@ -538,12 +544,18 @@ export function shortBackupChecksum(checksum: string): string {
 }
 
 /**
- * Instance **422** `failover_requires_trusted_datacenter`. One sentence shared
- * with the network surfaces (`network-error-copy.ts`) so the datacenter
- * Routing panel and the replica picker never explain the same refusal two ways.
+ * Instance **422** `untrusted_network_needs_fabric`. One sentence shared with
+ * the network surfaces (`network-error-copy.ts`) so the datacenter Routing
+ * panel and the replica picker never explain the same refusal two ways.
+ */
+export const UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY = `The only datacenter network those servers share is marked untrusted, and ${TURBOFABRIC_PRODUCT_NAME} is not carrying traffic between them right now. Check that ${TURBOFABRIC_PRODUCT_NAME} is on and healthy for both servers, or mark the datacenter network trusted.`
+
+/**
+ * Older control planes answer `failover_requires_trusted_datacenter` and never
+ * route this pair over TurboFabric, so the advice differs.
  */
 export const FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY =
-  'The only datacenter those servers share is marked untrusted. Failover replicas need a trusted datacenter LAN — mark the datacenter trusted, or add the replica as a read replica over ' +
+  'The only datacenter network those servers share is marked untrusted. Failover replicas need a trusted datacenter network, so mark the datacenter network trusted, or add the replica as a read replica over ' +
   `${TURBOFABRIC_PRODUCT_NAME} instead.`
 
 const MANAGED_ERROR_COPY: Record<string, string> = {
@@ -577,7 +589,7 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'Only failover replicas can be promoted on this path. Convert this replica to failover for a recorded switchover, or use Promote for disaster recovery.',
   managed_automatic_failover_blocked: AUTOMATIC_FAILOVER_BLOCKED_MESSAGE,
   failover_replica_requires_datacenter_transport:
-    'Failover replicas must share a datacenter LAN with the primary — TurboFabric and public paths are not allowed.',
+    'Failover replicas must share a datacenter network with the primary, or an untrusted one carried by TurboFabric — public paths are not allowed.',
   managed_member_is_primary: 'Promote another member first — the primary cannot be removed.',
   managed_no_read_targets:
     'This cluster has no replica serving read traffic yet. Add a replica with reads enabled, then create the read-only login.',
@@ -607,20 +619,21 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
     'The owner of a database changes things, so it cannot be read-only. Use Read/write.',
   managed_self_login_has_no_privileges:
     'A login you manage yourself has no permissions yet. Set them in your own tools first.',
-  datacenter_required: 'That server is not assigned to a datacenter.',
-  datacenter_cidr_required: 'That datacenter has no private network yet.',
-  datacenter_ip_required: 'That server has no private address in its datacenter.',
+  datacenter_required: 'That server is not on a datacenter network.',
+  datacenter_cidr_required: 'That datacenter network has no private subnet yet.',
+  datacenter_ip_required: 'That server has no private address on its datacenter network.',
   fabric_address_required: `That server has no ${TURBOFABRIC_PRODUCT_NAME} address yet, so the ${TURBOFABRIC_PRODUCT_NAME} scope cannot be used on it.`,
   ingress_reconcile_failed:
     'Saved, but the server could not be told the new setting yet, so it still listens the old way. It is retried automatically; press Apply to try now.',
   private_family_mismatch:
-    'Those servers share a datacenter but not an address family (one is IPv4-only, the other IPv6-only).',
+    'Those servers share a datacenter network but not an address family (one is IPv4-only, the other IPv6-only).',
   private_path_unavailable: 'No private path between that server and the primary.',
   failover_requires_trusted_datacenter: FAILOVER_REQUIRES_TRUSTED_DATACENTER_COPY,
-  peer_tunnel_address_required: `The ${TURBOFABRIC_PRODUCT_NAME} path between those datacenters has no overlay address yet.`,
+  untrusted_network_needs_fabric: UNTRUSTED_NETWORK_NEEDS_FABRIC_COPY,
+  peer_tunnel_address_required: `The ${TURBOFABRIC_PRODUCT_NAME} path between those datacenter networks has no overlay address yet.`,
   managed_private_port_exhausted: 'No free private listener port on that server.',
   managed_listener_bind_conflict:
-    'This cluster mixes members that need different network paths to the same host, so one private listener cannot serve them all. Put the failover replicas and read replicas on a single path (datacenter, ' +
+    'This cluster mixes members that need different network paths to the same host, so one private listener cannot serve them all. Put the failover replicas and read replicas on a single path (datacenter network, ' +
     `${TURBOFABRIC_PRODUCT_NAME}, or public).`,
   managed_replica_not_streaming:
     'That replica is not streaming from the primary yet. Wait for it to catch up, or promote anyway if the primary is dead.',
@@ -644,7 +657,9 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   binding_key_prefix_in_use:
     'This service already has a connection using that prefix — pick another.',
   binding_engine_defaults_in_use:
-    'Another connection on this service already owns the engine default keys — turn engine defaults off.',
+    'Another database on this service already sets these names. Choose None, or change the other one first.',
+  binding_preset_conflict: 'Send either a name preset or the engine defaults switch, not both.',
+  binding_preset_engine_mismatch: 'That set of names does not fit this database engine.',
   binding_key_conflict:
     'A variable key from this connection already exists on that service — rename or remove it first.',
   binding_endpoint_unavailable: "No network path from that service's server to this cluster.",
@@ -701,9 +716,22 @@ export function managedNamedErrorMessage(err: unknown): string | null {
   return /\s—\s(.+)$/s.exec(raw)?.[1] ?? null
 }
 
+/**
+ * `binding_endpoint_unavailable` has two causes: no path at all (the general
+ * copy fits) and a path that only exists over an untrusted network without
+ * TurboFabric, where the server's own sentence says what to do.
+ */
+function untrustedBindingMessage(raw: string): string | null {
+  if (managedErrorCode(raw) !== 'binding_endpoint_unavailable') return null
+  const sentence = /\s—\s(.+)$/s.exec(raw)?.[1]
+  return sentence?.includes('marked untrusted') ? sentence : null
+}
+
 export function managedErrorMessage(err: unknown, fallback: string): string {
   const raw = err instanceof Error ? err.message : fallback
   const code = managedErrorCode(raw)
+  const untrustedBinding = untrustedBindingMessage(raw)
+  if (untrustedBinding) return untrustedBinding
   // These refusals say which server they are about; the general copy would
   // lose that.
   const named = managedNamedErrorMessage(err)
@@ -879,7 +907,7 @@ export function memberTransportLabel(transport: ManagedMemberTransport | null | 
     case 'local':
       return 'Local'
     case 'datacenter':
-      return 'Datacenter LAN'
+      return 'Datacenter network'
     case 'fabric':
       return `${TURBOFABRIC_PRODUCT_NAME} direct`
     case 'public':
@@ -1114,4 +1142,14 @@ export function clusterHasUnhealthyMember(
     if (!m.status) return false
     return m.status !== 'ready' && m.status !== 'running'
   })
+}
+
+/** Picker label for an environment: `Project Name / environment`, so same-named environments can be told apart. */
+export function bindingEnvironmentLabel(
+  environmentName: string | null | undefined,
+  projectName: string | null | undefined
+): string {
+  const env = environmentName?.trim() || 'Environment'
+  const project = projectName?.trim()
+  return project ? `${project} / ${env}` : env
 }

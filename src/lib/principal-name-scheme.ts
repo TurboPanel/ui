@@ -134,8 +134,32 @@ const PRINCIPAL_ERROR_COPY: Record<string, string> = {
   username_in_use: USERNAME_IN_USE_COPY,
 }
 
-/** Friendly copy for principal create errors; returns the message unchanged for anything else. */
-export function principalSchemeErrorMessage(message: string): string {
+/** Control plane 400 for a typed name starting with `tp`: the prefix TurboPanel keeps for its own accounts. */
+export const USERNAME_TP_PREFIX_COPY =
+  "Names starting with tp are kept for TurboPanel's own accounts, so a Hosting Account can't start with tp. Pick another name, such as your site's name."
+
+/** Control plane 400 for a `systemd-` name or a name ending in `-grp`. */
+export const USERNAME_RESERVED_PATTERN_COPY =
+  "Names starting with systemd- or ending in -grp are kept for the server's own accounts and groups. Pick another name, such as your site's name."
+
+/**
+ * Why a reserved name was refused, picked from the typed name: the `tp`
+ * prefix and the `systemd-` / `-grp` patterns get their own reason, every
+ * other name the general one.
+ */
+export function reservedUsernameMessage(typed?: string | null): string {
+  const name = typed?.trim().toLowerCase() ?? ''
+  if (name.startsWith('tp')) return USERNAME_TP_PREFIX_COPY
+  if (name.startsWith('systemd-') || name.endsWith('-grp')) return USERNAME_RESERVED_PATTERN_COPY
+  return USERNAME_RESERVED_COPY
+}
+
+/**
+ * Friendly copy for principal create errors; returns the message unchanged for
+ * anything else. Pass the typed name so a reserved-name refusal says why.
+ */
+export function principalSchemeErrorMessage(message: string, typed?: string | null): string {
   const code = /HTTP \d+:\s*([a-z0-9_]+)/i.exec(message)?.[1] ?? message.trim()
+  if (code === 'username_reserved') return reservedUsernameMessage(typed)
   return PRINCIPAL_ERROR_COPY[code] ?? message
 }

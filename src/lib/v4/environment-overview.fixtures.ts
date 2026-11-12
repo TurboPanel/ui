@@ -295,6 +295,7 @@ export function binding(
     serviceId,
     databaseName,
     keyPrefix: '',
+    preset: engine === 'postgres' ? 'postgres' : 'mysql',
     emitEngineDefaults: true,
     keys: [],
     endpoint: null,

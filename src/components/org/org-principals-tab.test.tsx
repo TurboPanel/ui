@@ -46,9 +46,16 @@ vi.mock('@/components/ui', () => {
   const passthrough = ({ children }: { children?: unknown }) => <div>{children as never}</div>
   return {
     Badge: ({ label }: { label: string }) => <span>{label}</span>,
-    ConfirmButton: ({ label, onConfirm }: { label: string; onConfirm: () => void }) => (
-      <button onClick={onConfirm}>{label}</button>
-    ),
+    // The dialog is covered by type-name-confirm.test.tsx: here a press types the name.
+    TypeNameDeleteButton: ({
+      label,
+      name,
+      onConfirm,
+    }: {
+      label: string
+      name: string
+      onConfirm: (typed: string) => void
+    }) => <button onClick={() => onConfirm(name)}>{label}</button>,
     DataTable: passthrough,
     DataTableCell: passthrough,
     DataTableEmpty: passthrough,
@@ -82,7 +89,15 @@ function row(patch: Partial<OrgPrincipalRecord>): OrgPrincipalRecord {
     projectName: null,
     servers: [{ serverId: 's1', serverName: 'Alpha', state: 'present', uid: 15001, gid: 15001 }],
     logins: [],
-    usedBy: { tenancies: 0, bindings: 0, storages: 0, secrets: 0, logins: 0, folders: 0 },
+    usedBy: {
+      tenancies: 0,
+      bindings: 0,
+      storages: 0,
+      secrets: 0,
+      logins: 0,
+      caches: 0,
+      folders: 0,
+    },
     state: 'present',
     orphaned: true,
     canDelete: true,
@@ -122,7 +137,7 @@ describe('OrgPrincipalsTab', () => {
       screen.getByText('Belongs to the project Shop site. Remove it from that project.')
     ).toBeTruthy()
     fireEvent.click(screen.getByText('Delete'))
-    expect(state.mutate).toHaveBeenCalledWith('p1')
+    expect(state.mutate).toHaveBeenCalledWith({ principalId: 'p1', confirmName: 'shop' })
   })
 
   it('warns when the removal could not be queued for a server', () => {

@@ -61,11 +61,23 @@ export function nodeAppModeProblem(value: string): string | null {
  * Build backend for a `x-turbopanel.source` binding. Mirrors the instance type.
  *
  * `native` (the default when omitted) is the checkout → build → promote
- * directory release. `railpack` swaps that middle step for Railpack + BuildKit,
- * which emits an OCI image the daemon tags and feeds back into runtime compose
- * as `services.<name>.image`.
+ * directory release. `image` swaps that middle step for an automatic build in
+ * an isolated environment, which emits an OCI image the daemon tags and feeds
+ * back into runtime compose as `services.<name>.image`.
+ *
+ * Compose files written before the rename carry the previous value for
+ * `image` ({@link PREVIOUS_IMAGE_BUILD_KIND}); it is still accepted on read and
+ * shown as `image`, and only `image` is ever written.
  */
-export type ComposeSourceBuildKind = 'native' | 'railpack'
+export type ComposeSourceBuildKind = 'native' | 'image'
+
+/** The value `image` replaced; accepted when reading so existing files keep working. */
+export const PREVIOUS_IMAGE_BUILD_KIND = 'railpack'
+
+/** True for `image` and for the previous value it replaced (raw compose reads). */
+export function isImageBuildKind(value: unknown): boolean {
+  return typeof value === 'string' && ['image', PREVIOUS_IMAGE_BUILD_KIND].includes(value.trim())
+}
 
 /** Max length for operator-facing service description metadata. */
 export const SERVICE_DESCRIPTION_MAX_LENGTH = 500
@@ -120,7 +132,7 @@ export type ComposeServiceSourceExtension = {
   /**
    * Which build backend produces the release. Omitted means `native`.
    *
-   * `railpack` is only meaningful on a container service — `site`
+   * `image` is only meaningful on a container service — `site`
    * and `node` already have their own build and runtime lanes — and the
    * instance rejects the combination on save.
    */
@@ -233,6 +245,12 @@ export type ComposeServiceExtensionFields = {
    */
   cron?: ComposeServiceCronJob[]
   /**
+   * A container's helper port: the container port, and the sites or Node apps
+   * that may reach it. The host publishes it on `127.0.0.1` and opens it to one
+   * Hosting Account only. Container-only. Mirrors the instance type.
+   */
+  reach?: ComposeServiceReachExtension
+  /**
    * The account this host-native service runs as, named by **alias**.
    *
    * The value is a key in the sibling root `x-turbopanel.principals` map — a
@@ -276,6 +294,37 @@ type CommonServiceExtensionFields = Pick<
   'serviceKind' | 'description' | 'source' | 'hosting'
 >
 
+/** `x-turbopanel.reach`: the container port, and the sites or apps that may reach it. */
+export type ComposeServiceReachExtension = { port: number; from: string[] }
+
+/** Most services one reach port names. Mirrors the instance. */
+export const MAX_REACH_FROM = 8
+
+const REACH_FROM_NAME_RE = /^[A-Za-z0-9._-]+$/
+
+/** True for `{ port: 1-65535, from: 1-8 service names }` and nothing else. Mirrors the instance. */
+export function isValidReachValue(value: unknown): boolean {
+  if (!isPlainMapping(value)) return false
+  const { port, from } = value
+  if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) return false
+  if (!Array.isArray(from) || from.length < 1 || from.length > MAX_REACH_FROM) return false
+  const names = new Set<string>()
+  for (const name of from) {
+    if (typeof name !== 'string' || !REACH_FROM_NAME_RE.test(name) || names.has(name)) return false
+    names.add(name)
+  }
+  return true
+}
+
+function parseServiceReach(value: unknown): ComposeServiceReachExtension | undefined {
+  if (!isValidReachValue(value)) return undefined
+  const { port, from } = value as { port: number; from: string[] }
+  return { port, from: [...from] }
+}
+
+/** Container-only fields: a helper port opened to one account. */
+type ContainerOnlyExtensionField = 'reach'
+
 /** Site-only fields: how the content is served, and what serves it. */
 type SiteOnlyExtensionField = 'engine' | 'root' | 'sourceKind' | 'php'
 
@@ -311,13 +360,14 @@ type NotForThisKind<Field extends keyof ComposeServiceExtensionFields> = {
 /** The default kind. Runs from an image; everything host-native is off-limits. */
 export type ComposeContainerServiceExtension = CommonServiceExtensionFields & {
   serviceKind?: 'container'
-} & NotForThisKind<SiteOnlyExtensionField | NodeOnlyExtensionField | HostNativeExtensionField>
+} & Pick<ComposeServiceExtensionFields, ContainerOnlyExtensionField> &
+  NotForThisKind<SiteOnlyExtensionField | NodeOnlyExtensionField | HostNativeExtensionField>
 
 /** Served by a host engine out of a document root. */
 export type ComposeSiteServiceExtension = CommonServiceExtensionFields & {
   serviceKind: 'site'
 } & Pick<ComposeServiceExtensionFields, SiteOnlyExtensionField | HostNativeExtensionField> &
-  NotForThisKind<NodeOnlyExtensionField>
+  NotForThisKind<NodeOnlyExtensionField | ContainerOnlyExtensionField>
 
 /**
  * A supervised host process built from Git. `source` is **required**, not
@@ -331,7 +381,7 @@ export type ComposeNodeServiceExtension = Omit<
     ComposeServiceExtensionFields,
     NodeOnlyExtensionField | HostNativeExtensionField
   > &
-  NotForThisKind<SiteOnlyExtensionField>
+  NotForThisKind<SiteOnlyExtensionField | ContainerOnlyExtensionField>
 
 /**
  * The per-service `x-turbopanel` block, narrowed by `serviceKind`. Mirrors the
@@ -367,6 +417,7 @@ const SITE_KIND_ONLY: readonly ComposeServiceKind[] = ['site']
 const NODE_KIND_ONLY: readonly ComposeServiceKind[] = ['node']
 /** Both host-native kinds — the set {@link isHostNativeServiceKind} names. */
 const HOST_NATIVE_KINDS: readonly ComposeServiceKind[] = ['site', 'node']
+const CONTAINER_KIND_ONLY: readonly ComposeServiceKind[] = ['container']
 
 const SERVICE_EXTENSION_FIELDS: Readonly<Record<string, ServiceExtensionFieldRule>> = {
   serviceKind: {
@@ -375,7 +426,7 @@ const SERVICE_EXTENSION_FIELDS: Readonly<Record<string, ServiceExtensionFieldRul
   },
   description: { kinds: ALL_SERVICE_KINDS },
   // No kind restriction on *having* a source: a source builds a release for any
-  // kind. `buildKind: railpack` is the one combination that contradicts a
+  // kind. `buildKind: image` is the one combination that contradicts a
   // host-native kind, and the instance's `validateSourceConsistency` owns it.
   source: { kinds: ALL_SERVICE_KINDS },
   // Legal on every kind: a container behind the edge, a site served by a host
@@ -391,6 +442,11 @@ const SERVICE_EXTENSION_FIELDS: Readonly<Record<string, ServiceExtensionFieldRul
   sourceKind: { kinds: SITE_KIND_ONLY },
   php: { kinds: SITE_KIND_ONLY },
   cron: { kinds: HOST_NATIVE_KINDS },
+  reach: {
+    kinds: CONTAINER_KIND_ONLY,
+    typeMessage:
+      'reach must be { port: 1-65535, from: [1 to 8 site or Node app names] }, with no repeated name',
+  },
   principal: {
     kinds: HOST_NATIVE_KINDS,
     typeMessage:
@@ -641,7 +697,7 @@ const SITE_ENGINES = new Set<SiteEngine>([
   'nginx+apache',
   'openlitespeed',
 ])
-const SOURCE_BUILD_KINDS = new Set<ComposeSourceBuildKind>(['native', 'railpack'])
+const SOURCE_BUILD_KINDS = new Set<string>(['native', 'image', PREVIOUS_IMAGE_BUILD_KIND])
 const NODE_PACKAGE_MANAGERS = new Set<NodePackageManager>(['npm', 'yarn', 'pnpm'])
 
 /** Where a site's content comes from. Omitted means `release`. */
@@ -705,10 +761,8 @@ function readNativeRuntimeFramework(value: unknown): NativeRuntimeFramework | un
 function readSourceBuildKind(value: unknown): ComposeSourceBuildKind | undefined {
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
-  if (!SOURCE_BUILD_KINDS.has(trimmed as ComposeSourceBuildKind)) {
-    return undefined
-  }
-  return trimmed as ComposeSourceBuildKind
+  if (!SOURCE_BUILD_KINDS.has(trimmed)) return undefined
+  return isImageBuildKind(trimmed) ? 'image' : (trimmed as ComposeSourceBuildKind)
 }
 
 function readNativeRuntime(value: unknown): NativeRuntime | undefined {
@@ -841,6 +895,7 @@ export function parseServiceTurbopanelExtension(
     root: readBoundedString(value.root, Number.POSITIVE_INFINITY),
     sourceKind: readSiteSourceKind(value.sourceKind),
     cron: parseServiceCronJobs(value.cron) ?? undefined,
+    reach: parseServiceReach(value.reach),
     // Shape-only, like every other reader here. Whether the alias *resolves* is
     // a question about the document as a whole, so the linter answers it
     // (`knownPrincipalAliases`).
@@ -946,12 +1001,12 @@ export type ComposeServiceTurbopanelExtensionPatch = Omit<
 /**
  * Clear the fields that belong to a `serviceKind` other than the one now set.
  *
- * `railpack` goes with them: it is a container-only build backend —
+ * `image` goes with them: it is a container-only build backend —
  * `site` and `node` have their own build and runtime lanes, and the
  * instance rejects the combination on save. The Services form stops *offering*
  * the option once the kind moves off container, which is not the same as
  * clearing it: without this a service that was switched away from container
- * keeps an invisible `buildKind: 'railpack'` until the compose document is
+ * keeps an invisible `buildKind: 'image'` until the compose document is
  * rejected on save. Drop the field entirely rather than rewriting it to
  * `native`, which is what omitting it already means.
  */
@@ -968,7 +1023,7 @@ function dropFieldsForOtherKinds(next: ComposeServiceTurbopanelExtensionPatch): 
     delete fields[field]
   }
   if (isHostNativeServiceKind(next.serviceKind) && next.source) {
-    const { buildKind: _railpackNotApplicable, ...source } = next.source
+    const { buildKind: _imageNotApplicable, ...source } = next.source
     next.source = source
   }
 }
@@ -1025,6 +1080,7 @@ export function patchServiceTurbopanelExtension(
     source: next.source ? { ...next.source } : undefined,
     php: next.php && Object.keys(next.php).length > 0 ? { ...next.php } : undefined,
     cron: next.cron && next.cron.length > 0 ? next.cron.map((job) => ({ ...job })) : undefined,
+    reach: next.reach ? { port: next.reach.port, from: [...next.reach.from] } : undefined,
     hosting:
       next.hosting && next.hosting.length > 0
         ? next.hosting.map((entry) => ({ ...entry }))

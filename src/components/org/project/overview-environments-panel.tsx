@@ -18,7 +18,7 @@ import { useDeployLogProgress } from '@/components/org/project/use-deploy-log-pr
 import { panelStyles } from '@/components/ui/panel-styles'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
 import { EnvironmentGitSourcePanel } from '@/components/org/project/environment-git-source-panel'
-import { StatusDot } from '@/components/ui'
+import { StatusDot, TypeNameConfirmModal } from '@/components/ui'
 import { StatusChip } from '@/components/ui/v4/status-chip'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
@@ -27,11 +27,13 @@ import {
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
 import { environmentStatusTone, hasHostDeployedContainers } from '@/lib/container-status'
-import { deployPreviewFailureMessage } from '@/lib/deploy-error-message'
+import { deployPreviewFailureMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
 import {
   type CommandProgress,
   type CommandStatus,
   type CommandStatusRecord,
+  type DestroyDataOptions,
+  type EnvironmentDataVolumesResponse,
   type EnvironmentRecord,
 } from '@/lib/instance-api'
 import {
@@ -42,6 +44,7 @@ import {
   useContainersByProject,
   useDeleteEnvironment,
   useDeployEnvironment,
+  useEnvironmentDataVolumes,
   useOrgServers,
   useProjectPrincipals,
   useRunEnvironmentLifecycle,
@@ -53,13 +56,16 @@ import { mergeComposeOverlay } from '@/lib/compose'
 import { progressChipLabel } from '@/lib/deploy-progress'
 import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
 import {
-  environmentDeleteFailure,
+  environmentConfirmName,
+  environmentDeleteOutcome,
   environmentDeletePrompt,
   type EnvironmentDeleteFailure,
 } from '@/lib/environment-delete'
+import { DestroyDataChoice } from '@/components/org/project/destroy-data-choice'
 import {
   DESTROY_ARMED_HINT,
   DESTROY_EXPLANATION,
+  destroyConfirmReady,
   environmentActionItems,
   type EnvironmentActionId,
 } from '@/lib/environment-menu'
@@ -161,19 +167,26 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
   const { orgId, projectId, selectedEnvironment, invalidateEnvironments, setError } =
     useProjectContext()
   const deleteEnvironment = useDeleteEnvironment(orgId)
+  // Armed = the name dialog is open; `dialogError` is a refusal shown inside it.
   const [armed, setArmed] = useState(false)
+  const [dialogError, setDialogError] = useState<string | null>(null)
   const [failure, setFailure] = useState<EnvironmentDeleteFailure | null>(null)
   const name = selectedEnvironment?.name?.trim() || 'environment'
+  const confirmName = selectedEnvironment ? environmentConfirmName(selectedEnvironment) : ''
 
-  const confirm = async () => {
+  const confirm = async (typed: string) => {
     if (!selectedEnvironment || deleteEnvironment.isPending) return
     setError(null)
     setFailure(null)
-    const result = await deleteEnvironment.run(selectedEnvironment.id)
+    setDialogError(null)
+    const result = await deleteEnvironment.run({ id: selectedEnvironment.id, confirmName: typed })
     if (!result.ok) {
-      if (deleteEnvironment.actionError) {
-        setFailure(environmentDeleteFailure(deleteEnvironment.actionError, name))
-      }
+      if (!result.error) return
+      const outcome = environmentDeleteOutcome(result.error, name)
+      if (outcome.kind === 'failure') {
+        setArmed(false)
+        setFailure(outcome.failure)
+      } else setDialogError(outcome.text)
       return
     }
     setArmed(false)
@@ -189,16 +202,19 @@ function useOverviewEnvironmentDelete(onStop: () => void) {
 
   return {
     armed,
+    dialogError,
     failure,
     name,
+    confirmName,
     pending: deleteEnvironment.isPending,
     arm: () => {
       setFailure(null)
+      setDialogError(null)
       setArmed(true)
     },
     cancel: () => {
       setArmed(false)
-      setFailure(null)
+      setDialogError(null)
     },
     confirm,
     stop,
@@ -343,19 +359,15 @@ function EnvironmentActionsMenu({ model }: Readonly<{ model: OverviewEnvironment
       </Modal>
 
       {remove.armed ? (
-        <View style={styles.deleteConfirm}>
-          <Text style={styles.hintInline}>{environmentDeletePrompt(remove.name)}</Text>
-          <View style={styles.inlineActions}>
-            <QuietButton
-              label={remove.pending ? 'Deleting…' : 'Delete environment'}
-              accessibilityLabel="Confirm delete environment"
-              tone="danger"
-              disabled={remove.pending}
-              onPress={() => ignorePromise(remove.confirm())}
-            />
-            <QuietButton label="Cancel" onPress={remove.cancel} />
-          </View>
-        </View>
+        <TypeNameConfirmModal
+          thing="Environment"
+          name={remove.confirmName}
+          description={environmentDeletePrompt(remove.name)}
+          pending={remove.pending}
+          error={remove.dialogError}
+          onCancel={remove.cancel}
+          onConfirm={(typed) => ignorePromise(remove.confirm(typed))}
+        />
       ) : null}
 
       {remove.failure ? (
@@ -382,6 +394,7 @@ function LifecycleToolbar({ model }: Readonly<{ model: OverviewEnvironmentsPanel
     busy,
     destroyArmed,
     destroyBusy,
+    destroyReady,
   } = model
   const actionDisabled = !hasServer || busy
   const deployDisabled = actionDisabled || needsPrincipal
@@ -390,11 +403,11 @@ function LifecycleToolbar({ model }: Readonly<{ model: OverviewEnvironmentsPanel
     return (
       <View style={styles.actionsRow}>
         <QuietButton
-          label={destroyBusy ? 'Destroying…' : 'Confirm destroy'}
-          accessibilityLabel={destroyBusy ? 'Destroying environment' : 'Confirm destroy'}
+          label={destroyBusy ? 'Destroying…' : 'Confirm Destroy'}
+          accessibilityLabel={destroyBusy ? 'Destroying environment' : 'Confirm Destroy'}
           tooltip={DESTROY_EXPLANATION}
           tone="danger"
-          disabled={destroyBusy}
+          disabled={destroyBusy || !destroyReady}
           onPress={() => ignorePromise(model.handleDestroy())}
         />
         <QuietButton
@@ -472,11 +485,11 @@ function MissingPrincipalBindingsLink({ environmentId }: Readonly<{ environmentI
     <Link href={projectEnvironmentBindingsHref(orgId, projectId, environmentId) as Href} asChild>
       <Pressable
         accessibilityRole="link"
-        accessibilityLabel="Assign a system user on the Bindings tab"
+        accessibilityLabel="Assign a Hosting Account on the Bindings tab"
         style={webPointer}
       >
         <Text style={styles.statusText}>
-          No system user — <Text style={styles.hostingLink}>assign one in Bindings</Text>
+          No Hosting Account — <Text style={styles.hostingLink}>assign one in Bindings</Text>
         </Text>
       </Pressable>
     </Link>
@@ -756,6 +769,9 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   busy: boolean
   destroyArmed: boolean
   destroyBusy: boolean
+  /** Confirm Destroy may be pressed (always, unless deleting data is ticked and not yet confirmed). */
+  destroyReady: boolean
+  destroyData: DestroyDataState
   containerError: string | null
   actionError: string | null
   commandError: string | null
@@ -787,6 +803,76 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   refetchAllContainers: () => Promise<unknown>
 }>
 
+/** The armed Destroy's "Also Delete the Data Volumes" choice. */
+type DestroyDataState = Readonly<{
+  /** Only someone who could delete the environment may delete its data. */
+  available: boolean
+  checked: boolean
+  toggle: () => void
+  typedName: string
+  setTypedName: (value: string) => void
+  expectedName: string
+  data: EnvironmentDataVolumesResponse | undefined
+  loading: boolean
+  error: string | null
+}>
+
+/** Holds the choice, resets it whenever Destroy is disarmed, and reads the list only while ticked. */
+function useDestroyDataState(
+  orgId: string,
+  environment: EnvironmentRecord | null,
+  armed: boolean,
+  canOwn: boolean
+): DestroyDataState & {
+  ready: boolean
+  options: DestroyDataOptions | undefined
+  refetch: () => void
+} {
+  const [checked, setChecked] = useState(false)
+  const [typedName, setTypedName] = useState('')
+  useEffect(() => {
+    if (armed) return
+    setChecked(false)
+    setTypedName('')
+  }, [armed])
+  const available = canOwn && environment != null
+  const wanted = available && armed && checked
+  const query = useEnvironmentDataVolumes(orgId, environment?.id ?? '', { enabled: wanted })
+  const expectedName = environment ? environmentConfirmName(environment) : ''
+  const ready = destroyConfirmReady({
+    deleteVolumes: wanted,
+    typedName,
+    expectedName,
+    // Never confirm against a list that is still being refreshed.
+    volumesLoaded: query.isSuccess && !query.isFetching,
+    outdatedServerCount: query.data?.outdatedServers.length ?? 0,
+  })
+  return {
+    available,
+    checked: wanted,
+    toggle: () => setChecked((current) => !current),
+    typedName,
+    setTypedName,
+    expectedName,
+    data: wanted ? query.data : undefined,
+    loading: wanted && query.isLoading,
+    error:
+      wanted && query.error ? userErrorMessage(query.error, 'Failed to load the volumes') : null,
+    ready,
+    options:
+      wanted && query.data
+        ? {
+            deleteVolumes: true,
+            confirmName: typedName,
+            volumeIds: query.data.volumes.map((volume) => volume.storageId),
+          }
+        : undefined,
+    refetch: () => {
+      ignorePromise(query.refetch())
+    },
+  }
+}
+
 function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const {
     orgId,
@@ -799,6 +885,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     invalidateEnvironments,
     isSystemProject,
     canManage,
+    canOwn,
     projectAllowsMutations,
   } = useProjectContext()
 
@@ -826,6 +913,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const deployEnvironmentMutation = useDeployEnvironment(orgId, selectedEnvironment?.id ?? '')
   const lifecycleMutation = useRunEnvironmentLifecycle(orgId, selectedEnvironment?.id ?? '')
   const stopEnvironmentMutation = useStopEnvironment(orgId, selectedEnvironment?.id ?? '')
+  const destroyData = useDestroyDataState(orgId, selectedEnvironment, destroyArmed, canOwn)
   const commandsQuery = useCommandsBatch(orgId, trackedEntries)
   const commandMetaRef = useRef(commandMeta)
   const refetchOneRef = useRef(containersQuery.refetchOne)
@@ -991,7 +1079,10 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
         confirmMode === 'cacheless' ? { noCache: true } : undefined
       )
       if (!result.ok) {
-        setActionError(deployEnvironmentMutation.actionError ?? 'Failed to deploy')
+        // `actionError` still holds the previous render's value here; the refusal itself is `cause`.
+        setActionError(
+          result.cause ? deployRefusalMessage(result.cause) : (result.error ?? 'Failed to deploy')
+        )
         return
       }
       setPreviewOpen(null)
@@ -1035,8 +1126,10 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const handleDestroy = async () => {
     if (!selectedEnvironment) return
     setActionError(null)
-    const result = await stopEnvironmentMutation.run()
+    const result = await stopEnvironmentMutation.run(destroyData.options)
     if (!result.ok) {
+      // A refused data delete (changed list, older daemon) shows the list afresh.
+      if (destroyData.options) destroyData.refetch()
       if (stopEnvironmentMutation.actionError) {
         setActionError(stopEnvironmentMutation.actionError)
       }
@@ -1121,6 +1214,8 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     busy,
     destroyArmed,
     destroyBusy,
+    destroyReady: destroyData.ready,
+    destroyData,
     containerError,
     actionError,
     commandError,
@@ -1245,6 +1340,19 @@ export function EnvironmentLifecycleNotices() {
   return (
     <View style={styles.root}>
       {model.destroyArmed ? <Text style={styles.hintInline}>{DESTROY_ARMED_HINT}</Text> : null}
+      {model.destroyArmed && model.destroyData.available ? (
+        <DestroyDataChoice
+          checked={model.destroyData.checked}
+          onToggle={model.destroyData.toggle}
+          typedName={model.destroyData.typedName}
+          onTypedName={model.destroyData.setTypedName}
+          expectedName={model.destroyData.expectedName}
+          data={model.destroyData.data}
+          loading={model.destroyData.loading}
+          error={model.destroyData.error}
+          disabled={model.destroyBusy}
+        />
+      ) : null}
 
       <LifecycleErrorMessages
         containerError={model.containerError}
@@ -1556,11 +1664,6 @@ const styles = StyleSheet.create({
   inlineForm: {
     gap: spacing.xs,
     maxWidth: 360,
-  },
-  inlineActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
   },
   buttonDisabled: {
     opacity: 0.45,

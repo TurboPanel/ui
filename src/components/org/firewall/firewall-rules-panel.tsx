@@ -15,6 +15,7 @@ import {
   Select,
   TextField,
   Toggle,
+  TypeNameDeleteButton,
   type SelectOption,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -234,13 +235,24 @@ function RuleRow({
       <Text style={panelStyles.muted}>On: {serverName}</Text>
       <ButtonRow>
         <Button label="Edit" size="sm" disabled={busy} onPress={onEdit} />
-        <ConfirmButton
-          label="Delete"
-          confirmLabel="Confirm delete"
-          prompt="Delete this rule? Servers stop including it in their preview."
-          disabled={busy}
-          onConfirm={onDelete}
-        />
+        {rule.label.trim() ? (
+          <TypeNameDeleteButton
+            label="Delete"
+            thing="Firewall Rule"
+            name={rule.label.trim()}
+            description="Servers stop including it in their preview."
+            disabled={busy}
+            onConfirm={onDelete}
+          />
+        ) : (
+          <ConfirmButton
+            label="Delete"
+            confirmLabel="Confirm delete"
+            prompt="Delete this rule? Servers stop including it in their preview."
+            disabled={busy}
+            onConfirm={onDelete}
+          />
+        )}
       </ButtonRow>
     </View>
   )

@@ -22,6 +22,21 @@ function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
 }
 
+/** Fills server names the plan left empty from the organization's server list. */
+export function withServerNames(
+  plan: DeletePlan | undefined,
+  known: readonly { id: string; name?: string | null }[]
+): DeletePlan | undefined {
+  if (!plan) return plan
+  const names = new Map(known.map((row) => [row.id, row.name?.trim()]))
+  return {
+    ...plan,
+    servers: plan.servers.map((row) =>
+      row.name?.trim() ? row : { ...row, name: names.get(row.id) || row.name }
+    ),
+  }
+}
+
 /** The folders of a plan, one group per server, servers in the plan's order. */
 export function groupFoldersByServer(plan: DeletePlan): DeletePlanServerGroup[] {
   const groups = new Map<string, { remove: PlanFolder[]; keep: PlanFolder[] }>()
@@ -40,7 +55,7 @@ export function groupFoldersByServer(plan: DeletePlan): DeletePlanServerGroup[] 
     const group = groups.get(serverId) ?? { remove: [], keep: [] }
     return {
       serverId,
-      serverName: server?.name?.trim() || 'Unnamed server',
+      serverName: server?.name?.trim() || 'Server',
       connected: server?.connected ?? false,
       remove: group.remove,
       keep: group.keep,

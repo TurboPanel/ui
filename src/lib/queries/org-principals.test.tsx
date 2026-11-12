@@ -52,8 +52,8 @@ describe('organization principal hooks', () => {
     const { result } = renderHook(() => useDeleteOrgPrincipal('org-1'), {
       wrapper: createWrapper(client),
     })
-    await result.current.mutateAsync('p1')
-    expect(deleteOrgPrincipal).toHaveBeenCalledWith('org-1', 'p1')
+    await result.current.mutateAsync({ principalId: 'p1', confirmName: 'shop' })
+    expect(deleteOrgPrincipal).toHaveBeenCalledWith('org-1', 'p1', 'shop')
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.org('org-1').principals })
       expect(invalidate).toHaveBeenCalledWith({ predicate: expect.any(Function) })
@@ -67,7 +67,9 @@ describe('organization principal hooks', () => {
     const { result } = renderHook(() => useDeleteOrgPrincipal('org-1'), {
       wrapper: createWrapper(client),
     })
-    await expect(result.current.mutateAsync('p1')).rejects.toThrow('In use')
+    await expect(
+      result.current.mutateAsync({ principalId: 'p1', confirmName: 'shop' })
+    ).rejects.toThrow('In use')
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.org('org-1').principals })
     })

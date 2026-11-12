@@ -4,6 +4,7 @@ import {
   ManagedEnvironmentBody,
   type ManagedBodyFocus,
 } from '@/components/org/managed/managed-project-section'
+import { confirmationName } from '@/lib/confirm-name'
 import { ManagedEnvironmentDelete } from '@/components/org/managed/managed-environment-delete'
 import {
   ManagedByTurboPanelPanel,
@@ -95,7 +96,7 @@ export function ManagedFocusTab(
         orgId={orgId}
         environmentId={pathEnvironmentId}
         engineCode={project.metadata?.code ?? null}
-        projectName={project.name?.trim() || 'Unnamed project'}
+        projectName={confirmationName(project.name, project.id)}
         focus={ENVIRONMENT_TAB_FOCUS[tab]}
         notCreated={<ManagedNotCreatedPanel environmentId={pathEnvironmentId} />}
       />

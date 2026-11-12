@@ -5,6 +5,7 @@ import type {
   UpgradeStepPipelineId,
   UpgradeStepStatus,
 } from '@/lib/upgrade-vocabulary'
+import type { StepRailState } from '@/lib/step-rail'
 import { UPGRADE_STEP_PIPELINE } from '@/lib/upgrade-vocabulary'
 import { formatLocalDateTime } from '@/lib/format-datetime'
 import { plainStepFailureMessage } from '@/lib/user-error'
@@ -130,7 +131,7 @@ export function upgradeBuildDetailLines(
   return { version, commit, manifestUrl }
 }
 
-/** Map a step status to the pipeline id used by `WizardSteps`. */
+/** Map a step status to the pipeline id the step bar (`WizardSteps`) marks as current. */
 export function mapStepStatusToPipeline(
   status: UpgradeStepStatus | null | undefined
 ): UpgradeStepPipelineId {
@@ -215,7 +216,7 @@ function skippedOutcome(
   detail: string | null
 ): UpgradeStepOutcome {
   if (step.errorCode === 'server_offline') {
-    const message = step.errorMessage?.trim()
+    const message = modernSkippedOfflineText(step.errorMessage?.trim())
     return { tone: 'muted', label: 'Skipped: Offline', detail: message || SKIPPED_OFFLINE_DETAIL }
   }
   if (step.errorCode === 'retry_later') {
@@ -297,7 +298,8 @@ export function stepMessageText(
   step: Readonly<{ errorCode?: string | null; errorMessage?: string | null }>
 ): string | null {
   if (step.errorCode?.trim() === 'retry_later') return retryLaterText(step.errorMessage)
-  return plainStepFailureMessage(step.errorMessage)
+  const message = plainStepFailureMessage(step.errorMessage)
+  return step.errorCode?.trim() === 'server_offline' ? modernSkippedOfflineText(message) : message
 }
 
 /**
@@ -350,7 +352,25 @@ export function stepHasStarted(status: UpgradeStepStatus | null | undefined): bo
 
 /** Shown for a server the update left out because it was offline. */
 export const SKIPPED_OFFLINE_DETAIL =
-  'It was offline when the update started. It updates on its own when it reconnects.'
+  'Skipped: offline when the update started. It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.'
+
+const OLD_SKIPPED_OFFLINE_TAIL = 'It updates on its own when it reconnects.'
+const NEW_SKIPPED_OFFLINE_TAIL =
+  'It updates at the next automatic check after it reconnects (within the hour), unless updates are paused.'
+
+/**
+ * Stored history rows keep the sentence the control plane wrote at the time.
+ * Older rows promise an update on reconnect; show the current tail instead.
+ */
+function modernSkippedOfflineText<T extends string | null | undefined>(message: T): T | string {
+  if (!message?.endsWith(OLD_SKIPPED_OFFLINE_TAIL)) return message
+  const lead = message
+    .slice(0, -OLD_SKIPPED_OFFLINE_TAIL.length)
+    .trim()
+    .replace(/^It was offline when/, 'Skipped: offline when')
+    .replace(/^It stayed offline for/, 'Skipped: offline for')
+  return `${lead} ${NEW_SKIPPED_OFFLINE_TAIL}`
+}
 
 function skippedBadge(errorCode: string | null | undefined): {
   tone: 'muted' | 'pending'
@@ -460,8 +480,8 @@ export function offlineWaitingNotice(steps: readonly OfflineWaitStep[]): string 
   if (remaining.length === 0 || !remaining.every(isOfflineWaitStep)) return null
   const n = remaining.length
   return n === 1
-    ? '1 server is offline, so this update is waiting for it. It is skipped if it stays offline, and it updates on its own when it reconnects.'
-    : `${n} servers are offline, so this update is waiting for them. They are skipped if they stay offline, and they update on their own when they reconnect.`
+    ? '1 server is offline, so this update is waiting for it. It updates as soon as it reconnects; if it stays offline for 15 minutes it is skipped and updates at the next automatic check after it reconnects.'
+    : `${n} servers are offline, so this update is waiting for them. They update as soon as they reconnect; if one stays offline for 15 minutes it is skipped and updates at the next automatic check after it reconnects.`
 }
 
 /**
@@ -684,4 +704,31 @@ export function platformUpgradeHeadlineCopy(headline: PlatformUpgradeHeadline): 
     case 'paused':
       return 'Updates Paused'
   }
+}
+
+/**
+ * How the step bar draws the stage a server's update reached: turning while
+ * it is under way, green once done, every stage skipped for a skipped server,
+ * and still (no spinner) otherwise. A failed or rolled-back step stays still
+ * rather than red: its status does not say which stage it stopped at (the
+ * pipeline id falls back to Verifying), and the red outcome line says it failed.
+ */
+export function upgradeRailState(status: UpgradeStepStatus | null | undefined): StepRailState {
+  if (status === 'done') return 'done'
+  if (status === 'skipped') return 'skipped'
+  return upgradeStepOutcome({ status }).tone === 'active' ? 'running' : 'active'
+}
+
+/**
+ * Every stage's state when one status decides them all: a skipped server
+ * never ran any stage. Undefined otherwise (the bar follows the current stage).
+ */
+export function upgradeRailStates(
+  status: UpgradeStepStatus | null | undefined
+): Record<UpgradeStepPipelineId, StepRailState> | undefined {
+  if (status !== 'skipped') return undefined
+  return Object.fromEntries(UPGRADE_STEP_PIPELINE.map((id) => [id, 'skipped'])) as Record<
+    UpgradeStepPipelineId,
+    StepRailState
+  >
 }

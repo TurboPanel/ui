@@ -32,7 +32,7 @@ Console visual rules live in:
 - [`design-system/turbopanel/pages/`](./design-system/turbopanel/pages/) — per-surface overrides
 - [`src/lib/theme.ts`](./src/lib/theme.ts) — runtime Tamagui tokens
 
-Read [AGENTS.md](./AGENTS.md) before visual work — the **ui-ux-pro-max** skill is mandatory for layout and chrome changes.
+Read [AGENTS.md](./AGENTS.md) and [design-system/AGENTS.md](./design-system/AGENTS.md) before visual work — the **ui-ux-pro-max** skill is mandatory for layout and chrome changes.
 
 ## Documentation
 
@@ -49,10 +49,10 @@ Clone the six sibling repos (including this one), then from the `dev` checkout:
 vagrant up
 vagrant ssh
 # inside guest:
-dev/console
+turbopanel/dev/console
 ```
 
-Then edit this repo on the host (mounted into the guest at `~/ui`). See [Local development](https://turbopanel.io/docs/getting-started/development?utm_source=github-ui-readme).
+Then edit this repo on the host (mounted into the guest at `~/turbopanel/ui`). See [Local development](https://turbopanel.io/docs/getting-started/development?utm_source=github-ui-readme).
 
 Routing guide: [CONTRIBUTING.md](https://github.com/TurboPanel/.github/blob/trunk/CONTRIBUTING.md). Pull requests are accepted under the [Contributor License Agreement](https://github.com/TurboPanel/.github/blob/trunk/CLA.md).
 

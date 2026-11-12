@@ -121,10 +121,10 @@ describe('buildSearchItems', () => {
     expect(find(list, 'database-m2')).toMatchObject({ name: 'Managed database', status: 'failed' })
     expect(find(list, 'datacenter-d1')).toMatchObject({
       name: 'Wichita',
-      group: 'Datacenters',
+      group: 'Datacenter Networks',
       href: '/o1/servers/datacenters/d1',
     })
-    expect(find(list, 'datacenter-d2')?.name).toBe('Datacenter')
+    expect(find(list, 'datacenter-d2')?.name).toBe('Datacenter Network')
   })
 
   it('lists the sub-pages that exist, not just the top areas', () => {
@@ -132,14 +132,16 @@ describe('buildSearchItems', () => {
     const hrefs = Object.fromEntries(
       list.filter((i) => i.group === 'Pages').map((i) => [i.name, i.href])
     )
-    expect(hrefs['Datacenters']).toBe('/o1/servers/datacenters')
+    expect(hrefs['Datacenter Networks']).toBe('/o1/servers/datacenters')
     expect(hrefs['Pending Keys']).toBe('/o1/servers/keys')
     expect(hrefs['TLS Certificates']).toBe('/o1/servers/tls')
     expect(hrefs['Server Settings']).toBe('/o1/servers/settings')
-    expect(hrefs['Firewall']).toBe('/o1/network/firewall')
-    expect(hrefs['Members']).toBe('/o1/manage?tab=members')
-    expect(hrefs['Domains & certificates']).toBe('/o1/manage?tab=domains')
-    expect(hrefs['Git connections']).toBe('/o1/manage?tab=git')
+    expect(hrefs['Firewall']).toBe('/o1/servers/firewall')
+    expect(hrefs['TurboFabric']).toBe('/o1/servers/fabric')
+    expect(hrefs['Tunnels']).toBe('/o1/servers/tunnels')
+    expect(hrefs['Access']).toBe('/o1/manage?tab=access')
+    expect(hrefs['Domains & Certificates']).toBe('/o1/manage?tab=domains')
+    expect(hrefs['Git Connections']).toBe('/o1/manage?tab=git')
     expect(hrefs['Principals']).toBe('/o1/manage?tab=principals')
     expect(hrefs['Managed Database Settings']).toBe('/o1/managed/settings')
     expect(hrefs['Billing']).toBe('/o1/billing')
@@ -159,20 +161,20 @@ describe('buildSearchItems', () => {
     const list = items()
     const actions = list.filter((i) => i.group === 'Actions' && !i.objectId)
     expect(Object.fromEntries(actions.map((a) => [a.name, a.href]))).toEqual({
-      'Add server': '/o1/servers?add=1',
+      'Add Server': '/o1/servers?add=1',
       'Add project': '/o1/projects/new',
       'Add database': '/o1/projects/new?type=managed',
-      'Invite member': '/o1/manage?tab=members',
-      'Pause or Resume Updates': '/admin/updates',
+      'Invite member': '/o1/manage?tab=access',
+      'Pause All Updates': '/admin/updates',
     })
   })
 
   it('hides actions the person may not run', () => {
     const list = items({ canManage: false, canOwn: false, isPlatformAdmin: false })
     const actionNames = names(list.filter((i) => i.group === 'Actions'))
-    expect(actionNames).not.toContain('Add server')
+    expect(actionNames).not.toContain('Add Server')
     expect(actionNames).not.toContain('Invite member')
-    expect(actionNames).not.toContain('Pause or Resume Updates')
+    expect(actionNames).not.toContain('Pause All Updates')
     expect(actionNames).not.toContain('Remove server derp')
     expect(actionNames).not.toContain('Reboot server derp')
     expect(actionNames).toContain('Add project')
@@ -226,7 +228,7 @@ describe('rankSearchItems', () => {
 
   it('on an empty query shows the general actions then the pages, never per-object rows', () => {
     const ranked = rankSearchItems(list, '')
-    expect(ranked[0]?.name).toBe('Add server')
+    expect(ranked[0]?.name).toBe('Add Server')
     expect(ranked.some((i) => i.group === 'Servers')).toBe(false)
     expect(ranked.some((i) => i.objectId)).toBe(false)
     expect(ranked.some((i) => i.group === 'Pages')).toBe(true)
@@ -261,7 +263,7 @@ describe('rankSearchItems', () => {
 
   it('treats add, new and create as the same word', () => {
     for (const q of ['new server', 'create server']) {
-      expect(names(rankSearchItems(list, q))).toContain('Add server')
+      expect(names(rankSearchItems(list, q))).toContain('Add Server')
     }
   })
 
@@ -280,6 +282,11 @@ describe('rankSearchItems', () => {
       'activity'
     )
     expect(tie.map((i) => i.group)).toEqual(['Projects', 'Pages'])
+  })
+
+  it('finds the update pause by "pause" or "resume"', () => {
+    expect(names(rankSearchItems(list, 'pause'))).toContain('Pause All Updates')
+    expect(names(rankSearchItems(list, 'resume updates'))).toContain('Pause All Updates')
   })
 
   it('returns nothing for text that matches nothing', () => {
@@ -304,7 +311,7 @@ describe('rankSearchItems', () => {
       'Servers',
       'Projects',
       'Databases',
-      'Datacenters',
+      'Datacenter Networks',
       'Pages',
     ])
   })

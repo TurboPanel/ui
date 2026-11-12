@@ -6,6 +6,7 @@ import { CatalogStep } from '@/components/org/project-create/catalog-step'
 import { RepositoryLaneStep } from '@/components/org/project-create/repository-lane-step'
 import { ComposeStep } from '@/components/org/project-create/compose-step'
 import { DetailsStep } from '@/components/org/project-create/details-step'
+import { useNewProjectIcon } from '@/components/org/project-create/new-project-icon'
 import { NewProjectScreen } from '@/components/org/project-create/new-project-screen'
 import {
   parseRepositoryCompose,
@@ -64,8 +65,10 @@ import {
   useWorkspaces,
 } from '@/lib/queries'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
+import { useOrgProjectFormDefaults } from '@/lib/org-project-settings'
 import type { RepositoryInspection, RepositoryRecord } from '@/lib/instance-api'
 import { userWorkspaces } from '@/lib/system-inventory'
+import { createIconField } from '@/lib/icons'
 import { spacing } from '@/lib/theme'
 import { ALL_WORKSPACES_SCOPE } from '@/lib/workspace-scope'
 import { useOptionalWorkspaceScope } from '@/lib/workspace-scope-context'
@@ -253,11 +256,13 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
   const params = useLocalSearchParams<{ workspaceId?: string; type?: string }>()
   const workspaceScope = useOptionalWorkspaceScope()
   const { defaultEnvironmentName } = useOrgDefaultEnvironmentName(orgId)
+  const { openWorkspaceSectionByDefault } = useOrgProjectFormDefaults(orgId)
 
   const workspacesQuery = useWorkspaces(orgId)
   const projectsQuery = useProjects(orgId)
   const createWorkspace = useCreateWorkspace(orgId)
   const createProject = useCreateProject(orgId)
+  const projectIcon = useNewProjectIcon(orgId)
 
   const [step, setStep] = useState<Step>('setup')
   /** A `?type=` link picks its card up front; every card stays switchable. */
@@ -550,6 +555,7 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
       type: selectedType,
       workspaceId,
       name: trimmedProjectName,
+      ...createIconField(projectIcon.icon, selectedType),
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
       ...(selectedCode ? { code: selectedCode } : {}),
       ...(compose ? { options: { compose } } : {}),
@@ -569,7 +575,11 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
       // Hosting opens on a draft rather than a blank slate: the whole card is
       // "one site, already declared", and making the operator write four
       // lines of `x-turbopanel` by hand would be the opposite of what it offers.
-      setComposeDoc(selectedChoice === 'hosting' ? seedHostingCompose({}) : emptyComposeDocument())
+      setComposeDoc(
+        selectedChoice === 'hosting'
+          ? seedHostingCompose({ principalAlias: projectAccountAlias(trimmedProjectName) })
+          : emptyComposeDocument()
+      )
       setSeededChoice(selectedChoice)
     }
     setStep('compose')
@@ -722,21 +732,26 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
       }
       error={surfaceError}
       basics={
-        <DetailsStep
-          displayName={displayName}
-          description={description}
-          workspaceMode={workspaceMode}
-          workspaces={workspaces}
-          loadingWorkspaces={loadingWorkspaces}
-          pickedWorkspaceId={pickedWorkspaceId}
-          newWorkspaceNameValue={mirroredWorkspaceName}
-          fieldErrors={fieldErrors}
-          onDisplayNameChange={handleDisplayNameChange}
-          onDescriptionChange={setDescription}
-          onWorkspaceModeChange={handleWorkspaceModeChange}
-          onPickedWorkspaceIdChange={setPickedWorkspaceId}
-          onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
-        />
+        <>
+          <DetailsStep
+            displayName={displayName}
+            description={description}
+            workspaceMode={workspaceMode}
+            workspaces={workspaces}
+            loadingWorkspaces={loadingWorkspaces}
+            pickedWorkspaceId={pickedWorkspaceId}
+            newWorkspaceNameValue={mirroredWorkspaceName}
+            fieldErrors={fieldErrors}
+            onDisplayNameChange={handleDisplayNameChange}
+            onDescriptionChange={setDescription}
+            onWorkspaceModeChange={handleWorkspaceModeChange}
+            onPickedWorkspaceIdChange={setPickedWorkspaceId}
+            onNewWorkspaceNameChange={handleNewWorkspaceNameChange}
+            openWorkspaceByDefault={openWorkspaceSectionByDefault}
+            icon={projectIcon.fieldFor(selectedOption?.type)}
+          />
+          {projectIcon.sheet}
+        </>
       }
       selectedChoice={selectedChoice}
       moreOpen={moreOpen}

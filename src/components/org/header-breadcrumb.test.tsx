@@ -14,6 +14,8 @@ vi.mock('react-native', () => ({
       role={role as string}
       aria-label={rest['aria-label'] as string}
       aria-current={rest['aria-current'] as 'page'}
+      aria-hidden={rest['aria-hidden'] as boolean}
+      data-testid={rest.testID as string}
       title={rest.title as string}
     >
       {children}
@@ -35,6 +37,9 @@ vi.mock('react-native', () => ({
   ),
 }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('@/components/header-chevron', () => ({
+  BreadcrumbChevron: () => <span>›</span>,
+}))
 vi.mock('@/components/ui/v4/status-chip', () => ({
   StatusChip: ({ status, label }: Props) => (
     <span data-testid="chip">{(label as string) ?? (status as string)}</span>
@@ -77,7 +82,7 @@ describe('HeaderBreadcrumb', () => {
     expect(link.getAttribute('title')).toBe('Servers')
     fireEvent.click(link)
     expect(push).toHaveBeenCalledWith('/o1/servers')
-    expect(screen.getByText('›').getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByTestId('breadcrumb-separator').getAttribute('aria-hidden')).toBe('true')
   })
 
   it('shows the status chip beside the current object', async () => {
@@ -95,6 +100,6 @@ describe('HeaderBreadcrumb', () => {
     const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
     const text = nav.textContent ?? ''
     expect(text).toBe('Acme›Servers›derp')
-    expect(screen.getAllByText('›')).toHaveLength(2)
+    expect(screen.getAllByTestId('breadcrumb-separator')).toHaveLength(2)
   })
 })

@@ -3,6 +3,7 @@ import { setActiveOrganizationId, ORG_ID_HEADER } from '@/lib/org-context'
 import { userErrorMessage } from '@/lib/user-error'
 import {
   applyOrgFabric,
+  deleteOrgFabric,
   bootstrapInstall,
   checkPermission,
   completeInstall,
@@ -18,6 +19,10 @@ import {
   deleteLicense,
   deleteProject,
   isForbiddenError,
+  issueServerReenrollTicket,
+  repairColocatedServerConnection,
+  reissueLicenseTicket,
+  revokeServerReenrollTickets,
   deleteVariable,
   deleteWorkspace,
   fetchAccessGrants,
@@ -36,6 +41,7 @@ import {
   fetchOrganization,
   fetchOrganizationCa,
   fetchOrganizationCaRotation,
+  fetchInstanceIdentity,
   fetchOrganizations,
   fetchPermissions,
   fetchProject,
@@ -50,9 +56,17 @@ import {
   fetchWorkspace,
   IP_IN_USE_ERROR,
   patchOrgFabricRelay,
+  patchOrgFabricServer,
   pingDaemon,
   PROJECT_HAS_RUNNING_SERVICES_ERROR,
   rebootServer,
+  approveKeysetStatement,
+  fetchKeyRotation,
+  cancelWaitingKeyChange,
+  fetchKeysetStatement,
+  prepareKeysetStatement,
+  fetchSealedSecrets,
+  clearServerSealingKey,
   resolveResourceId,
   retireOrganizationCa,
   rotateOrganizationCa,
@@ -336,7 +350,8 @@ describe('instance-api fetch wrappers', () => {
     })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(deleteProject('p1')).resolves.toEqual({ ok: true })
+    await expect(deleteProject('p1', { confirmName: 'Shop' })).resolves.toEqual({ ok: true })
+    expect(String(fetchMock.mock.lastCall?.[0])).toContain('/projects/p1?confirmName=Shop')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ environments: [{ id: 'env-1' }] }))
     await expect(fetchVisibleEnvironments('p1')).resolves.toMatchObject({
@@ -390,6 +405,12 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteEnvironment('env-1')).resolves.toEqual({ ok: true })
+    expect(String(fetchMock.mock.lastCall?.[0])).toMatch(/\/environments\/env-1$/)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
+    await deleteEnvironment('env-1', { confirmName: 'my env' })
+    expect(String(fetchMock.mock.lastCall?.[0])).toContain('/environments/env-1?confirmName=my+env')
+    expect(fetchMock.mock.lastCall?.[1]).toMatchObject({ method: 'DELETE' })
   })
 
   it('variable CRUD wrappers encode parent filters', async () => {
@@ -445,6 +466,34 @@ describe('instance-api fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(deleteLicense('lic-1')).resolves.toEqual({ ok: true })
+  })
+
+  it('re-enroll ticket wrappers call the ticket routes', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ticketId: 't', expiresAt: 'x', licenseToken: 'a', licenseArg: 'b' })
+    )
+    await expect(issueServerReenrollTicket('srv-1')).resolves.toMatchObject({ ticketId: 't' })
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/servers/srv-1/reenroll-ticket')
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'POST' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, revoked: 1 }))
+    await expect(revokeServerReenrollTickets('srv-1')).resolves.toMatchObject({ revoked: 1 })
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'DELETE' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ licenseId: 'k1', licenseArg: 'b' }))
+    await reissueLicenseTicket('k1')
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/licenses/k1/ticket')
+  })
+
+  it('repair connection posts to the co-located repair route', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, serverId: 'srv-1', reasons: ['x'], clearedKey: true })
+    )
+    await expect(repairColocatedServerConnection('srv-1')).resolves.toMatchObject({
+      clearedKey: true,
+    })
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/servers/srv-1/colocated-repair')
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'POST' })
   })
 
   it('server command wrappers enqueue and poll', async () => {
@@ -596,6 +645,29 @@ describe('instance-api fetch wrappers', () => {
     })
   })
 
+  it('fabric remove and server patch wrappers proxy org fabric routes', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ enabled: false, relays: [] }))
+    await expect(deleteOrgFabric('org-1')).resolves.toMatchObject({
+      enabled: false,
+      paused: false,
+      servers: [],
+    })
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/organizations/org-1/fabric')
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({ method: 'DELETE' })
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, server: { serverId: 'srv-1', enabled: false } })
+    )
+    await expect(patchOrgFabricServer('org-1', 'srv-1', { enabled: false })).resolves.toMatchObject(
+      { ok: true, server: { serverId: 'srv-1' } }
+    )
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('/organizations/org-1/fabric/servers/srv-1')
+    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({
+      method: 'PATCH',
+      body: JSON.stringify({ enabled: false }),
+    })
+  })
+
   it('fetchEnvironmentConfigView reads the derived config-view route', async () => {
     const side = { services: [], variables: [], linuxUsers: [] }
     fetchMock.mockResolvedValueOnce(
@@ -673,9 +745,15 @@ describe('instance-api fetch wrappers', () => {
     })
   })
 
+  it('passes the datacenter list warnings through', async () => {
+    const tie = { code: 'equal_priority', priority: 100, datacenterIds: ['dc-a', 'dc-b'] }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ datacenters: [], warnings: [tie] }))
+    await expect(fetchDatacenters()).resolves.toEqual({ datacenters: [], warnings: [tie] })
+  })
+
   it('datacenter and IP helpers build query strings and remap ip_in_use', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ datacenters: [] }))
-    await expect(fetchDatacenters()).resolves.toEqual({ datacenters: [] })
+    await expect(fetchDatacenters()).resolves.toEqual({ datacenters: [], warnings: [] })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ suggestions: [] }))
     await expect(
@@ -774,6 +852,88 @@ describe('instance-api fetch wrappers', () => {
       name: 'Huey',
       installBaseUrl: 'https://panel.example/',
     })
+  })
+
+  it('createLicense passes the control plane key fingerprints through when sent', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        licenseId: 'lic-3',
+        licenseToken: 'tok',
+        installCommand: 'curl | sh',
+        panelFingerprint: 'C'.repeat(43),
+        nextFingerprint: null,
+        installUrl: 'https://cp.example.com',
+      })
+    )
+    const created = await createLicense()
+    expect(created.panelFingerprint).toBe('C'.repeat(43))
+    expect(created.nextFingerprint).toBeNull()
+    expect(created.installUrl).toBe('https://cp.example.com')
+  })
+
+  it('createLicense tolerates an older control plane that sends no fingerprints', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ licenseId: 'lic-4', licenseToken: 'tok', installCommand: 'curl | sh' })
+    )
+    const created = await createLicense()
+    expect(created.panelFingerprint).toBeUndefined()
+  })
+
+  it('fetchInstanceIdentity reads the admin identity route', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, configured: false, servers: [] }))
+    await expect(fetchInstanceIdentity()).resolves.toMatchObject({ configured: false })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/api/admin/v1/instance/identity')
+  })
+
+  it('a key change is prepared, approved, downloaded and cancelled on the identity routes', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, statement: 'AA', challenge: 'BB' }))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, keyset: 3, kind: 'rotate', state: 'live' })
+    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, runtime: 'deno', statements: [] }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ statement: 'AA', approvals: [] }))
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, keyset: 3, cancelled: true }))
+    await prepareKeysetStatement({ kind: 'passkeys', mark: ['pk-1'] })
+    await approveKeysetStatement({ statement: 'AA', approvals: [] })
+    await fetchKeyRotation()
+    await fetchKeysetStatement(3)
+    await cancelWaitingKeyChange(3)
+    const calls = fetchMock.mock.calls.map(([url, init]) => [
+      String(url).replace(/^.*\/api\/admin\/v1/, ''),
+      (init as RequestInit | undefined)?.method ?? 'GET',
+    ])
+    expect(calls).toEqual([
+      ['/instance/identity/statements/prepare', 'POST'],
+      ['/instance/identity/statements', 'POST'],
+      ['/instance/identity/rotation', 'GET'],
+      ['/instance/identity/statements/3', 'GET'],
+      ['/instance/identity/statements/3', 'DELETE'],
+    ])
+    expect(JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body))).toEqual({
+      kind: 'passkeys',
+      mark: ['pk-1'],
+    })
+  })
+
+  it('fetchSealedSecrets reads the sealed-secrets route', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, receivingPlaintext: 0, servers: [] }))
+    await expect(fetchSealedSecrets()).resolves.toMatchObject({ receivingPlaintext: 0 })
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      '/api/admin/v1/instance/identity/sealed-secrets'
+    )
+  })
+
+  it('clearServerSealingKey deletes the key with the typed server name', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, cleared: true }))
+    await expect(clearServerSealingKey('srv/1', 'web 1')).resolves.toEqual({
+      ok: true,
+      cleared: true,
+    })
+    const [url, init] = fetchMock.mock.calls[0] ?? []
+    expect(String(url)).toContain(
+      '/api/admin/v1/instance/identity/sealed-secrets/srv%2F1/key?confirmName=web+1'
+    )
+    expect((init as RequestInit).method).toBe('DELETE')
   })
 
   it('createLicense sends the license tier chosen in Add Server', async () => {

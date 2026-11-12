@@ -78,7 +78,7 @@ function renderPanel(actions: HostingCertificateActions = {}) {
 
 const OFF = {
   message:
-    'Let’s Encrypt is turned off for this organization. An owner can turn it on in Organization settings › Domains & certificates.',
+    'Let’s Encrypt is turned off for this organization. An owner can turn it on in Organization Settings › Domains & Certificates.',
   openSettings: true,
 }
 
@@ -94,10 +94,10 @@ afterEach(() => {
 })
 
 describe('a refused Let’s Encrypt request after saving', () => {
-  it('says Let’s Encrypt is off and links to Domains & certificates', () => {
+  it('says Let’s Encrypt is off and links to Domains & Certificates', () => {
     renderPanel({ refusals: { h1: OFF } })
     expect(screen.getByText(OFF.message)).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Open Organization settings › Domains & certificates'))
+    fireEvent.click(screen.getByLabelText('Open Organization Settings › Domains & Certificates'))
     expect(state.push).toHaveBeenCalledWith('/o1/manage?tab=domains')
   })
 
@@ -109,7 +109,7 @@ describe('a refused Let’s Encrypt request after saving', () => {
   it('shows other refusals in plain words, without the settings link', () => {
     renderPanel({ refusals: { h1: { message: 'Add a domain name first.', openSettings: false } } })
     expect(screen.getByText('Add a domain name first.')).toBeTruthy()
-    expect(screen.queryByLabelText(/Domains & certificates/)).toBeNull()
+    expect(screen.queryByLabelText(/Domains & Certificates/)).toBeNull()
   })
 
   it('still says why before the certificate has loaded', () => {
@@ -125,7 +125,7 @@ describe('a refused Let’s Encrypt request after saving', () => {
     renderPanel()
     expect(screen.getByText(OFF.message)).toBeTruthy()
     expect(
-      screen.getByLabelText('Open Organization settings › Domains & certificates')
+      screen.getByLabelText('Open Organization Settings › Domains & Certificates')
     ).toBeTruthy()
   })
 })

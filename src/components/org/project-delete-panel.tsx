@@ -8,7 +8,8 @@ import {
 } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { Button, ConfirmButton, LoadingState, TextField } from '@/components/ui'
+import { Button, LoadingState, TypeNameConfirmModal, TypeNameDeleteButton } from '@/components/ui'
+import { confirmationName } from '@/lib/confirm-name'
 import {
   MANAGED_RUNTIME_PRESENT_ERROR,
   type CommandStatusRecord,
@@ -24,11 +25,12 @@ import {
   useDeleteProject,
   useEnvironments,
   useOrganizationManaged,
+  useOrgServers,
   useProjectDeletePreview,
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { DeletePlanList } from '@/components/org/delete-plan-list'
-import { deleteFailureMessage } from '@/lib/delete-plan'
+import { deleteFailureMessage, withServerNames } from '@/lib/delete-plan'
 import { commandErrorLine } from '@/lib/command-error'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import type { ManagedListRecord } from '@/lib/managed-services'
@@ -102,8 +104,9 @@ function environmentLabel(environment: EnvironmentRecord): string {
   return environment.name?.trim() || 'Unnamed environment'
 }
 
+/** The name typed to delete the project (and to destroy its databases): its name, else its id. */
 function projectConfirmName(project: ProjectRecord): string {
-  return project.name?.trim() || 'Unnamed project'
+  return confirmationName(project.name, project.id)
 }
 
 type StopStepCopy = Readonly<{
@@ -112,8 +115,7 @@ type StopStepCopy = Readonly<{
   countLabel: (count: number) => string
   actionLabel: string
   actionBusyLabel: string
-  /** The second press: the action destroys data, so it always confirms. */
-  confirmLabel: string
+  /** Said in the name dialog: the action destroys data, so it always asks for the name. */
   confirmPrompt: string
 }>
 
@@ -122,9 +124,8 @@ export const MANAGED_DESTROY_COPY: StopStepCopy = {
   stepCopy:
     'Destroy every managed database before the project can be deleted. This stops the containers and removes their data volumes.',
   countLabel: () => 'Still running on the server',
-  actionLabel: 'Destroy database',
+  actionLabel: 'Destroy Database',
   actionBusyLabel: 'Destroying…',
-  confirmLabel: 'Destroy it',
   confirmPrompt: 'Destroy the databases in this environment and their data?',
 }
 
@@ -132,12 +133,15 @@ export function StopStepSection({
   envRows,
   onStop,
   onForceDestroy,
+  confirmName,
   copy,
 }: Readonly<{
   envRows: EnvStopRow[]
-  onStop: (environmentId: string) => void
-  onForceDestroy?: (environmentId: string) => void
+  onStop: (environmentId: string, confirmName: string) => void
+  onForceDestroy?: (environmentId: string, confirmName: string) => void
   copy: StopStepCopy
+  /** The project's name: typed to destroy a database. */
+  confirmName: string
 }>) {
   return (
     <View style={styles.section}>
@@ -153,19 +157,23 @@ export function StopStepSection({
               {row.error ? <Text style={panelStyles.error}>{row.error}</Text> : null}
             </View>
             <View style={styles.envActions}>
-              <ConfirmButton
+              <TypeNameDeleteButton
                 label={row.stopping ? copy.actionBusyLabel : copy.actionLabel}
-                confirmLabel={copy.confirmLabel}
-                prompt={copy.confirmPrompt}
+                thing="Database"
+                verb="Destroy"
+                name={confirmName}
+                description={`${copy.confirmPrompt} Type the project name to confirm.`}
                 busy={row.stopping}
-                onConfirm={() => onStop(row.environment.id)}
+                onConfirm={(typed) => onStop(row.environment.id, typed)}
               />
               {row.error && onForceDestroy ? (
-                <ConfirmButton
-                  label="Force destroy"
-                  confirmLabel="Confirm force"
-                  prompt="Removes the database records immediately and tears down what it can. Leftover containers on unreachable servers must be cleaned up manually."
-                  onConfirm={() => onForceDestroy(row.environment.id)}
+                <TypeNameDeleteButton
+                  label="Force Destroy"
+                  thing="Database"
+                  verb="Force Destroy"
+                  name={confirmName}
+                  description="Removes the database records immediately and tears down what it can. Leftover containers on unreachable servers must be cleaned up manually. Type the project name to confirm."
+                  onConfirm={(typed) => onForceDestroy(row.environment.id, typed)}
                 />
               ) : null}
             </View>
@@ -178,37 +186,15 @@ export function StopStepSection({
 
 function ConfirmStepSection({
   plan,
-  confirmName,
-  confirmText,
-  onConfirmTextChange,
   deleteError,
-  deleting,
 }: Readonly<{
   plan: DeletePlan | undefined
-  confirmName: string
-  confirmText: string
-  onConfirmTextChange: (value: string) => void
   deleteError: string | null
-  deleting: boolean
 }>) {
   return (
     <View style={styles.section}>
       <Text style={styles.stepLabel}>What will be removed</Text>
       {plan ? <DeletePlanList plan={plan} /> : null}
-      <Text style={styles.stepLabel}>Confirm deletion</Text>
-      <Text style={styles.stepCopy}>
-        Type <Text style={styles.confirmName}>{confirmName}</Text> to permanently delete this
-        project.
-      </Text>
-      <TextField
-        label="Project name"
-        value={confirmText}
-        onChangeText={onConfirmTextChange}
-        placeholder={confirmName}
-        autoCapitalize="none"
-        autoCorrect={false}
-        editable={!deleting}
-      />
       {deleteError ? <Text style={panelStyles.error}>{deleteError}</Text> : null}
     </View>
   )
@@ -230,21 +216,18 @@ function canConfirmProjectDelete(
   input: Readonly<{
     hasActiveServices: boolean
     blocked: boolean
-    confirmText: string
-    confirmName: string
     deleting: boolean
     loading: boolean
   }>
 ): boolean {
-  if (input.hasActiveServices || input.blocked || input.deleting || input.loading) return false
-  return input.confirmText.trim() === input.confirmName
+  return !(input.hasActiveServices || input.blocked || input.deleting || input.loading)
 }
 
 function projectDeleteWarning(managedProject: boolean): string {
   if (managedProject) {
     return 'This is permanent and cannot be undone. Destroying a database removes its containers and data volumes on the server, then deletes the project.'
   }
-  return 'This is permanent and cannot be undone. Deleting stops every environment, then removes its services, domains, variables and folders on your servers, and the Hosting Accounts nothing else uses. Volumes set to keep their data stay.'
+  return 'This is permanent and cannot be undone. Deleting stops every environment, then removes its services, domains, variables and folders on your servers, and the Hosting Accounts nothing else uses. Volume folders set to keep their data stay. Docker volumes stay on your servers; to delete them, Destroy each environment with Also Delete the Data Volumes first.'
 }
 
 function DeletePanelBody({
@@ -256,23 +239,17 @@ function DeletePanelBody({
   onForceDestroy,
   plan,
   confirmName,
-  confirmText,
-  onConfirmTextChange,
   deleteError,
-  deleting,
 }: Readonly<{
   loading: boolean
   managedProject: boolean
   hasActiveServices: boolean
   envRows: EnvStopRow[]
-  onStop: (environmentId: string) => void
-  onForceDestroy?: (environmentId: string) => void
+  onStop: (environmentId: string, confirmName: string) => void
+  onForceDestroy?: (environmentId: string, confirmName: string) => void
   plan: DeletePlan | undefined
   confirmName: string
-  confirmText: string
-  onConfirmTextChange: (value: string) => void
   deleteError: string | null
-  deleting: boolean
 }>) {
   if (loading) {
     return (
@@ -288,19 +265,11 @@ function DeletePanelBody({
         onStop={onStop}
         onForceDestroy={managedProject ? onForceDestroy : undefined}
         copy={MANAGED_DESTROY_COPY}
+        confirmName={confirmName}
       />
     )
   }
-  return (
-    <ConfirmStepSection
-      plan={plan}
-      confirmName={confirmName}
-      confirmText={confirmText}
-      onConfirmTextChange={onConfirmTextChange}
-      deleteError={deleteError}
-      deleting={deleting}
-    />
-  )
+  return <ConfirmStepSection plan={plan} deleteError={deleteError} />
 }
 
 function ProjectDeleteActions({
@@ -321,7 +290,7 @@ function ProjectDeleteActions({
       <Button label="Cancel" variant="secondary" size="sm" disabled={deleting} onPress={onCancel} />
       {showDelete ? (
         <Button
-          label="Delete permanently"
+          label="Delete Project"
           busyLabel="Deleting…"
           variant="danger"
           size="sm"
@@ -426,7 +395,11 @@ export function ProjectDeletePanel({
   const environmentsQuery = useEnvironments(orgId, project.id)
   const environments = orEmptyArray(environmentsQuery.data?.environments)
   const previewQuery = useProjectDeletePreview(orgId, project.id)
-  const plan = previewQuery.data
+  const serversQuery = useOrgServers(orgId)
+  const plan = useMemo(
+    () => withServerNames(previewQuery.data, orEmptyArray(serversQuery.data?.servers)),
+    [previewQuery.data, serversQuery.data?.servers]
+  )
   const orgManagedQuery = useOrganizationManaged(orgId, {
     enabled: managedProject,
   })
@@ -440,7 +413,8 @@ export function ProjectDeletePanel({
 
   const commandsQuery = useCommandsBatch(orgId, trackedCommands)
 
-  const [confirmText, setConfirmText] = useState('')
+  // The name dialog of the final step is open.
+  const [naming, setNaming] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const refetchManaged = useCallback(() => {
@@ -487,8 +461,6 @@ export function ProjectDeletePanel({
   const canDelete = canConfirmProjectDelete({
     hasActiveServices,
     blocked: !plan || plan.blockers.length > 0,
-    confirmText,
-    confirmName,
     deleting,
     loading,
   })
@@ -527,7 +499,11 @@ export function ProjectDeletePanel({
     }))
   }
 
-  const handleDestroyManaged = async (environmentId: string, options?: { force?: boolean }) => {
+  const handleDestroyManaged = async (
+    environmentId: string,
+    confirmName: string,
+    options?: { force?: boolean }
+  ) => {
     setStopRows((current) => ({
       ...current,
       [environmentId]: {
@@ -537,9 +513,11 @@ export function ProjectDeletePanel({
         serverId: current[environmentId]?.serverId ?? null,
       },
     }))
-    const result = await destroyManagedMutation.run(
-      options?.force ? { environmentId, force: true } : environmentId
-    )
+    const result = await destroyManagedMutation.run({
+      environmentId,
+      confirmName,
+      ...(options?.force ? { force: true } : {}),
+    })
     if (!result.ok) {
       markStopFailed(
         environmentId,
@@ -566,11 +544,12 @@ export function ProjectDeletePanel({
     trackQueuedCommand(environmentId, serverId, commandId, 'Destroying database…')
   }
 
-  const handleDelete = async () => {
+  const handleDelete = async (typed: string) => {
     if (!canDelete) return
     setDeleteError(null)
-    const result = await deleteProjectMutation.run(project.id)
+    const result = await deleteProjectMutation.run({ id: project.id, confirmName: typed })
     if (!result.ok) {
+      setNaming(false)
       setDeleteError(
         deleteFailureMessage(
           result.cause ?? result.error,
@@ -596,16 +575,13 @@ export function ProjectDeletePanel({
         managedProject={managedProject}
         hasActiveServices={hasActiveServices}
         envRows={envRows}
-        onStop={(environmentId) => void handleDestroyManaged(environmentId)}
-        onForceDestroy={(environmentId) =>
-          void handleDestroyManaged(environmentId, { force: true })
+        onStop={(environmentId, typed) => void handleDestroyManaged(environmentId, typed)}
+        onForceDestroy={(environmentId, typed) =>
+          void handleDestroyManaged(environmentId, typed, { force: true })
         }
         plan={plan}
         confirmName={confirmName}
-        confirmText={confirmText}
-        onConfirmTextChange={setConfirmText}
         deleteError={deleteError}
-        deleting={deleting}
       />
 
       <ProjectDeleteActions
@@ -613,8 +589,21 @@ export function ProjectDeletePanel({
         showDelete={!loading && !hasActiveServices}
         canDelete={canDelete}
         onCancel={onCancel}
-        onDelete={() => void handleDelete()}
+        onDelete={() => {
+          setDeleteError(null)
+          setNaming(true)
+        }}
       />
+      {naming ? (
+        <TypeNameConfirmModal
+          thing="Project"
+          name={confirmName}
+          description={projectDeleteWarning(managedProject)}
+          pending={deleting}
+          onCancel={() => setNaming(false)}
+          onConfirm={(typed) => void handleDelete(typed)}
+        />
+      ) : null}
     </View>
   )
 }
@@ -651,10 +640,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 20,
-  },
-  confirmName: {
-    color: colors.text,
-    fontWeight: '700',
   },
   envList: {
     gap: spacing.sm,

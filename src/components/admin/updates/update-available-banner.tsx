@@ -4,9 +4,14 @@ import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { adminAreaHref } from '@/lib/admin-navigation'
 import { Button, InlineNotice, TextLink } from '@/components/ui'
-import { isAdminSession, useAuth } from '@/lib/auth-context'
+import { isAdminSession, isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
-import { useInstanceUpdates, useUpgradeActiveRun } from '@/lib/queries/admin'
+import { useDevelopmentUpdates, useInstanceUpdates, useUpgradeActiveRun } from '@/lib/queries/admin'
+import {
+  developmentBanner,
+  developmentChangesPending,
+  isDevelopmentInstall,
+} from '@/lib/development-updates'
 import {
   readDismissedUpdateBanner,
   showsUpdateBanner,
@@ -27,12 +32,16 @@ function webStorage(): Storage | undefined {
 
 /**
  * The offered update for an instance admin on a self-hosted control plane, or null.
- * Shared by the banner and the admin sidebar badge.
+ * Shared by the banner and the admin sidebar badge. On a development install
+ * nothing is offered from the release channel; the banner and badge show only
+ * while some server lacks the checkout's daemon changes.
  */
 export function useUpdateAvailable(): Readonly<{
   banner: UpdateBanner | null
   /** An update is on offer, dismissed or not (the admin nav badge). */
   available: boolean
+  /** A development install: the banner speaks about daemon changes, not releases. */
+  development: boolean
   dismiss: (key: string) => void
 }> {
   const { session } = useAuth()
@@ -44,11 +53,26 @@ export function useUpdateAvailable(): Readonly<{
   const consoleBuild = useMemo(() => readConsoleBuild(), [])
   const updates = useInstanceUpdates({ enabled: eligible, consoleCommit: consoleBuild?.commit })
   const active = useUpgradeActiveRun({ enabled: eligible })
+  const development = eligible && isDevelopmentInstall(updates.data)
+  const developmentQuery = useDevelopmentUpdates({
+    // The development route is superadmin only; a plain admin would get a 403.
+    enabled: development && isSuperadminSession(session),
+  })
   const [dismissedKey, setDismissedKey] = useState(() => readDismissedUpdateBanner(webStorage()))
   const offer = { updates: updates.data, activeRun: Boolean(active.data?.run), consoleBuild }
+  let banner: UpdateBanner | null = null
+  let available = false
+  if (development) {
+    banner = developmentBanner({ development: developmentQuery.data, dismissedKey })
+    available = developmentChangesPending(developmentQuery.data)
+  } else if (eligible) {
+    banner = updateBanner({ ...offer, dismissedKey })
+    available = updateOffered(offer)
+  }
   return {
-    banner: eligible ? updateBanner({ ...offer, dismissedKey }) : null,
-    available: eligible && updateOffered(offer),
+    banner,
+    available,
+    development,
     dismiss: (key) => {
       writeDismissedUpdateBanner(webStorage(), key)
       setDismissedKey(key)
@@ -61,13 +85,15 @@ export function useUpdateAvailable(): Readonly<{
  * Updates install on their own, so it only says so and links to Admin >
  * Updates. On a phone-width window it is one line, "Update available ·
  * See Updates", so it never takes a third of the screen. On a wide window one line
- * of title and at most two of detail.
+ * of title and at most two of detail. On a development install it says
+ * "Daemon changes are not on your servers yet." with **Open Updates** instead.
  */
 export function UpdateAvailableBanner() {
   const router = useRouter()
   const { width } = useWindowDimensions()
-  const { banner, dismiss } = useUpdateAvailable()
+  const { banner, development, dismiss } = useUpdateAvailable()
   if (!banner) return null
+  const linkLabel = development ? 'Open Updates' : 'See Updates'
   const openUpdates = () => {
     router.push(adminAreaHref('updates') as Href)
   }
@@ -87,11 +113,11 @@ export function UpdateAvailableBanner() {
       <View style={styles.root}>
         <View style={styles.compact}>
           <Text style={styles.compactTitle} numberOfLines={1}>
-            Update available ·
+            {development ? 'Daemon changes waiting ·' : 'Update available ·'}
           </Text>
           <TextLink
-            label="See Updates"
-            accessibilityLabel={`See Updates in Admin > Updates. ${banner.title}`}
+            label={linkLabel}
+            accessibilityLabel={`${linkLabel} in Admin > Updates. ${banner.title}`}
             onPress={openUpdates}
           />
           <View style={styles.compactFill} />
@@ -109,7 +135,7 @@ export function UpdateAvailableBanner() {
         bodyLines={2}
         actions={
           <>
-            <Button label="See Updates" variant="secondary" onPress={openUpdates} />
+            <Button label={linkLabel} variant="secondary" onPress={openUpdates} />
             {dismissButton}
           </>
         }

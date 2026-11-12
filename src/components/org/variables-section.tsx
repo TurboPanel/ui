@@ -10,8 +10,10 @@ import {
   useVariables,
 } from '@/lib/queries/variables'
 import { useCan } from '@/lib/query-client'
+import { looksLikeSecretVariable, SECRET_LOOKING_VARIABLE_HINT } from '@/lib/variable-secret-hint'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
+import { NO_AUTOFILL, secretAutoComplete } from '@/lib/field-autofill'
 
 /** Secret values are write-only end to end — never rendered, even masked with real characters. */
 const HIDDEN_VALUE_LABEL = '***HIDDEN***'
@@ -287,6 +289,7 @@ function VariableValueCell({
         autoCorrect={false}
         editable={!secretSaving}
         secureTextEntry
+        autoComplete={secretAutoComplete()}
       />
     )
   }
@@ -619,6 +622,9 @@ function NewVariableRow({
           onToggle={onToggleLiteral}
         />
         {addFieldError ? <Text style={styles.fieldError}>{addFieldError}</Text> : null}
+        {!newIsSecret && looksLikeSecretVariable(newKey, newValue) ? (
+          <Text style={styles.secretHint}>{SECRET_LOOKING_VARIABLE_HINT}</Text>
+        ) : null}
       </View>
       <View style={styles.colValue}>
         <TextInput
@@ -632,6 +638,7 @@ function NewVariableRow({
           autoCorrect={false}
           editable={!adding}
           secureTextEntry={newIsSecret}
+          autoComplete={newIsSecret ? secretAutoComplete() : NO_AUTOFILL}
           multiline
         />
       </View>
@@ -1408,6 +1415,10 @@ const styles = StyleSheet.create({
   },
   fieldError: {
     color: colors.errorText,
+    fontSize: 11,
+  },
+  secretHint: {
+    color: colors.warn,
     fontSize: 11,
   },
   table: {

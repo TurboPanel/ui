@@ -9,6 +9,7 @@ function binding(over: Partial<BindingRecord>): BindingRecord {
     serviceId: 's1',
     databaseName: 'app',
     keyPrefix: 'DB',
+    preset: 'mysql',
     emitEngineDefaults: true,
     keys: ['DB_URL'],
     endpoint: { host: 'db.internal', port: 13306 },

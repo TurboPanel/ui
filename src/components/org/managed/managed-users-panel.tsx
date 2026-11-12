@@ -1,5 +1,9 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  LoginRotateControl,
+  UsedByAdminToolBadge,
+} from '@/components/org/managed/managed-admin-tool-login'
 import { SecretReveal } from '@/components/org/managed/secret-reveal'
 import {
   AppLoginsButton,
@@ -14,10 +18,10 @@ import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Button,
   ButtonRow,
-  ConfirmButton,
   EmptyState,
   SectionPanel,
   TextField,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import {
   LoginStraightThroughEditor,
@@ -34,6 +38,11 @@ import {
   LoginAdminEditor,
   NewLoginAdminField,
 } from '@/components/org/managed/managed-login-admin'
+import {
+  AllDatabasesChip,
+  allDatabasesOffReason,
+  LoginAllDatabasesEditor,
+} from '@/components/org/managed/managed-login-databases'
 import {
   jobConnectionRole,
   LoginJobEditor,
@@ -226,6 +235,22 @@ function PasswordsPanel({
   )
 }
 
+/** The databases part of a create request: every database, or the picked list. */
+function loginDatabasesBody(allDatabases: boolean, selected: string[]) {
+  return allDatabases ? { allDatabases: true } : { databases: selected }
+}
+
+function LoginDatabaseChips({ user }: Readonly<{ user: ManagedUserRecord }>) {
+  if (user.allDatabases) return <Chip label="All databases" />
+  return (
+    <>
+      {user.databases.map((db) => (
+        <Chip key={db} label={db} />
+      ))}
+    </>
+  )
+}
+
 export function ManagedUsersPanel({
   orgId,
   environmentId,
@@ -243,7 +268,13 @@ export function ManagedUsersPanel({
   onRedeployService,
   onReload,
   onCreateAppLogins,
+  allDatabasesOff = null,
+  adminToolLoginIds,
 }: Readonly<{
+  /** Logins an admin tool of this cluster signs in with: badged, and reset from the tool's card. */
+  adminToolLoginIds?: ReadonlySet<string>
+  /** Which All Databases switch is off, if any; the chip is then disabled. */
+  allDatabasesOff?: 'organization' | 'cluster' | null
   orgId: string
   environmentId: string
   /** Engine code of the cluster; the straight-through switch is PostgreSQL only. */
@@ -253,10 +284,13 @@ export function ManagedUsersPanel({
   canManage: boolean
   busy: boolean
   onCreateDatabase: (name: string) => Promise<void>
-  onDeleteDatabase: (name: string) => Promise<void>
+  /** `confirmName` is the database name as typed. */
+  onDeleteDatabase: (name: string, confirmName: string) => Promise<void>
   onCreateUser: (input: {
     username: string
-    databases: string[]
+    /** Absent when `allDatabases` is true. */
+    databases?: string[]
+    allDatabases?: boolean
     privileges?: string[]
     connectionRole: ManagedConnectionRole
     grantMode: LoginMode
@@ -286,6 +320,8 @@ export function ManagedUsersPanel({
   const [dbName, setDbName] = useState('')
   const [username, setUsername] = useState('')
   const [selectedDbs, setSelectedDbs] = useState<string[]>([])
+  const [allDatabasesChoice, setAllDatabasesChoice] = useState(false)
+  const allDatabases = allDatabasesChoice && !allDatabasesOff
   const [job, setJob] = useState<LoginJob>(initial.job)
   const [grantMode, setGrantMode] = useState<LoginMode>(initial.grantMode)
   const [tool, setTool] = useState(initial.tool)
@@ -370,11 +406,11 @@ export function ManagedUsersPanel({
     }
   }
 
-  const deleteDatabase = async (name: string) => {
+  const deleteDatabase = async (name: string, confirmName: string) => {
     setWorking(true)
     setError(null)
     try {
-      await onDeleteDatabase(name)
+      await onDeleteDatabase(name, confirmName)
       await onReload()
     } catch (err) {
       setError(managedErrorMessage(err, 'Failed to delete database'))
@@ -394,7 +430,7 @@ export function ManagedUsersPanel({
       setNewLoginError(nameProblem)
       return
     }
-    if (selectedDbs.length === 0) {
+    if (!allDatabases && selectedDbs.length === 0) {
       setNewLoginError('Select at least one database.')
       return
     }
@@ -413,7 +449,7 @@ export function ManagedUsersPanel({
     try {
       const result = await onCreateUser({
         username: trimmed,
-        databases: selectedDbs,
+        ...loginDatabasesBody(allDatabases, selectedDbs),
         privileges: [admin ? MANAGED_ADMIN_PRIVILEGE : job],
         connectionRole: admin ? 'read-write' : jobConnectionRole(job),
         grantMode,
@@ -536,14 +572,13 @@ export function ManagedUsersPanel({
                   <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
                 ) : null}
                 {canManage && !deleteBlocked ? (
-                  <ConfirmButton
+                  <TypeNameDeleteButton
                     label="Delete"
-                    confirmLabel="Confirm delete"
-                    prompt="Delete this database?"
+                    thing="Database"
+                    name={name}
+                    description="The database and its data are removed from the server."
                     disabled={disabled}
-                    onConfirm={() => {
-                      void deleteDatabase(name)
-                    }}
+                    onConfirm={(typed) => deleteDatabase(name, typed)}
                   />
                 ) : null}
                 <AppLoginsButton
@@ -607,11 +642,10 @@ export function ManagedUsersPanel({
                 {principalNamesLabel(user.username, user.appliedUsername)}
               </Text>
               <View style={styles.chipRow}>
-                {user.databases.map((db) => (
-                  <Chip key={db} label={db} />
-                ))}
+                <LoginDatabaseChips user={user} />
               </View>
               <LoginModeBadges user={user} />
+              <UsedByAdminToolBadge loginId={user.id} adminToolLoginIds={adminToolLoginIds} />
               <LoginAdminBadge user={user} />
               <LoginLimitBadges user={user} />
               <Text style={panelStyles.muted}>
@@ -667,6 +701,15 @@ export function ManagedUsersPanel({
                 />
               ) : null}
               {canManage ? (
+                <LoginAllDatabasesEditor
+                  user={user}
+                  disabled={disabled}
+                  off={allDatabasesOff}
+                  onUpdate={onUpdateUser}
+                  onError={setError}
+                />
+              ) : null}
+              {canManage ? (
                 <LoginAdminEditor
                   engine={engine}
                   user={user}
@@ -685,25 +728,23 @@ export function ManagedUsersPanel({
               ) : null}
               {canManage ? (
                 <ButtonRow>
-                  <Button
-                    label="Rotate password"
-                    size="sm"
+                  <LoginRotateControl
+                    loginId={user.id}
+                    adminToolLoginIds={adminToolLoginIds}
                     disabled={disabled}
-                    onPress={() => {
+                    onRotate={() => {
                       void rotateUser(user.id, user.appliedUsername)
                     }}
                   />
                   {deleteBlocked ? (
                     <Text style={panelStyles.muted}>Remove connections first ({bindingCount})</Text>
                   ) : (
-                    <ConfirmButton
+                    <TypeNameDeleteButton
                       label="Delete"
-                      confirmLabel="Confirm delete"
-                      prompt="Delete this user?"
+                      thing="Database Login"
+                      name={user.username}
                       disabled={disabled}
-                      onConfirm={() => {
-                        void deleteUser(user.id)
-                      }}
+                      onConfirm={() => deleteUser(user.id)}
                     />
                   )}
                 </ButtonRow>
@@ -731,20 +772,35 @@ export function ManagedUsersPanel({
           {usernameHint ? <Text style={panelStyles.calloutWarning}>{usernameHint}</Text> : null}
           <PrincipalNameSchemeField scheme={nameScheme} disabled={disabled} />
           <Text style={panelStyles.detailLabel}>Databases</Text>
+          <AllDatabasesChip
+            selected={allDatabases}
+            onToggle={() => setAllDatabasesChoice(!allDatabasesChoice)}
+            disabled={disabled}
+            offReason={allDatabasesOffReason(allDatabasesOff)}
+          />
           <View style={styles.chipRow}>
             {databases.map((name) => {
-              const selected = selectedDbs.includes(name)
+              const selected = !allDatabases && selectedDbs.includes(name)
+              const chipDisabled = disabled || allDatabases
               return (
                 <Pressable
                   key={name}
                   style={[styles.chip, selected && styles.chipSelected, webPointer]}
                   onPress={() => toggleDb(name)}
-                  disabled={disabled}
+                  disabled={chipDisabled}
                   accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selected, disabled }}
+                  accessibilityState={{ checked: selected, disabled: chipDisabled }}
+                  aria-checked={selected}
                   accessibilityLabel={name}
                 >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{name}</Text>
+                  <View style={styles.chipInner}>
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {selected ? '✓' : '+'}
+                    </Text>
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {name}
+                    </Text>
+                  </View>
                 </Pressable>
               )
             })}
@@ -862,6 +918,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgInput,
     paddingHorizontal: 10,
     paddingVertical: 4,
+  },
+  chipInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   chipSelected: {
     borderColor: chrome.accent,

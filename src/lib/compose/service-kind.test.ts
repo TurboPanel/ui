@@ -263,16 +263,23 @@ describe('x-turbopanel.source.deployOnPush', () => {
 })
 
 describe('x-turbopanel.source.buildKind', () => {
-  it('parses railpack and keeps the rest of the binding', () => {
+  it('parses image and keeps the rest of the binding', () => {
     const parsed = parseServiceTurbopanelExtension({
       source: {
         sourceId: '11111111-2222-3333-4444-555555555555',
         branch: 'main',
-        buildKind: 'railpack',
+        buildKind: 'image',
       },
     })
-    expect(parsed?.source?.buildKind).toBe('railpack')
+    expect(parsed?.source?.buildKind).toBe('image')
     expect(parsed?.source?.branch).toBe('main')
+  })
+
+  it('reads the previous value as image', () => {
+    const parsed = parseServiceTurbopanelExtension({
+      source: { sourceId: '11111111-2222-3333-4444-555555555555', buildKind: 'railpack' },
+    })
+    expect(parsed?.source?.buildKind).toBe('image')
   })
 
   it('omits the field entirely when the value is unknown', () => {
@@ -296,7 +303,7 @@ describe('x-turbopanel.source.buildKind', () => {
         serviceKind: 'container',
         source: {
           sourceId: '11111111-2222-3333-4444-555555555555',
-          buildKind: 'railpack',
+          buildKind: 'image',
         },
       }
     )
@@ -304,30 +311,30 @@ describe('x-turbopanel.source.buildKind', () => {
       serviceKind: 'container',
       source: {
         sourceId: '11111111-2222-3333-4444-555555555555',
-        buildKind: 'railpack',
+        buildKind: 'image',
       },
     })
   })
 })
 
 describe('buildKind normalization across a service-kind switch', () => {
-  const RAILPACK_CONTAINER = {
+  const IMAGE_CONTAINER = {
     image: 'nginx:alpine',
     'x-turbopanel': {
       serviceKind: 'container',
       source: {
         sourceId: '11111111-2222-3333-4444-555555555555',
         branch: 'main',
-        buildKind: 'railpack',
+        buildKind: 'image',
       },
     },
   }
 
-  it('clears railpack when the service becomes node', () => {
-    // The Services form hides the Railpack control once the kind leaves
+  it('clears image when the service becomes node', () => {
+    // The Services form hides the image control once the kind leaves
     // container, so a surviving `buildKind` would be invisible right up until
     // the instance rejected the document on save.
-    const next = patchServiceTurbopanelExtension(RAILPACK_CONTAINER, {
+    const next = patchServiceTurbopanelExtension(IMAGE_CONTAINER, {
       serviceKind: 'node',
       framework: 'auto',
     })
@@ -341,8 +348,8 @@ describe('buildKind normalization across a service-kind switch', () => {
     })
   })
 
-  it('clears railpack when the service becomes site', () => {
-    const next = patchServiceTurbopanelExtension(RAILPACK_CONTAINER, {
+  it('clears image when the service becomes site', () => {
+    const next = patchServiceTurbopanelExtension(IMAGE_CONTAINER, {
       serviceKind: 'site',
       engine: 'nginx',
       root: 'public',
@@ -358,17 +365,17 @@ describe('buildKind normalization across a service-kind switch', () => {
     })
   })
 
-  it('keeps railpack when the service stays a container', () => {
-    const next = patchServiceTurbopanelExtension(RAILPACK_CONTAINER, {
+  it('keeps image when the service stays a container', () => {
+    const next = patchServiceTurbopanelExtension(IMAGE_CONTAINER, {
       description: 'api',
     })
     expect((next['x-turbopanel'] as { source: { buildKind?: string } }).source.buildKind).toBe(
-      'railpack'
+      'image'
     )
   })
 
   it('restores the option when the service comes back to container', () => {
-    const native = patchServiceTurbopanelExtension(RAILPACK_CONTAINER, {
+    const native = patchServiceTurbopanelExtension(IMAGE_CONTAINER, {
       serviceKind: 'node',
       framework: 'auto',
     })

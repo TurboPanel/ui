@@ -1,17 +1,16 @@
-import { StyleSheet, Text, View } from 'react-native'
-import { chrome, colors, spacing } from '@/lib/theme'
+import { StyleSheet, View } from 'react-native'
+import { StepRail } from '@/components/ui/v4/step-rail'
+import { stepStatesFromCurrent, type StepRailItem, type StepRailState } from '@/lib/step-rail'
+import { colors, spacing } from '@/lib/theme'
 
 /**
- * Numbered progress dots for a multi-step flow.
+ * The numbered step indicator for a multi-step flow, drawn by the shared
+ * `StepRail` (the same one a deploy's progress uses).
  *
- * Lifted out of `add-server-wizard.tsx`, where it had lived privately since the
- * server wizard shipped, once a second wizard (registering a GitHub App) needed
- * the same thing. `ui/AGENTS.md` had already listed it as a shipped item that
- * was never promoted to the kit.
- *
- * Steps are given as data rather than children so the indicator can render
- * done / active / upcoming state itself: a step before the active one is
- * finished, which is what the filled dot and the connector both mean.
+ * Give `steps` with their ids and `current`: a step before the current one is
+ * done, the current one waits on the person (`currentState` says otherwise,
+ * e.g. `running` while the system works), the rest are still to come. A flow
+ * that knows each step's state itself passes `states` instead.
  */
 export type WizardStepItem<TId extends string = string> = {
   id: TId
@@ -21,104 +20,31 @@ export type WizardStepItem<TId extends string = string> = {
 export function WizardSteps<TId extends string>({
   steps,
   current,
+  currentState,
+  states,
 }: Readonly<{
   steps: readonly WizardStepItem<TId>[]
   /** `null` while nothing has started: no step reads as active or done. */
-  current: TId | null
+  current?: TId | null
+  currentState?: StepRailState
+  /** Each step's own state, by id; overrides `current`. */
+  states?: Readonly<Partial<Record<TId, StepRailState>>>
 }>) {
-  const activeIndex = steps.findIndex((entry) => entry.id === current)
-
+  const items: StepRailItem[] = states
+    ? steps.map((step) => ({ id: step.id, label: step.label, state: states[step.id] ?? 'pending' }))
+    : stepStatesFromCurrent(steps, current ?? null, currentState)
   return (
-    <View style={styles.row} accessibilityRole="list">
-      {steps.map((entry, index) => {
-        const done = index < activeIndex
-        const active = entry.id === current
-        return (
-          <View key={entry.id} style={styles.item}>
-            <View style={[styles.dot, done && styles.dotDone, active && styles.dotActive]}>
-              <Text
-                style={[
-                  styles.dotText,
-                  done && styles.dotTextDone,
-                  active && styles.dotTextActive,
-                ]}
-              >
-                {index + 1}
-              </Text>
-            </View>
-            <Text style={[styles.label, active && styles.labelActive]}>{entry.label}</Text>
-            {index < steps.length - 1 ? (
-              <View style={[styles.connector, index < activeIndex && styles.connectorDone]} />
-            ) : null}
-          </View>
-        )
-      })}
+    <View style={styles.wrap}>
+      <StepRail steps={items} numbered phoneLabels="current" />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
+  wrap: {
     marginBottom: spacing.sm,
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.borderSubtle,
-  },
-  item: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    minWidth: 0,
-  },
-  dot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: colors.borderChip,
-    backgroundColor: colors.bgSecondary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dotActive: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.bgActive,
-  },
-  dotDone: {
-    borderColor: chrome.accent,
-    backgroundColor: chrome.accent,
-  },
-  dotText: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  dotTextActive: {
-    color: colors.link,
-  },
-  dotTextDone: {
-    color: colors.buttonText,
-  },
-  label: {
-    color: colors.textDim,
-    fontSize: 11,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  labelActive: {
-    color: colors.text,
-  },
-  connector: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.borderArea,
-    marginHorizontal: 2,
-  },
-  connectorDone: {
-    backgroundColor: chrome.accent,
   },
 })

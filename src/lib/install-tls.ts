@@ -7,14 +7,7 @@
  * installCommand is authoritative.
  */
 
-const LOCAL_TLDS = new Set([
-  'lan',
-  'local',
-  'internal',
-  'home',
-  'corp',
-  'localhost',
-])
+const LOCAL_TLDS = new Set(['lan', 'local', 'internal', 'home', 'corp', 'localhost'])
 
 function stripIpv6Brackets(host: string): string {
   return host.replace(/^\[/, '').replace(/\]$/, '')
@@ -88,7 +81,7 @@ export function installTlsHint(origin: string): string | null {
   if (!trimmed) return null
   if (!trimmed.startsWith('https://')) return null
   if (installOriginNeedsInsecureTls(trimmed)) {
-    return 'This URL uses the platform CA (self-signed). The install command skips TLS verification for bootstrap, then trusts the downloaded CA.'
+    return 'This URL uses the platform CA (self-signed). The install command reaches it without TLS verification only to download that CA, and keeps it only if it matches the fingerprint in the command.'
   }
   return 'This URL presents publicly trusted TLS (Cloudflare tunnel, Let’s Encrypt, or an uploaded certificate). The install command verifies TLS and does not set TURBOPANEL_INSECURE_TLS.'
 }
