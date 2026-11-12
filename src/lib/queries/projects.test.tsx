@@ -18,6 +18,7 @@ import {
   useProjects,
   useSetPrincipalPassword,
   useUpdateProject,
+  useUpdateProjectIcon,
   useUpdateProjectPrincipalAssignments,
 } from '@/lib/queries/projects'
 
@@ -179,6 +180,28 @@ describe('projects query hooks', () => {
     })
   })
 
+  it('useUpdateProjectIcon sends only the icon and marks the project and list stale', async () => {
+    updateProject.mockResolvedValueOnce({ ok: true })
+    const client = createAppQueryClient()
+    client.setQueryData(queryKeys.org(orgId).projects.detail(projectId), { project: {} })
+    client.setQueryData(queryKeys.org(orgId).projects.list(), { projects: [] })
+
+    const { result } = renderHook(() => useUpdateProjectIcon(orgId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run({ projectId, icon: '🚀' })).resolves.toMatchObject({
+      ok: true,
+    })
+    expect(updateProject).toHaveBeenLastCalledWith(projectId, { icon: '🚀' })
+    await waitFor(() => {
+      expect(
+        client.getQueryState(queryKeys.org(orgId).projects.detail(projectId))?.isInvalidated
+      ).toBe(true)
+      expect(client.getQueryState(queryKeys.org(orgId).projects.list())?.isInvalidated).toBe(true)
+    })
+  })
+
   it('useDeleteProject runs delete mutation', async () => {
     deleteProject.mockResolvedValueOnce({ ok: true })
 
@@ -186,9 +209,12 @@ describe('projects query hooks', () => {
       wrapper: createWrapper(),
     })
 
-    await expect(result.current.run(projectId)).resolves.toMatchObject({
-      ok: true,
-    })
+    await expect(result.current.run({ id: projectId, confirmName: 'Shop' })).resolves.toMatchObject(
+      {
+        ok: true,
+      }
+    )
+    expect(deleteProject).toHaveBeenCalledWith(projectId, { confirmName: 'Shop' })
   })
 
   it('useProjectCatalog loads catalog entries', async () => {
@@ -323,11 +349,13 @@ describe('projects query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run('pr-1')).resolves.toMatchObject({
+    await expect(
+      result.current.run({ principalId: 'pr-1', confirmName: 'shop' })
+    ).resolves.toMatchObject({
       ok: true,
     })
 
-    expect(deleteProjectPrincipal).toHaveBeenCalledWith(projectId, 'pr-1')
+    expect(deleteProjectPrincipal).toHaveBeenCalledWith(projectId, 'pr-1', 'shop')
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).projects.principals(projectId),

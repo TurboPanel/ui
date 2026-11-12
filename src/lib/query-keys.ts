@@ -64,6 +64,21 @@ export const queryKeys = {
     unread: ['notifications', 'unread'] as const,
     events: ['notifications', 'events'] as const,
     channels: (scope: 'user' | 'organization') => ['notifications', 'channels', scope] as const,
+    /** Every preference read. A write for every organization invalidates all of it, since each organization's read repeats those rows. */
+    preferencesAll: ['notifications', 'preferences'] as const,
+    /**
+     * One organization's rows plus the ones for every organization; `null` =
+     * those alone. A write inside one organization invalidates this prefix
+     * only, which also covers that organization's `effective` reads.
+     */
+    preferences: (organizationId: string | null) =>
+      ['notifications', 'preferences', organizationId ?? 'global'] as const,
+    /** Effective levels at one scope below an organization (project, environment, server). */
+    effective: (organizationId: string, scopeKey: string) =>
+      ['notifications', 'preferences', organizationId, 'effective', scopeKey] as const,
+    /** Project, environment and server names of one organization, for the account page's override list. */
+    scopeNames: (organizationId: string) =>
+      ['notifications', 'scope-names', organizationId] as const,
   },
   auth: {
     all: ['auth'] as const,
@@ -163,6 +178,15 @@ export const queryKeys = {
         /** PHP modes the organization offers (`/organizations/:id/php-modes`). */
         phpModes: ['org', orgId, 'php-modes'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
+        deployTimeout: ['org', orgId, 'deploy-timeout'] as const,
+        /** New-project form switches (`/organizations/:id/project-settings`). */
+        projectSettings: ['org', orgId, 'project-settings'] as const,
+        /**
+         * The same switches as read by the new-project form, where a 403/404
+         * means "both closed". Kept apart from `projectSettings` so that
+         * fallback never hides the settings tab's own load error.
+         */
+        projectFormDefaults: ['org', orgId, 'project-settings', 'form-defaults'] as const,
         managedDefaults: ['org', orgId, 'managed-defaults'] as const,
         /** Org-wide dockerd `default-address-pools` + `bip` (`/organizations/:id/docker-networking`). */
         dockerNetworking: ['org', orgId, 'docker-networking'] as const,
@@ -244,11 +268,17 @@ export const queryKeys = {
         /** What deleting the environment removes and keeps. */
         deletePreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'delete-preview'] as const,
+        /** The data volumes a Destroy can delete, and the ones it keeps. */
+        dataVolumes: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'data-volumes'] as const,
         deployPreview: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deploy-preview'] as const,
         /** Effective configuration and changes from the Base (no interval; invalidated by every config save). */
         configView: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'config-view'] as const,
+        /** Project caches of the environment (a child of `detail`). */
+        caches: (environmentId: string) =>
+          ['org', orgId, 'environment', environmentId, 'caches'] as const,
         /** Deploy history page (no interval — invalidated by deploy mutations). */
         deployments: (environmentId: string) =>
           ['org', orgId, 'environment', environmentId, 'deployments'] as const,
@@ -373,6 +403,12 @@ export const queryKeys = {
           ['org', orgId, 'managed', environmentId, 'privilege-catalogue'] as const,
         users: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'users'] as const,
+        /** Under `users`, so every invalidation of the logins refreshes it too. */
+        backupLogin: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'users', 'backup-login'] as const,
+        /** Under `users`, so deleting or changing a tool's login from the Users list refreshes the tools too. */
+        adminTools: (environmentId: string) =>
+          ['org', orgId, 'managed', environmentId, 'users', 'admin-tools'] as const,
         databases: (environmentId: string) =>
           ['org', orgId, 'managed', environmentId, 'databases'] as const,
         backups: (environmentId: string) =>
@@ -390,6 +426,17 @@ export const queryKeys = {
 
       /** The people in the organization (owners and managers). */
       members: ['org', orgId, 'members'] as const,
+
+      /** Connected Cloudflare accounts and their API tokens. */
+      tunnelCarriers: ['org', orgId, 'tunnel-carriers'] as const,
+
+      /** Certificates the panel orders itself through a DNS challenge. */
+      dnsCertificates: ['org', orgId, 'dns-certificates'] as const,
+
+      /** Tunnels, where they run, and the hostnames each carries. */
+      tunnels: ['org', orgId, 'tunnels'] as const,
+      tunnelHostnames: (tunnelId: string) =>
+        ['org', orgId, 'tunnels', tunnelId, 'hostnames'] as const,
 
       /** The organization firewall: policy, typed rules, and each server's mode + preview. */
       firewall: {
@@ -458,6 +505,20 @@ export const queryKeys = {
     upgradeServers: (offset: number, limit: number, status: string) =>
       ['admin', 'instance-updates', 'servers', offset, limit, status] as const,
     upgradeSettings: ['admin', 'instance-updates', 'settings'] as const,
+    /** The development build-and-push view (development installs only). */
+    developmentUpdates: ['admin', 'instance-updates', 'development'] as const,
+    instanceIdentity: ['admin', 'instance-identity'] as const,
+    keyRotation: ['admin', 'instance-identity', 'rotation'] as const,
+    /** Superadmin sealed-secrets read (Clear Sealing Key lives beside it). */
+    sealedSecrets: ['admin', 'instance-identity', 'sealed-secrets'] as const,
+    /** Connection modes and the edge gate (self-hosted only). */
+    ingressCapabilities: ['admin', 'ingress', 'capabilities'] as const,
+    ingressAccounts: ['admin', 'ingress', 'accounts'] as const,
+    /** The control plane's own tunnel: connector and edge halves. */
+    instanceTunnel: ['admin', 'ingress', 'tunnel'] as const,
+    /** Live read of one hostname's connection, never cached across names. */
+    hostnameIngressStatus: (id: string) => ['admin', 'ingress', 'status', id] as const,
+    panelDnsCertificate: (id: string) => ['admin', 'acme-dns', id] as const,
     platformCa: ['admin', 'platform-ca'] as const,
     trustedProxies: ['admin', 'trusted-proxies'] as const,
     signup: ['admin', 'settings', 'signup'] as const,

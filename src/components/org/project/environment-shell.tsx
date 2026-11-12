@@ -82,6 +82,26 @@ function nativeRunningLabel(label: string, lastDeploy: DeploymentGroup | null | 
   return label
 }
 
+const RUNNING_LABEL_LOADING = 'Checking…'
+
+/**
+ * "Running now" for the header. Until the containers (or, for a native app,
+ * the deploy history) have loaded nothing is claimed, never "Not started yet".
+ */
+function headerRunningLabel(
+  input: Readonly<{
+    containersLoading: boolean
+    native: boolean
+    toneLabel: string
+    lastDeploy: DeploymentGroup | null | undefined
+  }>
+): string {
+  if (input.containersLoading) return RUNNING_LABEL_LOADING
+  if (!input.native) return input.toneLabel
+  if (input.lastDeploy === undefined) return RUNNING_LABEL_LOADING
+  return nativeRunningLabel(input.toneLabel, input.lastDeploy)
+}
+
 /**
  * The same header on every tab of an environment. Line 1: the name (the
  * environment picker) and its badge, then Visit, Deploy, Restart or Start and
@@ -124,9 +144,12 @@ function EnvironmentHeader() {
       : (groupDeploymentsByGeneration(deploymentRows ?? [])[0] ?? null)
     return environmentStatusFacts({
       // A native app has no containers: its newest deploy says whether it runs.
-      runningLabel: native
-        ? nativeRunningLabel(lifecycle.toneLabel, lastDeploy)
-        : lifecycle.toneLabel,
+      runningLabel: headerRunningLabel({
+        containersLoading: lifecycle.loading,
+        native,
+        toneLabel: lifecycle.toneLabel,
+        lastDeploy,
+      }),
       lastDeploy,
       progressLabel: lifecycle.deployProgressLabel,
       now,
@@ -135,6 +158,7 @@ function EnvironmentHeader() {
     deploymentsQuery.isLoading,
     deploymentRows,
     native,
+    lifecycle.loading,
     lifecycle.toneLabel,
     lifecycle.deployProgressLabel,
     now,

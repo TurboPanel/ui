@@ -24,6 +24,7 @@ function project(partial: Partial<HomeProject>): HomeProject {
     id: 'p1',
     name: 'Shop',
     kind: 'compose',
+    icon: null,
     workspaceId: 'w1',
     detail: null,
     environments: [],
@@ -60,6 +61,111 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
     expect(tile.textContent).toBe('ShopAcmeProductionStaging+2')
     fireEvent.click(tile)
     expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
+  it('draws the chosen icon, an emoji only while emoji are allowed', () => {
+    const { container, unmount } = render(
+      <ProjectTile project={project({ icon: 'mail' })} layout="grid" onOpen={vi.fn()} />
+    )
+    expect(container.querySelector('rect')).not.toBeNull()
+    unmount()
+    const emoji = render(
+      <ProjectTile project={project({ icon: '🚀' })} layout="grid" onOpen={vi.fn()} />
+    )
+    expect(emoji.getByText('🚀')).toBeTruthy()
+    emoji.unmount()
+    const off = render(
+      <ProjectTile
+        project={project({ icon: '🚀' })}
+        layout="grid"
+        isEmojiIconAllowed={false}
+        onOpen={vi.fn()}
+      />
+    )
+    expect(off.queryByText('🚀')).toBeNull()
+    expect(off.container.querySelectorAll('path')).toHaveLength(1)
+  })
+
+  it('puts the change-icon button beside the tile button, never inside it', () => {
+    const onOpen = vi.fn()
+    const onChangeIcon = vi.fn()
+    for (const layout of ['grid', 'list', 'listStacked'] as const) {
+      const { container, unmount } = render(
+        <ProjectTile
+          project={project({ icon: 'mail' })}
+          layout={layout}
+          onOpen={onOpen}
+          onChangeIcon={onChangeIcon}
+        />
+      )
+      const buttons = Array.from(container.querySelectorAll('button'))
+      expect(buttons).toHaveLength(2)
+      for (const button of buttons) expect(button.querySelector('button')).toBeNull()
+      const icon = screen.getByRole('button', { name: 'Change icon for Shop' })
+      const tile = screen.getByRole('button', { name: /^Open Shop/ })
+      expect(icon.parentElement).toBe(tile.parentElement)
+      expect(styleOf(icon)).toMatchObject({ position: 'absolute' })
+      fireEvent.click(icon)
+      unmount()
+    }
+    expect(onChangeIcon).toHaveBeenCalledTimes(3)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('still opens the project from the tile itself', () => {
+    const onOpen = vi.fn()
+    const onChangeIcon = vi.fn()
+    render(
+      <ProjectTile
+        project={project({})}
+        layout="grid"
+        onOpen={onOpen}
+        onChangeIcon={onChangeIcon}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Open Shop/ }))
+    expect(onOpen).toHaveBeenCalledTimes(1)
+    expect(onChangeIcon).not.toHaveBeenCalled()
+  })
+
+  it('keeps the icon plain without the action, and for managed and platform tiles', () => {
+    for (const over of [{}, { kind: 'managed' as const }, { kind: 'platform' as const }]) {
+      const onChangeIcon = Object.keys(over).length > 0 ? vi.fn() : undefined
+      const { unmount } = render(
+        <ProjectTile
+          project={project(over)}
+          layout="grid"
+          onOpen={vi.fn()}
+          onChangeIcon={onChangeIcon}
+        />
+      )
+      expect(screen.queryByRole('button', { name: 'Change icon for Shop' })).toBeNull()
+      unmount()
+    }
+  })
+
+  it('keeps the cube for a platform project, whatever is stored', () => {
+    const { container, queryByText } = render(
+      <ProjectTile
+        project={project({ kind: 'platform', icon: '🚀' })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    expect(queryByText('🚀')).toBeNull()
+    expect(container.querySelectorAll('path')).toHaveLength(1)
+  })
+
+  it('keeps the managed icon for a managed database, whatever is stored', () => {
+    const { container, queryByText } = render(
+      <ProjectTile
+        project={project({ kind: 'managed', icon: '🚀' })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    expect(queryByText('🚀')).toBeNull()
+    expect(container.querySelectorAll('path')).toHaveLength(3)
   })
 
   it('speaks the whole tile in its own label, with each status word', () => {
@@ -104,6 +210,38 @@ describe.each(SCENARIOS)('Project tile ($name)', (scenario) => {
     expect(pinned.querySelector('svg')).not.toBeNull()
     const weight = (el: Element) => styleOf(el.querySelector('span'))
     expect(weight(primary)).not.toEqual(weight(pinned))
+  })
+
+  it('shows the status instead of the name when there is one environment', () => {
+    render(
+      <ProjectTile
+        project={project({ environments: [env('e1', 'Production', 'running')] })}
+        layout="grid"
+        onOpen={vi.fn()}
+      />
+    )
+    expect(screen.getByText('Running')).toBeTruthy()
+    expect(screen.queryByText('Production')).toBeNull()
+  })
+
+  it('right aligns the pills on a grid tile only', () => {
+    const view = (layout: 'grid' | 'list') =>
+      render(
+        <ProjectTile
+          project={project({ environments: [env('e1', 'Production', 'running')] })}
+          layout={layout}
+          onOpen={vi.fn()}
+        />
+      )
+    view('grid')
+    expect(styleOf(screen.getByText('Running').parentElement?.parentElement).justifyContent).toBe(
+      'flex-end'
+    )
+    cleanup()
+    view('list')
+    expect(
+      styleOf(screen.getByText('Running').parentElement?.parentElement).justifyContent
+    ).toBeUndefined()
   })
 
   it('folds the rest into a dashed plus-N pill named for screen readers', () => {

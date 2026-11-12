@@ -7,6 +7,7 @@ import {
   ORG_SETTINGS_TAB_LABELS,
   SERVER_DETAIL_TAB_IDS,
   SERVER_DETAIL_TAB_LABELS,
+  SERVERS_NETWORK_SUB_ROUTE_IDS,
   datacenterHref,
   orgRouteHref,
   orgSettingsTabHref,
@@ -22,7 +23,7 @@ export const SEARCH_GROUP_ORDER = [
   'Servers',
   'Projects',
   'Databases',
-  'Datacenters',
+  'Datacenter Networks',
   'Pages',
 ] as const
 
@@ -112,7 +113,7 @@ function pageItems(orgId: string, data: SearchData): SearchItem[] {
     keywords: '',
   }))
   const sub = (
-    area: 'servers' | 'network' | 'managed',
+    area: 'servers' | 'managed',
     subId: string,
     name: string,
     keywords = ''
@@ -131,15 +132,20 @@ function pageItems(orgId: string, data: SearchData): SearchItem[] {
       },
     ]
   }
-  const networkPages = ORG_AREAS.find((a) => a.id === 'network')?.subRoutes.map((entry) => ({
-    id: `network-${entry.id}`,
-    name: entry.label,
-    type: 'Network',
-    group: 'Pages' as const,
-    href: orgRouteHref(orgId, 'network', entry.pathSegment),
-    icon: 'network' as const,
-    keywords: '',
-  }))
+  // The pages that used to be the Network area: under Servers, with the Network icon.
+  const networkPages = ORG_AREAS.find((a) => a.id === 'servers')
+    ?.subRoutes.filter((entry) =>
+      (SERVERS_NETWORK_SUB_ROUTE_IDS as readonly string[]).includes(entry.id)
+    )
+    .map((entry) => ({
+      id: `servers-${entry.id}`,
+      name: entry.label,
+      type: 'Servers',
+      group: 'Pages' as const,
+      href: orgRouteHref(orgId, 'servers', entry.pathSegment),
+      icon: 'network' as const,
+      keywords: 'network',
+    }))
   const settingsPages = ORG_SETTINGS_TAB_IDS.filter((tab) => tab !== 'general').map(
     (tab): SearchItem => ({
       id: `org-settings-${tab}`,
@@ -153,7 +159,7 @@ function pageItems(orgId: string, data: SearchData): SearchItem[] {
   )
   return [
     ...pages,
-    ...sub('servers', 'datacenters', 'Datacenters'),
+    ...sub('servers', 'datacenters', 'Datacenter Networks'),
     ...sub('servers', 'keys', 'Pending Keys', 'registration keys unused'),
     ...sub('servers', 'tls', 'TLS Certificates', 'tls ssl server certificates'),
     ...sub('servers', 'settings', 'Server Settings', 'defaults timezone'),
@@ -184,7 +190,7 @@ function generalActions(orgId: string, data: SearchData): SearchItem[] {
       ? [
           action(
             'add-server',
-            'Add server',
+            'Add Server',
             serversAddHref(orgId),
             'new create enroll host',
             'action-add'
@@ -210,7 +216,7 @@ function generalActions(orgId: string, data: SearchData): SearchItem[] {
           action(
             'invite-member',
             'Invite member',
-            orgSettingsTabHref(orgId, 'members'),
+            orgSettingsTabHref(orgId, 'access'),
             'add people user team',
             'action-add'
           ),
@@ -220,9 +226,9 @@ function generalActions(orgId: string, data: SearchData): SearchItem[] {
       ? [
           action(
             'update-panel',
-            'Pause or Resume Updates',
+            'Pause All Updates',
             adminAreaHref('updates'),
-            'update upgrade version release automatic'
+            'update upgrade version release automatic pause resume'
           ),
         ]
       : []),
@@ -318,9 +324,9 @@ function objectItems(orgId: string, data: SearchData): SearchItem[] {
   }))
   const datacenters = data.datacenters.map((datacenter): SearchItem => ({
     id: `datacenter-${datacenter.id}`,
-    name: datacenter.name?.trim() || 'Datacenter',
-    type: 'Datacenter',
-    group: 'Datacenters',
+    name: datacenter.name?.trim() || 'Datacenter Network',
+    type: 'Datacenter Network',
+    group: 'Datacenter Networks',
     href: datacenterHref(orgId, datacenter.id),
     icon: 'servers',
     keywords: '',

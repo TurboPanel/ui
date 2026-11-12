@@ -1,4 +1,4 @@
-# Page Override: Datacenters
+# Page Override: Datacenter Networks
 
 > Overrides `design-system/turbopanel/MASTER.md` for `/[orgId]/servers/datacenters` and `/[orgId]/servers/datacenters/:id`.
 
@@ -8,7 +8,7 @@
 - Detail → `datacenter-detail-section.tsx` at `/servers/datacenters/:id`
 - Legacy `/network/sites/:id` redirects here
 
-**Job:** A datacenter is a **logical routing domain, not a building** — one or more mutually routable private subnets (IPv4 and/or IPv6), plus member pins; a server may belong to several datacenters. Each carries a routing `priority` (lower wins, default 100) and a `trusted` flag (default true; false when the L2 is not under the operator's control). Not a second CRUD surface under Network. Subnets are all mutually routable inside the datacenter.
+**Job:** A datacenter network (UI words; code, routes and API keep `datacenter`) is a **network inside a datacenter, not the building** — one or more mutually routable private subnets (IPv4 and/or IPv6), plus member pins; a server may be on several datacenter networks. Servers on a shared trusted one talk directly; across an untrusted one TurboFabric carries the traffic. Each carries a routing `priority` (lower wins, default 100) and a `trusted` flag (default true; false when the L2 is not under the operator's control). Not a second CRUD surface under Network. Subnets are all mutually routable inside the datacenter network.
 
 ---
 
@@ -16,16 +16,17 @@
 
 - One job: **dense table**, not site cards or a dashboard of widgets
 - Row press navigates to `/[orgId]/servers/datacenters/[datacenterId]`
-- Page title **Datacenters** + a short `pageCopy` line (not a how-to paragraph)
-- **+ Datacenter** (manage-gated) in the table toolbar; disabled unless ≥1 server reports a private IP; navigates to `/servers/datacenters/new`
-- Empty list: table panel with **+ Datacenter** and `statePanel` — **do not** auto-open the create form
+- Page title **Datacenter Networks** + a short `pageCopy` line (not a how-to paragraph)
+- **+ Datacenter Network** (manage-gated) in the table toolbar; disabled unless ≥1 server reports a private IP; navigates to `/servers/datacenters/new`
+- Empty list: table panel with **+ Datacenter Network** and `statePanel` — **do not** auto-open the create form
 - Empty org with no reported private IPs: same empty list plus the eligibility hint
 - No hero, no decorative bento above the table
 
 ## Density
 
-- Table-first: Datacenter | Country | Servers | Subnets | Routing | Timezone
-- Routing column: mono `P{priority}` plus a **Trusted** (`ok`) / **Untrusted** (`pending`) `Badge` — both on the list payload (`priority` / `trusted`), never a detail fetch
+- Table-first: Datacenter Network | Country | Servers | Subnets | Routing | Timezone
+- Routing column: a **Trusted** (`ok`) / **Untrusted** (`pending`) `Badge` on every row; mono `P{priority}` only on rows where priority can change anything — a trusted network that shares at least two servers with another trusted one (`networksWherePriorityMatters` over `sharedServerNetworks(useOrgServers)`). All from the list payload, never a detail fetch
+- Priority ties: the list GET's `equal_priority` warnings, narrowed by `overlappingPriorityTies` to networks that share servers, show as a warning `InlineNotice` above the table. A tie between networks with no shared servers decides nothing and is not shown
 - Subnets column: `formatDatacenterSubnetSummary(privateCidrs)` — em dash, a single CIDR, or `10.0.0.0/24 +2` when more than one. List payload has `privateCidrs` only — never fetch detail per row
 - Web row hover (`bgSecondary`) and zebra (`bgInset`)
 - Description as muted subtext under the name when present
@@ -50,18 +51,18 @@
 
 ## Detail (panel order)
 
-1. **Datacenter** — display name + description (manage-gated save)
+1. **Datacenter Network** — display name + description (manage-gated save)
 2. **Subnets** — one `detailCard` per subnet: monospace CIDR (read-only / immutable), `IPv4`/`IPv6` text badge (`segmentChip` style — never colour alone), optional label, `memberCount` (“3 servers”). Empty: `statePanel` “No subnets yet — add one.” Loading: muted “Loading…”.
    - **Add subnet** (manage-gated): CIDR + optional label. Client-validate with `isValidCidr`, echo `normalizeCidr`, pre-check overlap with `cidrsOverlap`. **400** `invalid_cidr` → “Enter a valid IPv4 or IPv6 CIDR.” **409** `subnet_overlaps` → “That range overlaps an existing subnet in this organization.”
    - **Rename** (`name`) via `PATCH …/subnets/:networkId` — never send `cidr`
    - **Delete subnet**: two-press confirm; disabled while `memberCount > 0` (“Unassign the pinned servers first.”); **409** `subnet_has_members` uses the same copy
-3. **Routing** — one `SectionPanel` (collapsible, hint `Priority N · Trusted|Untrusted`) holding three policies that all save through **one** merged `options` write:
-   - **Address preference** — `SegmentedControl` **Prefer IPv6** / **Prefer IPv4** (default IPv6 when `options.addressPreference` is absent). One muted note: “Only applies when both servers have an address in the same datacenter in both families.”
-   - **Priority** — numeric `TextField` (mono, integer `0`–`1000`, **lower wins**, default `100`). Client-validate with `parseDatacenterPriorityDraft` before sending: the instance **drops** an out-of-range value rather than clamping, so an unvalidated save looks like a no-op. The hint names the current winner in plain language — `findDatacenterWinnerHint` over `useDatacenters` + `useOrgServers` (via `partitionSharedDatacenters`): *“Backhaul (priority 10) currently wins over Primary LAN (100) for db-1 ↔ db-2.”* When no server pair shares this datacenter with another trusted one, the hint says priority changes nothing yet.
+3. **Routing** — one `SectionPanel` (collapsible, hint `Priority N · Trusted|Untrusted`, or just `Trusted|Untrusted` when the priority field is hidden) holding three policies that all save through **one** merged `options` write:
+   - **Address preference** — `SegmentedControl` **Prefer IPv6** / **Prefer IPv4** (default IPv6 when `options.addressPreference` is absent). One muted note: “Only applies when both servers have an address on the same datacenter network in both families.”
+   - **Priority** — shown only when `priorityMatters`: this network is trusted and shares at least two servers with another trusted network. Untrusted networks and networks with no overlap never show it; the stored number is kept and saved unchanged. Numeric `TextField` (mono, integer `0`–`1000`, **lower wins**, default `100`). Client-validate with `parseDatacenterPriorityDraft` before sending: the instance **drops** an out-of-range value rather than clamping, so an unvalidated save looks like a no-op. The hint names the current winner in plain language — `findDatacenterWinnerHint` over `useDatacenters` + `useOrgServers` (via `partitionSharedDatacenters`): *“Backhaul (priority 10) currently wins over Primary LAN (100) for db-1 ↔ db-2.”* The hint also names the other networks (`formatPriorityRivals`). A tie with one of them replaces the winner sentence with a warning `InlineNotice` naming the tied networks.
    - **Trusted / Untrusted** — `SettingRow` + `Toggle` (`onLabel` Trusted / `offLabel` Untrusted). Description states both consequences literally: traffic across an untrusted datacenter is forced through TurboFabric and encrypted, and a failover replica across it is refused (`failover_requires_trusted_datacenter`). When toggled off while pinned servers host managed members (one `useOrganizationManaged` read, enabled only at that moment), an `InlineNotice` (`warning`) says stored replication transports and ProxySQL backends will be recomputed on save — `PATCH /datacenters/:id` fans out on a policy change.
    - Displayed `priority` / `trusted` come from the **effective top-level** `datacenter.priority` / `datacenter.trusted` (the API already applied defaults), never from `options`. Save via `PATCH /datacenters/:id` with `mergeDatacenterOptions` so timezone, SSH port, and NTP are not clobbered.
 4. **Member servers** — rows from detail `members[]` joined to `useOrgServers` (a server may appear multiple times). Each pin: selectable monospace address, IPv4/IPv6 badge, owning subnet CIDR (`networkId`, fallback `subnetForAddress`), and a **Stale** `Badge` (`pending` tone, text label — never colour-only) when `pin.stale`; the expanded body carries an `InlineNotice` (`warning`) with `STALE_PIN_COPY`: the daemon stopped reporting this address and the automatic repin found no unambiguous replacement; the pin still names the last known address; re-pin by unassigning and re-adding, or wait for the host to report a usable address. Hint `{pins} pins · {servers} servers`. Picker: `listServersWithCandidateAddresses` / `candidateMemberNetworks` — both families, **gated to addresses inside this datacenter’s subnets**, `FormSelect` only. Do not offer IPs that would create a new subnet; add those CIDRs under Subnets first. Empty picker: `memberAssignEmptyCopy`. Unassign removes **all** pins for that server in this datacenter (announce when the server holds more than one). Errors map through `network-error-copy.ts`: **409** `address_in_use` → “That address is already pinned.” **400** `address_not_in_any_subnet` → “That address is not in any subnet of this datacenter.” Collision **409**s (`subnet_overlaps`, `cidr_overlaps_*`) use the shared sentences with the conflicting range appended.
-5. **TurboFabric** — relays in this datacenter (role, tp0, other datacenters, **Primary** badge, **Via** when a `gateway`-kind path is selected); empty: no relays here (**manage-gated**); rows deep-link to `/network/fabric`. Missing-subnet warning when the datacenter has no subnets
+5. **TurboFabric** — relays in this datacenter (role, tp0, **Other Datacenter Networks**, **Primary** badge, **Via** when a `gateway`-kind path is selected); empty: no relays here (**manage-gated**); rows deep-link to `/servers/fabric`. Missing-subnet warning when the datacenter has no subnets
 6. **Timezone** — picker + enforce toggle; save through `mergeDatacenterOptions` so address preference survives
 7. **SSH port** — optional override (empty inherits org, then 22); save through `mergeDatacenterOptions`. Desired config only — does not rewrite sshd
 8. **NTP defaults** — enabled + servers + fallback; empty+off inherits org; **Clear (inherit)** sends `ntp: null`. Apply still happens on each server Time tab

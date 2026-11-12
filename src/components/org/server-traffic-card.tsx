@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import {
   Badge,
@@ -10,14 +10,17 @@ import {
   TextField,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { parseDatacenterPriorityDraft } from '@/lib/datacenter-routing'
+import { parseDatacenterPriorityDraft, sharedServerNetworks } from '@/lib/datacenter-routing'
 import type {
   DatacenterRecord,
+  OrgServerRecord,
   ServerTrafficMapNetwork,
   ServerTrafficMapNic,
   ServerTrafficMapPeer,
 } from '@/lib/instance-api'
 import { useCan } from '@/lib/query-client'
+import { useOrgServers } from '@/lib/queries/servers'
+import { resolveServerLabel } from '@/lib/resource-labels'
 import {
   useChooseServerTrafficNetwork,
   useDatacenters,
@@ -228,10 +231,10 @@ function PeerNetworkLine({ net }: Readonly<{ net: ServerTrafficMapNetwork }>) {
   )
 }
 
-function PeerRow({ peer }: Readonly<{ peer: ServerTrafficMapPeer }>) {
+function PeerRow({ peer, label }: Readonly<{ peer: ServerTrafficMapPeer; label: string }>) {
   return (
     <View style={styles.row}>
-      <Text style={panelStyles.detailTitle}>{peer.name ?? 'Unnamed server'}</Text>
+      <Text style={panelStyles.detailTitle}>{label}</Text>
       <Text style={panelStyles.muted}>
         {peerSummary(peer.chosenDatacenterId, peer.sharedNetworks)}
       </Text>
@@ -257,15 +260,18 @@ function NetworksList({
   orgId,
   datacenters,
   peers,
+  servers,
   canManage,
 }: Readonly<{
   orgId: string
   datacenters: readonly DatacenterRecord[]
   peers: readonly ServerTrafficMapPeer[]
+  servers: readonly OrgServerRecord[]
   canManage: boolean
 }>) {
   const { used, unused } = orderedNetworks(datacenters)
-  const tied = tiedNetworkIds(used)
+  const shared = useMemo(() => sharedServerNetworks(servers), [servers])
+  const tied = tiedNetworkIds(used, shared)
   const names = new Map(datacenters.map((dc) => [dc.id, dc.name ?? 'Unnamed network']))
   const rows = [
     ...used.map((dc, index) => ({ dc, position: index + 1 })),
@@ -301,6 +307,8 @@ export function ServerTrafficCard({
   const canManage = useCan('organization', orgId, 'organization:manage')
   const datacenters = useDatacenters(orgId)
   const map = useServerTrafficMap(orgId, serverId)
+  // A server without a display name goes by its hostname, as everywhere else.
+  const servers = useOrgServers(orgId).data?.servers
   const networks = datacenters.data?.datacenters ?? []
   const peers = map.data?.peers ?? []
   const nics = map.data?.nics ?? []
@@ -335,7 +343,13 @@ export function ServerTrafficCard({
   return (
     <SectionPanel title="Server traffic" hint={EXPLANATION}>
       <Text style={panelStyles.detailTitle}>Networks, in the order they are used</Text>
-      <NetworksList orgId={orgId} datacenters={networks} peers={peers} canManage={canManage} />
+      <NetworksList
+        orgId={orgId}
+        datacenters={networks}
+        peers={peers}
+        servers={servers ?? []}
+        canManage={canManage}
+      />
       <Text style={panelStyles.detailTitle}>Other servers reached from here</Text>
       {peers.length === 0 ? (
         <Text style={panelStyles.muted}>
@@ -344,7 +358,13 @@ export function ServerTrafficCard({
       ) : (
         <View style={styles.list}>
           {peers.map((peer) => (
-            <PeerRow key={peer.serverId} peer={peer} />
+            <PeerRow
+              key={peer.serverId}
+              peer={peer}
+              label={
+                peer.name?.trim() || resolveServerLabel(peer.serverId, servers) || peer.serverId
+              }
+            />
           ))}
         </View>
       )}

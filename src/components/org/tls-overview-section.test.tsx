@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
 
 const state = vi.hoisted(() => ({
   deleteRun: vi.fn(),
   createRun: vi.fn(),
+  rows: [] as TlsRecord[],
+  acmeEnabled: true,
+  settingsFailed: false,
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -15,8 +18,16 @@ vi.mock(
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
 vi.mock('@/components/org/organization-ca-panel', () => ({ OrganizationCaPanel: () => null }))
-vi.mock('@/components/ui', () => ({
+vi.mock('@/components/org/tls-contact-email-field', () => ({ TlsContactEmailField: () => null }))
+vi.mock('@/components/org/tls-acme-opt-in', () => ({
+  TlsAcmeOptIn: () => null,
+  TlsAcmeTermsRenewal: () => null,
+}))
+vi.mock('@/components/org/dns-certificate-panel', () => ({ DnsCertificatePanel: () => null }))
+vi.mock('@/components/ui', async () => ({
+  TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,
   Button: ({ label, onPress }: { label: string; onPress?: () => void }) => (
     <button onClick={onPress}>{label}</button>
   ),
@@ -26,14 +37,22 @@ vi.mock('@/components/ui', () => ({
   ),
   EmptyState: () => null,
   LoadingState: () => null,
-  SectionPanel: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
+  SectionPanel: ({ hint, children }: { hint?: string; children?: unknown }) => (
+    <div>
+      {hint ? <p>{hint}</p> : null}
+      {children as never}
+    </div>
+  ),
   SegmentedControl: () => null,
   SettingRow: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
   TextField: () => null,
   Toggle: () => null,
 }))
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: () => ({ data: { acmeEnabled: true }, isLoading: false, isError: false }),
+  useQuery: () =>
+    state.settingsFailed
+      ? { data: undefined, isLoading: false, isError: true, error: new Error('Network down') }
+      : { data: { acmeEnabled: state.acmeEnabled }, isLoading: false, isError: false },
   useQueryClient: () => ({ setQueryData: vi.fn() }),
 }))
 vi.mock('@/lib/query-client', () => ({
@@ -43,17 +62,17 @@ vi.mock('@/lib/query-client', () => ({
 }))
 vi.mock('@/lib/tls-managed-dates', () => ({ tlsDateLines: () => [], tlsStoredCopyLines: () => [] }))
 
-const certificate = (id: string, name: string): TlsRecord =>
+const certificate = (id: string, name: string, source = 'lets_encrypt'): TlsRecord =>
   ({
     id,
     name,
-    source: 'lets_encrypt',
+    source,
     metadata: { status: 'automatic', dnsNames: [name] },
   }) as unknown as TlsRecord
 
 vi.mock('@/lib/queries/tls', () => ({
   useTlsLibrary: () => ({
-    data: { tls: [certificate('t1', 'one.example'), certificate('t2', 'two.example')] },
+    data: { tls: state.rows },
     isLoading: false,
     isError: false,
   }),
@@ -64,10 +83,35 @@ vi.mock('@/lib/queries/tls', () => ({
 import { TlsOverviewSection } from './tls-overview-section'
 
 beforeEach(() => {
+  state.rows = [certificate('t1', 'one.example'), certificate('t2', 'two.example')]
+  state.acmeEnabled = true
+  state.settingsFailed = false
   state.deleteRun = vi.fn(() => Promise.resolve({ ok: true, value: {} }))
   state.createRun = vi.fn(() => Promise.resolve({ ok: true, value: {} }))
 })
 afterEach(cleanup)
+
+describe("TlsOverviewSection Let's Encrypt hint", () => {
+  const offHint = "Off until your organization accepts the Let's Encrypt terms and turns it on"
+
+  it('does not say it is off while the switch is on', () => {
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.queryByText(offHint)).toBeNull()
+  })
+
+  it('explains how to turn it on while it is off', () => {
+    state.acmeEnabled = false
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getByText(offHint)).toBeTruthy()
+  })
+
+  it('does not say it is off when the setting could not be read', () => {
+    state.settingsFailed = true
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.queryByText(offHint)).toBeNull()
+    expect(screen.getByText('Network down')).toBeTruthy()
+  })
+})
 
 describe('TlsOverviewSection delete', () => {
   it('says why a delete failed on that certificate, even on the first failure', async () => {
@@ -75,12 +119,90 @@ describe('TlsOverviewSection delete', () => {
       Promise.resolve({ ok: false, error: 'This certificate is still pinned by a hosting.' })
     )
     render(<TlsOverviewSection orgId="o1" />)
-    const [, second] = screen.getAllByText('Delete certificate')
+    const [, second] = screen.getAllByText('Delete')
     fireEvent.click(second as HTMLElement)
+    const confirm = screen.getByRole('button', { name: 'Delete Certificate' }) as HTMLButtonElement
+    expect(confirm.disabled).toBe(true)
+    fireEvent.change(within(screen.getByRole('dialog')).getByRole('textbox'), {
+      target: { value: 'two.example' },
+    })
+    expect(confirm.disabled).toBe(false)
+    fireEvent.click(confirm)
     const message = await screen.findByText('This certificate is still pinned by a hosting.')
     expect(state.deleteRun).toHaveBeenCalledWith('t2')
     expect(message.parentElement?.textContent).toContain('two.example')
     expect(message.parentElement?.textContent).not.toContain('one.example')
+  })
+
+  it('offers no Delete on the Organization CA and points to Rotate instead', () => {
+    state.rows = [
+      certificate('ca', 'Company root', 'organization_ca'),
+      certificate('t2', 'two.example'),
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getAllByText('Delete')).toHaveLength(1)
+    const hint = screen.getByText('Replace it with Rotate on the Organization CA panel.')
+    expect(hint.parentElement?.textContent).toContain('Company root')
+    expect(hint.parentElement?.textContent).not.toContain('two.example')
+  })
+
+  it("labels a certificate TurboPanel ordered by DNS challenge as Let's Encrypt", () => {
+    state.rows = [
+      {
+        ...certificate('d1', 'dns.example', 'upload'),
+        metadata: {
+          status: 'ready',
+          dnsNames: ['dns.example'],
+          acme: { managedBy: 'panel', challengeType: 'dns-01' },
+        },
+      } as unknown as TlsRecord,
+      certificate('u1', 'upload.example', 'upload'),
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getByText("Let's Encrypt · Ready")).toBeTruthy()
+    expect(screen.getByText('Uploaded · Issued and renewed by the serving host')).toBeTruthy()
+    // Only the DNS-ordered row says the control plane will not renew it.
+    const note = screen.getAllByText(
+      'This certificate will not renew from the control plane. It keeps working until it expires.'
+    )
+    expect(note).toHaveLength(1)
+    expect(note[0]?.parentElement?.textContent).toContain('dns.example')
+  })
+
+  it('shows who issued a DNS-ordered wildcard and from when it is valid', () => {
+    state.rows = [
+      {
+        ...certificate('w1', '*.example.net', 'upload'),
+        metadata: {
+          status: 'ready',
+          dnsNames: ['*.example.net', 'example.net'],
+          issuer: 'CN=R11,O=Let’s Encrypt,C=US',
+          notBefore: '2026-10-20T08:00:00.000Z',
+          acme: { managedBy: 'panel', challengeType: 'dns-01' },
+        },
+      } as unknown as TlsRecord,
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.getByText('Issued by CN=R11,O=Let’s Encrypt,C=US')).toBeTruthy()
+    expect(screen.getByText(/^Valid from /)).toBeTruthy()
+  })
+
+  it('leaves out placeholder issuer and start dates of an order still running', () => {
+    state.rows = [
+      {
+        ...certificate('w2', 'queued.example', 'upload'),
+        metadata: {
+          status: 'pending',
+          dnsNames: ['queued.example'],
+          issuer: '',
+          notBefore: '1970-01-01T00:00:00.000Z',
+          acme: { managedBy: 'panel', challengeType: 'dns-01' },
+        },
+      } as unknown as TlsRecord,
+    ]
+    render(<TlsOverviewSection orgId="o1" />)
+    expect(screen.queryByText(/^Issued by /)).toBeNull()
+    expect(screen.queryByText(/^Valid from /)).toBeNull()
   })
 
   it('says why a new certificate was not added, under Add certificate', async () => {

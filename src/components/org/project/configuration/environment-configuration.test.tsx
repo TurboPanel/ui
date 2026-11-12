@@ -32,6 +32,9 @@ vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
 vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => state.ctx,
 }))
+vi.mock('@/components/org/project/caches/cache-variables-group', () => ({
+  CacheVariablesGroup: () => null,
+}))
 vi.mock('@/lib/queries/environments', () => ({
   useEnvironmentConfigView: () => state.query,
 }))

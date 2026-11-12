@@ -4,6 +4,7 @@ import { Button, SegmentedControl, TextField } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { SectionHeading } from '@/components/ui/v4'
 import { ManagedAdvancedDisclosure } from '@/components/org/managed/managed-advanced-disclosure'
+import { AllDatabasesSwitch } from '@/components/org/managed/all-databases-switch'
 import { ManagedSslModePicker } from '@/components/org/managed/managed-ssl-mode-picker'
 import { ManagedExternalAccessSwitch } from '@/components/org/managed/managed-external-access-switch'
 import {
@@ -59,6 +60,7 @@ type SettingsForm = {
   /** `null` inherits the organization default (see {@link ManagedSslModePicker}). */
   sslMode: ManagedSslMode | null
   engineConfig: string
+  allowAllDatabasesLogins: boolean
   restart: string
   stopGrace: string
   shmSize: string
@@ -82,6 +84,7 @@ export function settingsToForm(settings: ManagedSettings, storedImage: string): 
     image: storedImage,
     sslMode: settings.ssl.mode ?? null,
     engineConfig: settings.engineConfig ?? '',
+    allowAllDatabasesLogins: settings.allowAllDatabasesLogins ?? false,
     restart: settings.dockerOptions?.restart ?? 'unless-stopped',
     stopGrace:
       settings.dockerOptions?.stopGracePeriodSeconds != null
@@ -143,6 +146,8 @@ export function buildManagedSettingsPayload(form: SettingsForm): BuildSettingsRe
       // value instead would freeze it against later org-default changes.
       ssl: form.sslMode ? { mode: form.sslMode } : {},
       engineConfig: form.engineConfig.trim() || undefined,
+      // Always sent: the control plane merges settings, so a missing key would keep a stored true.
+      allowAllDatabasesLogins: form.allowAllDatabasesLogins,
       dockerOptions: {
         restart: form.restart,
         stopGracePeriodSeconds: parseOptionalNumber(form.stopGrace),
@@ -647,6 +652,14 @@ export function ManagedSettingsPanel({
               versionLabel={versionLabel}
             />
           )}
+          <AllDatabasesSwitch
+            value={form.allowAllDatabasesLogins}
+            disabled={disabled}
+            hint="Lets a login of this Database Cluster read every database, including ones added later. The organization switch must be on too. Saved with Apply."
+            onChange={(allowAllDatabasesLogins) =>
+              setForm((current) => ({ ...current, allowAllDatabasesLogins }))
+            }
+          />
           <LabeledNumber
             label="Manual backups to keep"
             hint="Applies to backups made with Back up now. Each schedule keeps its own count."

@@ -37,6 +37,7 @@ import {
   mergeComposeOverlay,
   normalizeCompose,
   readComposeEditorView,
+  readServiceTurbopanelExtension,
   restoreComposeTurbopanelExtensions,
   setComposeEditorView,
   stripComposePlacement,
@@ -45,6 +46,7 @@ import {
   type ComposeEditorView,
   type ComposeLintIssue,
 } from '@/lib/compose'
+import { reachCandidates } from '@/lib/compose/reach'
 import {
   readComposeNetworks,
   writeComposeNetworks,
@@ -556,7 +558,7 @@ function ComposeDocumentBody({
       <View style={styles.documentPrincipals}>
         <ComposePrincipalsFields
           principals={principals}
-          disabled={saving || hideSave}
+          disabled={saving}
           onChange={onPrincipalsChange}
           onRename={onPrincipalRename}
         />
@@ -589,6 +591,7 @@ export function ComposeEditorSection({
   renderHostingEditor,
   renderReleasesPanel,
   extraPrincipalAliases,
+  hideReach = false,
 }: Readonly<{
   document: unknown
   onSave: (document: ComposeDocument) => Promise<void>
@@ -616,6 +619,11 @@ export function ComposeEditorSection({
    * be flagged.
    */
   extraPrincipalAliases?: readonly string[]
+  /**
+   * Leave out a container's helper port fields. An environment layer does not
+   * restate the Base's service kinds or accounts, so reach is edited on the Base.
+   */
+  hideReach?: boolean
   /**
    * When set (and a draft store is present), unsaved edits survive Overview /
    * Compose / Services route remounts for this scope key.
@@ -1170,6 +1178,15 @@ export function ComposeEditorSection({
     }
   }, [hideHeader, tab, yaml, draft])
 
+  const reachableServices = useMemo(() => {
+    const services: Record<string, { kind?: string; account?: string }> = {}
+    for (const [name, service] of Object.entries(servicesFrom(draft))) {
+      const extension = readServiceTurbopanelExtension(service)
+      services[name] = { kind: extension?.serviceKind, account: extension?.principal }
+    }
+    return reachCandidates(services)
+  }, [draft])
+
   /** One service's compose fields — shared by the card list and the document. */
   const serviceCard = (name: string) => {
     const service = servicesFrom(draft)[name]
@@ -1180,6 +1197,7 @@ export function ComposeEditorSection({
         nameDraft={serviceNameDrafts[name] ?? name}
         saving={saving}
         principalAliases={principalAliases}
+        {...(hideReach ? {} : { reachableServices })}
         {...(hideSave ? {} : { onDeclarePrincipalAlias: () => declarePrincipalAlias(name) })}
         // Only the create wizard hides Save; scheduled jobs wait until the
         // project exists.
@@ -1240,7 +1258,7 @@ export function ComposeEditorSection({
         />
         <ComposePrincipalsFields
           principals={principals}
-          disabled={saving || hideSave}
+          disabled={saving}
           onChange={setPrincipals}
           onRename={renamePrincipal}
         />

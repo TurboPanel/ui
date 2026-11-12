@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { UpdateCheckTooSoonError } from './instance-api'
+import { ReleaseUnreachableError, UpdateCheckTooSoonError } from './instance-api'
 import {
   CHECK_NOW_HELP,
   checkCadence,
@@ -10,11 +10,13 @@ import {
   lastCheckedText,
   isUpdateWaiting,
   nextCheckText,
-  PAUSE_UPDATES_PROMPT,
+  PAUSE_UPDATES_EXPLAINED,
+  PAUSE_UPDATES_TITLE,
+  pauseSwitchNote,
   pausedByLabel,
   pausedSinceText,
-  resumeUpdatesPrompt,
   SERVER_UPDATES_AUTOMATIC_COPY,
+  UPDATE_NOW_UNREACHABLE,
   UPDATE_WAITING_COPY,
   waitingSentence,
 } from './update-automation'
@@ -69,19 +71,23 @@ describe('next check and the confirmations', () => {
     expect(nextCheckText(undefined, fmt)).toBeNull()
   })
 
-  it('pause says a run in progress finishes its servers, then stops', () => {
-    expect(PAUSE_UPDATES_PROMPT).toContain(
-      'An update in progress finishes the servers it is updating, then stops.'
-    )
+  it('pause says what stops and what does not', () => {
+    expect(PAUSE_UPDATES_TITLE).toBe('Pause All Updates?')
+    const text = PAUSE_UPDATES_EXPLAINED.join(' ')
+    // No new update starts, from the schedule or from Update Now.
+    expect(text).toContain('not at the scheduled check, and not with Update Now')
+    // An update in progress is not cut off: started servers finish, the rest are skipped.
+    expect(text).toContain('An update already in progress is not stopped.')
+    expect(text).toContain('Servers it has not reached yet are skipped')
+    // Turning it off resumes nothing by itself.
+    expect(text).toContain('Turning this off starts nothing right away.')
   })
 
-  it('resume says updates start again at the next check', () => {
-    expect(resumeUpdatesPrompt('2026-10-27T11:17:00.000Z', fmt)).toBe(
-      'Resume updates? They start again at the next check (<2026-10-27T11:17:00.000Z>).'
+  it('says under the switch what its state means', () => {
+    expect(pauseSwitchNote(true)).toBe(
+      'No update starts. Turning this off starts nothing right away; the next check or Update Now does.'
     )
-    expect(resumeUpdatesPrompt(null, fmt)).toBe(
-      'Resume updates? They start again at the next check.'
-    )
+    expect(pauseSwitchNote(false)).toBe('Updates start on their own.')
   })
 
   it('formats with a local date and time, and a dash for nonsense', () => {
@@ -113,7 +119,10 @@ describe('what waits', () => {
   })
 
   it('says a server updates on its own', () => {
-    expect(SERVER_UPDATES_AUTOMATIC_COPY).toMatch(/^Updates automatically\./)
+    expect(SERVER_UPDATES_AUTOMATIC_COPY).toBe(
+      'Updates automatically. An administrator can use Pause All Updates in Admin > Updates.'
+    )
+    expect(SERVER_UPDATES_AUTOMATIC_COPY).not.toMatch(/instance/i)
   })
 })
 
@@ -149,6 +158,16 @@ describe('Check Now words', () => {
     })
   })
 
+  it('says the release server could not be reached, as Update Now does', () => {
+    expect(checkNowRefusal(new ReleaseUnreachableError('x'))).toEqual({
+      text: UPDATE_NOW_UNREACHABLE,
+      clearAfterMs: null,
+    })
+    expect(UPDATE_NOW_UNREACHABLE).toBe(
+      'The release server could not be reached. Try again in a few minutes.'
+    )
+  })
+
   it('falls back to the plain error for anything else, which stays', () => {
     expect(checkNowRefusal(new Error('HTTP 500')).clearAfterMs).toBeNull()
     expect(checkNowRefusal(null)).toEqual({
@@ -170,11 +189,11 @@ describe('how updates run', () => {
 
   it('says updates are paused instead of that they install on their own', () => {
     const text = updatesCadenceText({ updatesPaused: true, checkIntervalMinutes: 5 })
-    expect(text).toBe('Updates are paused. Nothing new starts until they are resumed.')
-    expect(text).not.toMatch(/on their own/)
-    expect(checkNowHelp(true)).toBe(
-      'Check Now only looks for new builds. Nothing starts until updates are resumed.'
+    expect(text).toBe(
+      'Updates are paused. Nothing new starts until Pause All Updates is turned off.'
     )
+    expect(text).not.toMatch(/on their own/)
+    expect(checkNowHelp(true)).toBe('Check Now only looks for new builds.')
     expect(checkNowHelp(false)).toBe(CHECK_NOW_HELP)
   })
 })

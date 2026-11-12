@@ -1,5 +1,5 @@
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
-import type { ServerServicesDatabaseRole, ServerServicesRecord } from '@/lib/instance-api'
+import type { IpScope, ServerServicesDatabaseRole, ServerServicesRecord } from '@/lib/instance-api'
 import { moreLabel } from '@/lib/server-delete-preview'
 
 type StatusTone = 'ok' | 'muted' | 'danger' | 'pending' | 'info'
@@ -56,6 +56,11 @@ export function databaseEngineLabel(engine: string): string {
     default:
       return engine
   }
+}
+
+/** Screen words for an address scope; the stored value stays `public` / `datacenter`. */
+export function ipScopeLabel(scope: IpScope): string {
+  return scope === 'datacenter' ? 'Datacenter Network' : 'Public'
 }
 
 /** Network registry kinds from turbopanel `network.kind`. */

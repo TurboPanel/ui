@@ -16,11 +16,15 @@ import {
   fetchUpgradeServersPage,
   fetchUpgradeSettings,
   checkForUpdates,
+  fetchDevelopmentUpdates,
+  pushDevelopmentDaemon,
+  startDevelopmentHostAction,
   markNotificationsRead,
   pauseUpdates,
   resumeUpdates,
   saveUpgradeSettings,
   updateNotificationChannel,
+  ReleaseUnreachableError,
   UpdateCheckTooSoonError,
 } from './instance-api'
 
@@ -141,6 +145,56 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     for (const i of [2, 3]) expect(initOf(i)).toMatchObject({ method: 'POST' })
   })
 
+  it('the development view is read from its route, and a 404 means not a development install', async () => {
+    const view = { ok: true, servers: [], job: null, pendingDaemonChanges: false }
+    fetchMock.mockResolvedValueOnce(jsonResponse(view))
+    await expect(fetchDevelopmentUpdates()).resolves.toEqual(view)
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/development$/)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'not_found' }, 404))
+    await expect(fetchDevelopmentUpdates()).resolves.toBeNull()
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'broken' }, 500))
+    await expect(fetchDevelopmentUpdates()).rejects.toThrow()
+  })
+
+  it('a push posts its body and hands back a running-job refusal', async () => {
+    const job = { id: 'j1', state: 'building' }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, job }, 202))
+    await expect(pushDevelopmentDaemon({ force: true })).resolves.toEqual({ ok: true, job })
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/development\/push$/)
+    expect(initOf(0)).toMatchObject({ method: 'POST', body: JSON.stringify({ force: true }) })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'job_running' }, 409))
+    await expect(pushDevelopmentDaemon()).resolves.toEqual({ ok: false, error: 'job_running' })
+    expect(initOf(1)).toMatchObject({ body: '{}' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'broken' }, 500))
+    await expect(pushDevelopmentDaemon()).rejects.toThrow()
+  })
+
+  it('host actions post to their routes and hand back 409 and 503 refusals', async () => {
+    const job = { id: 'h1', action: 'update' }
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, job }, 202))
+    await expect(startDevelopmentHostAction('update')).resolves.toEqual({ ok: true, job })
+    expect(urlOf(0)).toMatch(/\/instance\/updates\/development\/host\/update$/)
+    expect(initOf(0)).toMatchObject({ method: 'POST' })
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'job_running' }, 409))
+    await expect(startDevelopmentHostAction('restart')).resolves.toEqual({
+      ok: false,
+      error: 'job_running',
+    })
+    expect(urlOf(1)).toMatch(/\/instance\/updates\/development\/host\/restart$/)
+
+    const refused = { ok: false, error: 'daemon_unavailable', reason: 'timeout' }
+    fetchMock.mockResolvedValueOnce(jsonResponse(refused, 503))
+    await expect(startDevelopmentHostAction('update')).resolves.toEqual(refused)
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'broken' }, 500))
+    await expect(startDevelopmentHostAction('update')).rejects.toThrow()
+  })
+
   it('Check Now posts only to the check route and answers the status body', async () => {
     const status = { ok: true, channel: 'release', automatic: true, units: {} }
     fetchMock.mockResolvedValueOnce(jsonResponse(status))
@@ -165,6 +219,17 @@ describe('instance-api upgrade, notification and compose-gated-field wrappers', 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'check_too_soon' }, 429))
     const noWait = await checkForUpdates().catch((err: unknown) => err)
     expect((noWait as UpdateCheckTooSoonError).retryAfterSeconds).toBe(60)
+  })
+
+  it('Check Now with the release server unreachable throws the same refusal as Update Now', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'release_unreachable' }, 503))
+    const down = await checkForUpdates().catch((err: unknown) => err)
+    expect(down).toBeInstanceOf(ReleaseUnreachableError)
+    expect((down as Error).message).toContain('HTTP 503: release_unreachable')
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: false, error: 'Database unavailable' }, 503))
+    const other = await checkForUpdates().catch((err: unknown) => err)
+    expect(other).not.toBeInstanceOf(ReleaseUnreachableError)
   })
 
   it('notification reads default missing fields and pass the paging params', async () => {

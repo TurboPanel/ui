@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
+import { DevelopmentUpdates } from '@/components/admin/updates/development-updates'
 import { HighAvailabilityUpdates } from '@/components/admin/updates/ha-updates'
 import { SelfHostedUpdates } from '@/components/admin/updates/self-hosted-updates'
 import { Button, InlineNotice, LoadingState } from '@/components/ui'
@@ -13,6 +14,7 @@ import {
   reconnectBody,
 } from '@/lib/control-plane-reconnect'
 import { useControlPlaneReconnect } from '@/lib/use-control-plane-reconnect'
+import { isDevelopmentInstall } from '@/lib/development-updates'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
 import { useInstanceUpdates } from '@/lib/queries/admin'
 import { spacing } from '@/lib/theme'
@@ -60,6 +62,15 @@ export function UpdatesSection() {
 
   const managed =
     data.updatesManaged === true || data.runtime === 'workers' || runtime === 'workers'
+
+  if (!managed && isDevelopmentInstall(data)) {
+    return (
+      <View style={styles.root}>
+        <Text style={panelStyles.pageTitle}>Updates</Text>
+        <DevelopmentUpdates data={data} />
+      </View>
+    )
+  }
 
   return (
     <View style={styles.root}>

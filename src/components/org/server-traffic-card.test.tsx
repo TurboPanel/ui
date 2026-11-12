@@ -13,6 +13,7 @@ const {
   useCan,
   update,
   choose,
+  orgServers,
 } = vi.hoisted(() => ({
   useDatacenters: vi.fn(),
   useServerTrafficMap: vi.fn(),
@@ -21,6 +22,7 @@ const {
   useCan: vi.fn(),
   update: vi.fn(),
   choose: vi.fn(),
+  orgServers: { list: [] as Record<string, unknown>[] },
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -36,6 +38,9 @@ vi.mock('@/lib/queries/topology', () => ({
   useChooseServerTrafficNetwork,
 }))
 vi.mock('@/lib/query-client', () => ({ useCan }))
+vi.mock('@/lib/queries/servers', () => ({
+  useOrgServers: () => ({ data: { servers: orgServers.list } }),
+}))
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 
 type Props = Record<string, unknown> & { children?: unknown }
@@ -156,6 +161,7 @@ function show(canManage = true, mapData: ServerTrafficMap | undefined = map) {
 }
 
 beforeEach(() => {
+  orgServers.list = [{ id: 'srv-unnamed', name: null, hostname: 'db-2.example.net' }]
   update.mockResolvedValue({ ok: true, value: { ok: true } })
   choose.mockResolvedValue({ ok: true, value: { ok: true, changes: [] } })
   useUpdateDatacenter.mockReturnValue({ run: update, isPending: false, actionError: null })
@@ -187,6 +193,13 @@ describe('ServerTrafficCard', () => {
     expect(screen.getByText('The network card is down on this server.')).toBeTruthy()
     expect(screen.getByText('Carrying traffic to 1 server from here')).toBeTruthy()
     expect(screen.getByText('eth1')).toBeTruthy()
+  })
+
+  it('names a server without a display name by its hostname', () => {
+    const peer = map.peers[0]!
+    show(true, { ...map, peers: [{ ...peer, serverId: 'srv-unnamed', name: null }] })
+    expect(screen.getByText('db-2.example.net')).toBeTruthy()
+    expect(screen.queryByText('Unnamed server')).toBeNull()
   })
 
   it('saves a new priority number', () => {
@@ -247,7 +260,7 @@ describe('ServerTrafficCard', () => {
     expect(update).not.toHaveBeenCalled()
   })
 
-  it('shows one message when two networks share the first place', () => {
+  const showTie = () => {
     useCan.mockReturnValue(true)
     useDatacenters.mockReturnValue({
       data: {
@@ -260,9 +273,23 @@ describe('ServerTrafficCard', () => {
     })
     useServerTrafficMap.mockReturnValue({ data: { ...map, peers: [] }, isError: false })
     render(<ServerTrafficCard orgId="org-1" serverId="srv-1" />)
+  }
+  const inBoth = (id: string) => ({ id, datacenters: [{ id: 'a' }, { id: 'b' }] })
+
+  it('shows one message when two networks that share servers share the first place', () => {
+    orgServers.list = [inBoth('s1'), inBoth('s2')]
+    showTie()
     expect(screen.getAllByText('Tied for first')).toHaveLength(1)
     expect(screen.getAllByText('Same priority as another')).toHaveLength(1)
     expect(screen.queryByText('Used first')).toBeNull()
+  })
+
+  it('does not call it a tie when the two networks share no servers', () => {
+    orgServers.list = [inBoth('s1'), { id: 's2', datacenters: [{ id: 'a' }] }]
+    showTie()
+    expect(screen.queryByText('Tied for first')).toBeNull()
+    expect(screen.getByText('Used first')).toBeTruthy()
+    expect(screen.getByText('Second')).toBeTruthy()
   })
 
   it('names later places in words', () => {

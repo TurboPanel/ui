@@ -243,6 +243,7 @@ function ComposeEditorPanel({
   renderHostingEditor,
   renderReleasesPanel,
   extraPrincipalAliases,
+  hideReach,
   onViewChange,
 }: Readonly<{
   document: unknown
@@ -258,6 +259,8 @@ function ComposeEditorPanel({
   renderReleasesPanel?: (composeServiceName: string) => ReactNode
   /** Aliases from the layer above; `[]` on the base, the base's on an overlay. */
   extraPrincipalAliases?: readonly string[]
+  /** Leave out the helper port fields: an overlay lacks the Base's kinds and accounts. */
+  hideReach?: boolean
   /**
    * Shows the in-editor Compose / Services toggle and opens the chosen view's
    * route. Omitted when the page's tab bar already owns that choice.
@@ -284,6 +287,7 @@ function ComposeEditorPanel({
       {...(renderHostingEditor ? { renderHostingEditor } : {})}
       {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
       {...(extraPrincipalAliases === undefined ? {} : { extraPrincipalAliases })}
+      {...(hideReach ? { hideReach } : {})}
     />
   )
 }
@@ -647,6 +651,7 @@ function ServicesPanelBody({
         sessionKey={scopeKey}
         // An overlay answers to the project's root as well as its own.
         extraPrincipalAliases={composePrincipalAliases(project.options?.compose)}
+        hideReach
         documentFacts={documentFacts}
         onOpenScopeConfig={onOpenScopeConfig}
         renderHostingEditor={(composeServiceName) => (

@@ -66,7 +66,7 @@ export function NewProjectScreen({
   return (
     <View style={styles.column}>
       <PageTitle
-        title="New project"
+        title="New Project"
         sub="Pick where it comes from. You can change everything later."
       />
       {notice}

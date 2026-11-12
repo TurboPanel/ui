@@ -9,6 +9,7 @@ import {
   type DataTableColumn,
   DataTableRow,
   EmptyState,
+  InlineNotice,
   LoadingState,
   SectionPanel,
 } from '@/components/ui'
@@ -23,6 +24,14 @@ import {
   resolveDatacenterAddEligibility,
   sortDatacentersByName,
 } from '@/lib/datacenter-list'
+import {
+  joinWithAnd,
+  networksWherePriorityMatters,
+  PRIORITY_TIE_ADVICE,
+  overlappingPriorityTies,
+  sharedServerNetworks,
+  type EqualPriorityWarning,
+} from '@/lib/datacenter-routing'
 import type { DatacenterRecord } from '@/lib/instance-api'
 import { datacenterHref, datacenterNewHref } from '@/lib/org-navigation'
 import { useOrgServers } from '@/lib/queries/servers'
@@ -37,18 +46,18 @@ import { userErrorMessage } from '@/lib/user-error'
 
 function datacentersListHint(loading: boolean, count: number): string {
   if (loading) return 'Loading…'
-  if (count === 1) return '1 datacenter'
-  return `${count} datacenters`
+  if (count === 1) return '1 datacenter network'
+  return `${count} datacenter networks`
 }
 
 function datacentersErrorMessage(error: unknown): string | null {
   if (!error) return null
   if (error instanceof Error) return userErrorMessage(error, '')
-  return 'Failed to load datacenters'
+  return 'Failed to load datacenter networks'
 }
 
 const DATACENTER_COLUMNS = [
-  { key: 'name', header: 'Datacenter', flex: 2.2, minWidth: 180 },
+  { key: 'name', header: 'Datacenter Network', flex: 2.2, minWidth: 180 },
   { key: 'location', header: 'Location', flex: 1.8, minWidth: 170 },
   { key: 'servers', header: 'Servers', flex: 0.9, minWidth: 90 },
   { key: 'cidrs', header: 'Subnets', flex: 1.6, minWidth: 140 },
@@ -65,12 +74,18 @@ const [
   DC_COL_TIMEZONE,
 ] = DATACENTER_COLUMNS
 
-/** Priority (lower wins) + trust chip — both on the list payload, no extra fetch. */
-function DatacenterRoutingCell({ datacenter }: Readonly<{ datacenter: DatacenterRecord }>) {
+/**
+ * Trust chip on every row; the priority (lower wins) only where it can change
+ * anything: a trusted network that shares servers with another trusted one.
+ */
+function DatacenterRoutingCell({
+  datacenter,
+  showPriority,
+}: Readonly<{ datacenter: DatacenterRecord; showPriority: boolean }>) {
   return (
     <DataTableCell column={DC_COL_ROUTING}>
       <View style={styles.routingRow}>
-        <Text style={styles.monoText}>P{datacenter.priority}</Text>
+        {showPriority ? <Text style={styles.monoText}>P{datacenter.priority}</Text> : null}
         {datacenter.trusted ? (
           <Badge label="Trusted" tone="ok" />
         ) : (
@@ -85,7 +100,10 @@ function DatacenterLocationCell({ datacenter }: Readonly<{ datacenter: Datacente
   return (
     <DataTableCell column={DC_COL_LOCATION}>
       <GeoLocationLines
-        geo={locationDisplayGeo(datacenter.location, datacenterGeoFromMetadata(datacenter.metadata))}
+        geo={locationDisplayGeo(
+          datacenter.location,
+          datacenterGeoFromMetadata(datacenter.metadata)
+        )}
         custom={isCustomLocation(datacenter.location)}
       />
     </DataTableCell>
@@ -96,11 +114,13 @@ function DatacenterTableRow({
   orgId,
   datacenter,
   serverCount,
+  showPriority,
   rowIndex,
 }: Readonly<{
   orgId: string
   datacenter: DatacenterRecord
   serverCount: number
+  showPriority: boolean
   rowIndex: number
 }>) {
   const router = useRouter()
@@ -132,7 +152,7 @@ function DatacenterTableRow({
           {formatDatacenterSubnetSummary(datacenter.privateCidrs)}
         </Text>
       </DataTableCell>
-      <DatacenterRoutingCell datacenter={datacenter} />
+      <DatacenterRoutingCell datacenter={datacenter} showPriority={showPriority} />
       <DataTableCell column={DC_COL_TIMEZONE}>
         <Text style={styles.monoText} numberOfLines={1}>
           {datacenterTimezoneLabel(datacenter.options)}
@@ -146,10 +166,12 @@ function DatacentersTable({
   orgId,
   datacenters,
   serverCountByDatacenter,
+  priorityShown,
 }: Readonly<{
   orgId: string
   datacenters: readonly DatacenterRecord[]
   serverCountByDatacenter: ReadonlyMap<string, number>
+  priorityShown: ReadonlySet<string>
 }>) {
   return (
     <DataTable columns={DATACENTER_COLUMNS} minWidth={900} bordered>
@@ -159,6 +181,7 @@ function DatacentersTable({
           orgId={orgId}
           datacenter={datacenter}
           serverCount={serverCountByDatacenter.get(datacenter.id) ?? 0}
+          showPriority={priorityShown.has(datacenter.id)}
           rowIndex={index}
         />
       ))}
@@ -172,15 +195,17 @@ function DatacentersListBody({
   eligibilityReason,
   datacenters,
   serverCountByDatacenter,
+  priorityShown,
 }: Readonly<{
   orgId: string
   loading: boolean
   eligibilityReason: string | null
   datacenters: readonly DatacenterRecord[]
   serverCountByDatacenter: ReadonlyMap<string, number>
+  priorityShown: ReadonlySet<string>
 }>) {
   if (loading) {
-    return <LoadingState label="Loading datacenters…" />
+    return <LoadingState label="Loading datacenter networks…" />
   }
   if (datacenters.length === 0) {
     return <DatacentersEmptyState reason={eligibilityReason} />
@@ -190,14 +215,27 @@ function DatacentersListBody({
       orgId={orgId}
       datacenters={datacenters}
       serverCountByDatacenter={serverCountByDatacenter}
+      priorityShown={priorityShown}
     />
   )
+}
+
+/** "Backhaul and Office LAN share servers and both have priority 100. …" */
+function priorityTieBody(
+  tie: EqualPriorityWarning,
+  datacenters: readonly DatacenterRecord[]
+): string {
+  const names = tie.datacenterIds.map((id) => {
+    const dc = datacenters.find((row) => row.id === id)
+    return dc ? datacenterDisplayName(dc) : id
+  })
+  return `${joinWithAnd(names)} share servers and have the same priority, ${tie.priority}. ${PRIORITY_TIE_ADVICE}`
 }
 
 function DatacentersEmptyState({ reason }: Readonly<{ reason: string | null }>) {
   return (
     <EmptyState
-      title="No datacenters yet"
+      title="No datacenter networks yet"
       hint={reason ?? 'Create one from a server IP.'}
       panel
     />
@@ -217,11 +255,11 @@ function DatacentersToolbar({
   return (
     <View style={styles.toolbarRow}>
       <Button
-        label="+ Datacenter"
+        label="+ Datacenter Network"
         variant="primary"
         disabled={!canAdd}
         onPress={onAdd}
-        accessibilityLabel="Add datacenter"
+        accessibilityLabel="Add datacenter network"
       />
     </View>
   )
@@ -239,9 +277,15 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
   )
   const serverList = serversQuery.data?.servers
   const eligibleCount = listServersWithReportedPrivateNetworks(serverList ?? []).length
-  const serverCounts = useMemo(
-    () => countServersByDatacenterId(serverList ?? []),
-    [serverList],
+  const serverCounts = useMemo(() => countServersByDatacenterId(serverList ?? []), [serverList])
+  const shared = useMemo(() => sharedServerNetworks(serverList ?? []), [serverList])
+  const priorityShown = useMemo(
+    () => networksWherePriorityMatters(datacenters, shared),
+    [datacenters, shared]
+  )
+  const priorityTies = useMemo(
+    () => overlappingPriorityTies(datacentersQuery.data?.warnings ?? [], shared),
+    [datacentersQuery.data?.warnings, shared]
   )
   const eligibility = resolveDatacenterAddEligibility({
     serversWithPrivateAddress: eligibleCount,
@@ -257,16 +301,27 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
 
   return (
     <View style={styles.root}>
-      <Text style={panelStyles.pageTitle}>Datacenters</Text>
+      <Text style={panelStyles.pageTitle}>Datacenter Networks</Text>
       <Text style={panelStyles.pageCopy}>
-        Logical routing domains, not buildings. A datacenter can hold several
-        routable subnets; a server may belong to more than one. Lower priority
-        wins; untrusted datacenters route through {TURBOFABRIC_PRODUCT_NAME}.
+        A datacenter network is a network inside a datacenter, not the building: a routing domain of
+        private subnets that can all reach each other. A server can be on more than one. When
+        servers share more than one trusted network, the lower priority number wins. Servers on a
+        shared trusted network talk over the LAN with no tunnel; over an untrusted one,{' '}
+        {TURBOFABRIC_PRODUCT_NAME} runs encrypted.
       </Text>
 
       {error && datacenters.length === 0 ? <Text style={panelStyles.error}>{error}</Text> : null}
 
-      <SectionPanel title="Datacenters" hint={listHint}>
+      {priorityTies.map((tie) => (
+        <InlineNotice
+          key={`${tie.priority}:${tie.datacenterIds.join(',')}`}
+          tone="warning"
+          title="Networks that share servers have the same priority."
+          body={priorityTieBody(tie, datacenters)}
+        />
+      ))}
+
+      <SectionPanel title="Datacenter Networks" hint={listHint}>
         <DatacentersToolbar
           canManage={canManage}
           canAdd={canAdd}
@@ -282,6 +337,7 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
           eligibilityReason={eligibility.reason}
           datacenters={datacenters}
           serverCountByDatacenter={serverCounts.byDatacenter}
+          priorityShown={priorityShown}
         />
       </SectionPanel>
     </View>

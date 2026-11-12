@@ -7,10 +7,10 @@
 - Hostnames (area root) → `hostnames-section.tsx` at `/admin/access`
 - Certificates → `certificates-section.tsx` at `/admin/access/certificates`
 - Trusted proxies → `trusted-proxies-section.tsx` at `/admin/access/trusted-proxies`
-- Tunnel → `tunnel-section.tsx` at `/admin/access/tunnel`
+- Tunnel (screen title Cloudflare Tunnel) → `cloudflare-tunnel-section.tsx` at `/admin/access/tunnel`
 - Platform CA → `platform-ca-section.tsx` at `/admin/access/platform-ca`
 
-`/admin` redirects to `/admin/access`. `/admin/networking` stays as a bookmark redirect to `/admin/access` and is not a sidebar area. Do not mount `control-plane-urls-section.tsx` here.
+`/admin` redirects to `/admin/access`. `/admin/networking` stays as a bookmark redirect to `/admin/access` and is not a sidebar area.
 
 **Job:** How people and machines reach this control plane: its own hostnames, certificate sources, trusted proxies, the co-located tunnel token, and the Platform CA. Organization TLS and an organization's Let's Encrypt opt-in stay on the org TLS surface.
 
@@ -26,6 +26,7 @@
 ## Hostnames
 
 - Title **Hostnames**. One line: these addresses are the Platform CA leaf SANs, the Git webhook origin, and the install-command origin.
+- Pick the view from the control plane runtime (`useAuth().controlPlaneRuntime`), never from the hostnames response. TurboPanel High Availability gets the read-only address only, also while the read loads or after it fails. An unknown runtime shows a loading state. Never show the editor until the runtime is known to be self-hosted.
 - Compose each new entry (scheme, host, optional port) via `src/lib/public-url-entry.ts`. Scheme-less stored entries stay byte-for-byte. The hostname table shows `https://<host>:8443` for every row, and the copy button copies that URL.
 - `PUT /instance/hostnames` is **replace-all**. A 422 names `invalid` hosts beside the row.
 - Each row picks `platform-ca` / `uploaded` / `lets-encrypt`. Disable a source the daemon cannot render or that Let's Encrypt / the uploaded pair refuses, and show the sentence from `certificateSourceEligibility`.
@@ -47,10 +48,22 @@
 - Read-only CIDR table from `GET /instance/trusted-proxies`, with a **Loopback default** or **Custom list** badge.
 - Persistent warning: `TURBOPANEL_TRUSTED_PROXY_CIDRS` **replaces** `127.0.0.0/8, ::1/128`. It does not add to that list. Include loopback when Caddy is still on this host.
 
-## Tunnel
+## Cloudflare Tunnel
 
-- Write-only token field. Never pre-fill a stored value — the API does not return one.
-- **Save token** sends the typed value. **Tear down** sends an empty token. Clear the field after either succeeds.
+- Superadmin only; on TurboPanel High Availability show the not-applicable note and nothing else.
+- A **Provider** line reads Cloudflare Tunnel, with a sentence that more tunnel types may come later. Say the tunnel connector runs on the control plane host only.
+- **Status** comes first and works for both paths (API token or pasted run token): connector and version, edge locations and connections, hostnames routed, last health check, last error. An empty half shows the control plane's note, never a blank.
+- **Managed by an API Token** is the primary block; the pasted run token is the fallback.
+- Never tell anyone to click through or accept a certificate warning.
+- **Edge Go-Live** is a two-step confirm with a warning notice above it; disabled with a sentence when the host holds the gate closed.
+- Account token: write-only, cleared from the field as soon as it is sent, never rendered. Failed checks show as **Fail** rows with their detail; scopes show as **Tunnel Scope** / **DNS Scope** rows. Status pairs a word with its colour.
+- The pasted run token stays behind a collapsed **Paste a run token instead** disclosure at the bottom. Never pre-fill it. **Save Token** sends the typed value, **Tear Down** sends an empty token, and the field clears after either.
+
+## Connection modes (Hostnames)
+
+- Connection Mode, Cloudflare Account, Preflight / Connect / Disconnect live in the row (expand in place, no modal). Disabled options carry their reason as the option detail.
+- The DNS-01 ladder on Certificates is a row of step chips; the current step is the one in the info tone and announced as the current step.
+- A DNS-01 hostname's Status cell adds one short block under the badge: the running step as muted text, or (failed or back-off) the Failed / Back-off badge, the cause and detail in the error tone, Last Failure and Next Attempt in muted text, and a small **Retry** button. Nothing shows once issued.
 
 ## Platform CA
 

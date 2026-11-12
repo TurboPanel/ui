@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { deployErrorMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
-import { DeployHealthCheckMissingError, DeployResourceLimitExceededError } from '@/lib/instance-api'
+import {
+  deployErrorMessage,
+  deployRefusalMessage,
+  isHostingAccountRefusal,
+} from '@/lib/deploy-error-message'
+import {
+  DeployHealthCheckMissingError,
+  DeployResourceLimitExceededError,
+  DeployTunnelRefusedError,
+} from '@/lib/instance-api'
 
 const wrapped = (code: string, sentence: string) =>
   new Error(`/api/client/v1/environments/e1/deploy failed: 403 ${code} — ${sentence}`)
@@ -25,6 +33,12 @@ describe('deployErrorMessage', () => {
     expect(
       deployErrorMessage(new Error('deploy failed: 403 compose_host_access_requires_manager'))
     ).toContain('host-level Compose features')
+  })
+
+  it('says what to add when a Hosting Account is required', () => {
+    expect(deployErrorMessage(new Error('HTTP 422: principal_required_for_service_kind'))).toBe(
+      'Add a Hosting Account under Bindings first.'
+    )
   })
 
   it('keeps the existing mappings and passes other messages through', () => {
@@ -73,5 +87,43 @@ describe('deployRefusalMessage', () => {
     expect(deployRefusalMessage(new Error('409 — server_placement_mismatch'))).toBe(
       "Deploy target does not match the project's pinned server placement."
     )
+  })
+})
+
+describe('tunnel deploy refusals', () => {
+  it('names the hostnames and the next step for a typed refusal', () => {
+    const cert = new DeployTunnelRefusedError('tunnel_name_public_certificate', ['a.example.com'])
+    expect(deployRefusalMessage(cert)).toBe(
+      "A tunnel-only name cannot use a public certificate (a.example.com). Choose Self-signed for this site's certificate, then deploy again."
+    )
+    expect(deployErrorMessage(cert)).toBe(deployRefusalMessage(cert))
+    const old = new DeployTunnelRefusedError('tunnel_daemon_too_old', [
+      'a.example.com',
+      'b.example.com',
+    ])
+    expect(deployRefusalMessage(old)).toMatch(
+      /Update this server .*\(a\.example\.com, b\.example\.com\)/
+    )
+  })
+  it('still reads a coded message that lost its type', () => {
+    expect(
+      deployErrorMessage(
+        new Error('/environments/e1/deploy failed: HTTP 409: tunnel_name_public_certificate')
+      )
+    ).toMatch(/cannot use a public certificate\. Choose Self-signed/)
+    expect(deployErrorMessage(new Error('HTTP 409: tunnel_daemon_too_old'))).toMatch(
+      /Update this server/
+    )
+  })
+})
+
+describe('isHostingAccountRefusal', () => {
+  it('spots the missing Hosting Account refusal and nothing else', () => {
+    expect(
+      isHostingAccountRefusal(new Error('HTTP 409: principal_required_for_service_kind'))
+    ).toBe(true)
+    expect(isHostingAccountRefusal(new Error('HTTP 409: server_placement_mismatch'))).toBe(false)
+    expect(isHostingAccountRefusal('principal_required_for_service_kind')).toBe(false)
+    expect(isHostingAccountRefusal(undefined)).toBe(false)
   })
 })

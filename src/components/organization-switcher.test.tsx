@@ -7,7 +7,7 @@ import { OrganizationSwitcherSegment } from './organization-switcher'
 type Props = { children?: ReactNode } & Record<string, unknown>
 
 const state = vi.hoisted(() => ({
-  orgs: [] as { id: string; name: string }[],
+  orgs: [] as { id: string; name: string; icon?: string | null; isEmojiIconAllowed?: boolean }[],
   billingEnabled: false,
   push: vi.fn(),
 }))
@@ -96,11 +96,11 @@ describe('OrganizationSwitcherSegment menu', () => {
     expect(screen.queryByText('Current')).toBeNull()
   })
 
-  it('always offers a New organization action and Settings', () => {
+  it('always offers a New Organization action and Settings', () => {
     openMenu(2)
-    expect(screen.getByText('New organization')).toBeTruthy()
+    expect(screen.getByText('New Organization')).toBeTruthy()
     expect(screen.getByLabelText('Create organization')).toBeTruthy()
-    expect(screen.getByLabelText('Organization settings')).toBeTruthy()
+    expect(screen.getByLabelText('Organization Settings')).toBeTruthy()
     expect(screen.queryByLabelText('Organization billing and licenses')).toBeNull()
   })
 
@@ -119,6 +119,33 @@ describe('OrganizationSwitcherSegment menu', () => {
     fireEvent.click(button)
     expect(screen.getByRole('menu')).toBeTruthy()
     expect(screen.getByLabelText('Organization: Org 1').getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByLabelText('Organization settings')).toBeTruthy()
+    expect(screen.getByLabelText('Organization Settings')).toBeTruthy()
+  })
+
+  it('draws the organization icon on the button and in the list when one is set', () => {
+    state.orgs = [
+      { id: 'org-1', name: 'Org 1', icon: '🚀', isEmojiIconAllowed: true },
+      { id: 'org-2', name: 'Org 2' },
+    ]
+    render(<OrganizationSwitcherSegment orgId="org-1" />)
+    const button = screen.getByLabelText('Organization: Org 1')
+    expect(button.textContent).toContain('🚀')
+    fireEvent.click(button)
+    expect(screen.getByLabelText('Org 1, current organization').textContent).toContain('🚀')
+    // The other row gets the default building so the names stay aligned.
+    expect(screen.getByLabelText('Switch to Org 2').querySelector('svg')).not.toBeNull()
+  })
+
+  it('keeps the building and plain rows while emoji are off or no icon is set', () => {
+    state.orgs = [
+      { id: 'org-1', name: 'Org 1', icon: '🚀', isEmojiIconAllowed: false },
+      { id: 'org-2', name: 'Org 2', icon: null, isEmojiIconAllowed: true },
+    ]
+    render(<OrganizationSwitcherSegment orgId="org-1" />)
+    const button = screen.getByLabelText('Organization: Org 1')
+    expect(button.textContent).not.toContain('🚀')
+    expect(button.querySelector('svg')).not.toBeNull()
+    fireEvent.click(button)
+    expect(screen.getByLabelText('Switch to Org 2').querySelector('svg')).toBeNull()
   })
 })

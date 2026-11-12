@@ -1,22 +1,23 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { ScreenSafeArea } from '@/components/screen-safe-area'
 import {
   Badge,
   Button,
   ButtonRow,
   Checkbox,
-  ConfirmButton,
   EmptyState,
   InlineNotice,
   LoadingState,
   SectionPanel,
-  Select,
   SegmentedControl,
-  type SegmentedOption,
+  Select,
   TextField,
+  TextLink,
   Toggle,
+  TypeNameDeleteButton,
+  type SegmentedOption,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
@@ -37,6 +38,7 @@ import {
   DIGEST_OPTIONS,
   draftFromRules,
   KIND_LABEL,
+  organizationChannelEvents,
   QUIET_TIME_OPTIONS,
   quietWindowValid,
   rulesFromDraft,
@@ -56,17 +58,25 @@ import {
   useResendChannelVerification,
   useUpdateNotificationChannel,
 } from '@/lib/queries/notifications'
-import { getActiveOrganizationId, resolvePreferredOrganizationId } from '@/lib/org-context'
+import {
+  GlobalNotificationPreferences,
+  NotificationOverridesList,
+  OrganizationNotificationPreferences,
+} from '@/components/account/notification-preferences-section'
+import { preferencesRoutesAbsent } from '@/lib/notification-preferences'
+import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { useOrganizationsQuery } from '@/lib/queries/auth'
+import { useNotificationPreferencesQuery } from '@/lib/queries/notification-preferences'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { NO_AUTOFILL } from '@/lib/field-autofill'
 
 const KIND_OPTIONS: readonly SegmentedOption<NotificationChannelKind>[] =
   NOTIFICATION_CHANNEL_KINDS.map((value) => ({ value, label: KIND_LABEL[value] }))
 
 const SEVERITY_OPTIONS: readonly SegmentedOption<NotificationSeverity>[] = [
-  { value: 'info', label: 'Everything' },
-  { value: 'warning', label: 'Warnings and up' },
-  { value: 'critical', label: 'Critical only' },
+  { value: 'info', label: 'All' },
+  { value: 'warning', label: 'Warnings and Critical' },
+  { value: 'critical', label: 'Critical Only' },
 ]
 
 function RulesEditor({
@@ -90,15 +100,14 @@ function RulesEditor({
         disabled={disabled}
         accessibilityLabel="Deliver every event"
       />
-      {draft.everything ? (
-        <SegmentedControl
-          options={SEVERITY_OPTIONS}
-          value={draft.floor}
-          onChange={(floor) => onChange({ ...draft, floor })}
-          disabled={disabled}
-          accessibilityLabel="Minimum severity"
-        />
-      ) : (
+      <SegmentedControl
+        options={SEVERITY_OPTIONS}
+        value={draft.floor}
+        onChange={(floor) => onChange({ ...draft, floor })}
+        disabled={disabled}
+        accessibilityLabel="Minimum severity"
+      />
+      {draft.everything ? null : (
         <View style={styles.eventList}>
           {events.map((info) => (
             <Checkbox
@@ -140,8 +149,11 @@ function TimingEditor({
   const personal = channel.scope === 'user'
   const zones = useTimezones({ enabled: personal })
   const zoneOptions = useMemo(
-    () => [...(zones.data?.timezones ?? [])].sort((a, b) => a.localeCompare(b)).map((tz) => ({ value: tz, label: tz })),
-    [zones.data],
+    () =>
+      [...(zones.data?.timezones ?? [])]
+        .sort((a, b) => a.localeCompare(b))
+        .map((tz) => ({ value: tz, label: tz })),
+    [zones.data]
   )
   return (
     <View style={styles.rules}>
@@ -186,7 +198,9 @@ function TimingEditor({
           {quietWindowValid(draft) ? null : (
             <Text style={panelStyles.error}>The start and the end cannot be the same time.</Text>
           )}
-          <Text style={panelStyles.muted}>Events that arrive in this window are sent as one summary when it ends.</Text>
+          <Text style={panelStyles.muted}>
+            Events that arrive in this window are sent as one summary when it ends.
+          </Text>
         </View>
       ) : null}
       {personal ? (
@@ -202,13 +216,17 @@ function TimingEditor({
           onChange={(timeZone) => onChange({ ...draft, timeZone })}
         />
       ) : (
-        <Text style={panelStyles.muted}>Read in {channel.timeZone}, the organization&apos;s time zone.</Text>
+        <Text style={panelStyles.muted}>
+          Read in {channel.timeZone}, the organization&apos;s time zone.
+        </Text>
       )}
     </View>
   )
 }
 
-function LastDelivery({ delivery }: Readonly<{ delivery: NotificationChannel['recentDeliveries'][number] | undefined }>) {
+function LastDelivery({
+  delivery,
+}: Readonly<{ delivery: NotificationChannel['recentDeliveries'][number] | undefined }>) {
   if (!delivery) return <Text style={panelStyles.muted}>No deliveries in the last week.</Text>
   const attempts = delivery.attempts > 1 ? ` after ${delivery.attempts} attempts` : ''
   return (
@@ -219,21 +237,62 @@ function LastDelivery({ delivery }: Readonly<{ delivery: NotificationChannel['re
   )
 }
 
+/** A channel's name, badges, address, timing summary and last delivery. */
+function ChannelHead({ channel }: Readonly<{ channel: NotificationChannel }>) {
+  const primary = channel.isPrimary === true
+  const disabled = channel.disabledAt !== null
+  const awaitingConfirmation = channelAwaitsConfirmation(channel)
+  const summary = channelHasTiming(channel) ? timingSummary(channel) : null
+  const lastDelivery = channel.recentDeliveries[0]
+  return (
+    <View style={styles.channelHead}>
+      <View style={styles.channelTitle}>
+        <Text style={styles.channelLabel}>{channel.label}</Text>
+        {primary ? <Badge tone="info" label="Account Email" /> : null}
+        <Badge
+          tone={disabled ? 'muted' : 'ok'}
+          label={KIND_LABEL[channel.kind as NotificationChannelKind] ?? channel.kind}
+        />
+        {channel.signed ? <Badge tone="info" label="Signed" /> : null}
+        {disabled ? <Badge tone="pending" label="Paused" /> : null}
+        {awaitingConfirmation ? <Badge tone="pending" label="Awaiting Confirmation" /> : null}
+      </View>
+      <Text style={panelStyles.muted}>{channel.address}</Text>
+      {summary ? <Text style={panelStyles.muted}>{summary}</Text> : null}
+      {awaitingConfirmation ? (
+        <Text style={panelStyles.muted}>
+          Nothing is sent to this address until the confirmation link in the email is opened.
+        </Text>
+      ) : null}
+      {primary ? (
+        <Text style={panelStyles.muted}>
+          Built in: it follows your sign-in address and cannot be removed.
+        </Text>
+      ) : null}
+      <LastDelivery delivery={lastDelivery} />
+    </View>
+  )
+}
+
 function ChannelRow({
   channel,
   events,
   scope,
+  hasRules,
   organizationId,
 }: Readonly<{
   channel: NotificationChannel
   events: readonly NotificationEventInfo[]
   scope: 'user' | 'organization'
+  /** The channel is routed by its own rules, not by the person's notification settings. */
+  hasRules: boolean
   organizationId: string | null
 }>) {
   const update = useUpdateNotificationChannel(scope, organizationId)
   const remove = useDeleteNotificationChannel(scope, organizationId)
   const resend = useResendChannelVerification(organizationId)
   const awaitingConfirmation = channelAwaitsConfirmation(channel)
+  const primary = channel.isPrimary === true
   const [draft, setDraft] = useState(() => draftFromRules(channel.rules))
   const [dirty, setDirty] = useState(false)
   const [timing, setTiming] = useState(() => timingDraftFromChannel(channel))
@@ -241,9 +300,7 @@ function ChannelRow({
   const [message, setMessage] = useState<string | null>(null)
   const [sentNote, setSentNote] = useState<string | null>(null)
   const disabled = channel.disabledAt !== null
-  const lastDelivery = channel.recentDeliveries[0]
   const hasTiming = channelHasTiming(channel)
-  const summary = hasTiming ? timingSummary(channel) : null
 
   const onTiming = useCallback((next: TimingDraft) => {
     setTiming(next)
@@ -265,12 +322,10 @@ function ChannelRow({
 
   const save = useCallback(() => {
     setMessage(null)
-    void update
-      .run({ id: channel.id, rules: rulesFromDraft(draft) })
-      .then((result) => {
-        if (result.ok) setDirty(false)
-        else setMessage(channelErrorCopy(result.error))
-      })
+    void update.run({ id: channel.id, rules: rulesFromDraft(draft) }).then((result) => {
+      if (result.ok) setDirty(false)
+      else setMessage(channelErrorCopy(result.error))
+    })
   }, [channel.id, draft, update])
 
   const sendAgain = useCallback(() => {
@@ -284,43 +339,41 @@ function ChannelRow({
 
   return (
     <View style={styles.channel}>
-      <View style={styles.channelHead}>
-        <View style={styles.channelTitle}>
-          <Text style={styles.channelLabel}>{channel.label}</Text>
-          <Badge tone={disabled ? 'muted' : 'ok'} label={KIND_LABEL[channel.kind as NotificationChannelKind] ?? channel.kind} />
-          {channel.signed ? <Badge tone="info" label="Signed" /> : null}
-          {disabled ? <Badge tone="pending" label="Paused" /> : null}
-          {awaitingConfirmation ? <Badge tone="pending" label="Awaiting confirmation" /> : null}
-        </View>
-        <Text style={panelStyles.muted}>{channel.address}</Text>
-        {summary ? <Text style={panelStyles.muted}>{summary}</Text> : null}
-        {awaitingConfirmation ? (
-          <Text style={panelStyles.muted}>
-            Nothing is sent to this address until the confirmation link in the email is opened.
-          </Text>
-        ) : null}
-        <LastDelivery delivery={lastDelivery} />
-      </View>
-      <RulesEditor events={events} draft={draft} onChange={onDraft} disabled={update.isPending} />
+      <ChannelHead channel={channel} />
+      {hasRules ? (
+        <RulesEditor events={events} draft={draft} onChange={onDraft} disabled={update.isPending} />
+      ) : null}
       {hasTiming ? (
-        <TimingEditor channel={channel} draft={timing} onChange={onTiming} disabled={update.isPending} />
+        <TimingEditor
+          channel={channel}
+          draft={timing}
+          onChange={onTiming}
+          disabled={update.isPending}
+        />
       ) : null}
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
       {sentNote ? <Text style={panelStyles.muted}>{sentNote}</Text> : null}
       <ButtonRow>
         {awaitingConfirmation ? (
-          <Button label="Send again" onPress={sendAgain} busy={resend.isPending} busyLabel="Sending…" />
+          <Button
+            label="Send Again"
+            onPress={sendAgain}
+            busy={resend.isPending}
+            busyLabel="Sending…"
+          />
         ) : null}
-        <Button
-          label="Save rules"
-          variant="primary"
-          busy={update.isPending}
-          disabled={!dirty}
-          onPress={save}
-        />
+        {hasRules ? (
+          <Button
+            label="Save Rules"
+            variant="primary"
+            busy={update.isPending}
+            disabled={!dirty}
+            onPress={save}
+          />
+        ) : null}
         {hasTiming ? (
           <Button
-            label="Save timing"
+            label="Save Timing"
             variant="primary"
             busy={update.isPending}
             disabled={!timingDirty || !quietWindowValid(timing)}
@@ -332,13 +385,17 @@ function ChannelRow({
           onPress={() => void update.run({ id: channel.id, disabled: !disabled })}
           busy={update.isPending}
         />
-        <ConfirmButton
-          label="Remove"
-          confirmLabel="Remove channel"
-          prompt="Remove this channel? Its rules go with it."
-          busy={remove.isPending}
-          onConfirm={() => void remove.run(channel.id)}
-        />
+        {primary ? null : (
+          <TypeNameDeleteButton
+            label="Remove"
+            thing="Channel"
+            verb="Remove"
+            name={channel.label}
+            description={hasRules ? 'Its rules go with it.' : 'Nothing is sent to it again.'}
+            busy={remove.isPending}
+            onConfirm={() => remove.run(channel.id)}
+          />
+        )}
       </ButtonRow>
     </View>
   )
@@ -347,10 +404,12 @@ function ChannelRow({
 function AddChannelForm({
   events,
   scope,
+  hasRules,
   organizationId,
 }: Readonly<{
   events: readonly NotificationEventInfo[]
   scope: 'user' | 'organization'
+  hasRules: boolean
   organizationId: string | null
 }>) {
   const create = useCreateNotificationChannel(scope, organizationId)
@@ -376,11 +435,12 @@ function AddChannelForm({
         label: label.trim(),
         address: address.trim(),
         ...(kind === 'webhook' && signingSecret ? { signingSecret } : {}),
-        rules: rulesFromDraft(draft),
+        ...(hasRules ? { rules: rulesFromDraft(draft) } : {}),
       })
       .then((result) => {
         if (result.ok) {
-          if (channelAwaitsConfirmation(result.value)) setSentNote(confirmationSentCopy(typedAddress))
+          if (channelAwaitsConfirmation(result.value))
+            setSentNote(confirmationSentCopy(typedAddress))
           setLabel('')
           setAddress('')
           setSigningSecret('')
@@ -388,16 +448,22 @@ function AddChannelForm({
           setMessage(channelErrorCopy(result.error))
         }
       })
-  }, [address, create, draft, kind, label, signingSecret])
+  }, [address, create, draft, hasRules, kind, label, signingSecret])
 
   return (
     <View style={styles.addCard}>
-      <SegmentedControl options={KIND_OPTIONS} value={kind} onChange={setKind} accessibilityLabel="Channel kind" />
+      <SegmentedControl
+        options={KIND_OPTIONS}
+        value={kind}
+        onChange={setKind}
+        accessibilityLabel="Channel kind"
+      />
       <TextField
         label="Name"
         hint="How this channel is listed — “Ops Slack”, “my phone”."
         value={label}
         onChangeText={setLabel}
+        autoComplete={NO_AUTOFILL}
         editable={!create.isPending}
       />
       <TextField
@@ -421,12 +487,23 @@ function AddChannelForm({
           editable={!create.isPending}
         />
       ) : null}
-      <RulesEditor events={events} draft={draft} onChange={setDraft} disabled={create.isPending} />
+      {hasRules ? (
+        <RulesEditor
+          events={events}
+          draft={draft}
+          onChange={setDraft}
+          disabled={create.isPending}
+        />
+      ) : (
+        <Text style={panelStyles.muted}>
+          What reaches this channel follows your notification settings above.
+        </Text>
+      )}
       {message ? <Text style={panelStyles.error}>{message}</Text> : null}
       {sentNote ? <Text style={panelStyles.muted}>{sentNote}</Text> : null}
       <ButtonRow>
         <Button
-          label="Add channel"
+          label="Add Channel"
           variant="primary"
           busy={create.isPending}
           busyLabel="Adding…"
@@ -441,25 +518,50 @@ function AddChannelForm({
 function ChannelsList({
   isLoading,
   isError,
+  forbidden,
   channels,
   events,
   scope,
+  hasRules,
   organizationId,
 }: Readonly<{
   isLoading: boolean
   isError: boolean
+  forbidden: boolean
   channels: readonly NotificationChannel[]
   events: readonly NotificationEventInfo[]
   scope: 'user' | 'organization'
+  hasRules: boolean
   organizationId: string | null
 }>) {
   if (isLoading) return <LoadingState label="Loading channels…" />
+  if (forbidden) {
+    return (
+      <Text style={panelStyles.muted}>
+        Only the organization&apos;s owners and managers can see and change its shared channels.
+        Your own notifications are set above.
+      </Text>
+    )
+  }
   if (isError) {
-    return <InlineNotice tone="warning" title="Could not load channels" body="Reload the page to try again." />
+    return (
+      <InlineNotice
+        tone="warning"
+        title="Could not load channels"
+        body="Reload the page to try again."
+      />
+    )
   }
   if (channels.length === 0) return <EmptyState title="No channels yet." />
   return channels.map((channel) => (
-    <ChannelRow key={channel.id} channel={channel} events={events} scope={scope} organizationId={organizationId} />
+    <ChannelRow
+      key={channel.id}
+      channel={channel}
+      events={events}
+      scope={scope}
+      hasRules={hasRules}
+      organizationId={organizationId}
+    />
   ))
 }
 
@@ -473,80 +575,129 @@ function ChannelsPanel({
   organizationId: string | null
 }>) {
   const query = useNotificationChannelsQuery(scope, { organizationId })
-  const channels = query.data ?? []
+  const forbidden = query.data === null
+  // An organization channel is routed by its rules. A personal channel
+  // follows the person's notification settings, unless the control plane
+  // predates those settings (its preference read answers 404): there a
+  // personal channel is still routed by rules and one created without any
+  // would receive nothing, so the rules editor stays for it.
+  const personal = scope === 'user'
+  const settings = useNotificationPreferencesQuery(null, { enabled: personal })
+  const settingsAbsent = personal && preferencesRoutesAbsent(settings.error)
+  const hasRules = !personal || settingsAbsent
+  const allEvents = useNotificationEventsQuery({ enabled: settingsAbsent })
+  const ruleEvents = settingsAbsent ? (allEvents.data ?? []) : events
+  // Until the settings read answers, it is not known which of the two a new
+  // personal channel needs, so the add form waits for it.
+  const undecided = personal && settings.isLoading
+  // The built-in Account Email channel always comes first.
+  const channels = [...(query.data ?? [])].sort(
+    (a, b) => Number(b.isPrimary === true) - Number(a.isPrimary === true)
+  )
   return (
     <View style={styles.stack}>
       <ChannelsList
         isLoading={query.isLoading}
         isError={query.isError}
+        forbidden={forbidden}
         channels={channels}
-        events={events}
+        events={ruleEvents}
         scope={scope}
+        hasRules={hasRules}
         organizationId={organizationId}
       />
-      <AddChannelForm events={events} scope={scope} organizationId={organizationId} />
+      {settingsAbsent ? (
+        <Text style={panelStyles.muted}>
+          This control plane is older than this web interface: each of your channels is sent what
+          its own rules choose.
+        </Text>
+      ) : null}
+      {forbidden || query.isLoading || undecided ? null : (
+        <AddChannelForm
+          events={ruleEvents}
+          scope={scope}
+          hasRules={hasRules}
+          organizationId={organizationId}
+        />
+      )}
     </View>
   )
 }
 
 /**
- * Account → Notifications: where a person decides what leaves the console
- * and how. The inbox (the bell) needs nothing here; channels do. Personal
- * channels are the signed-in person's own; organization channels belong to
- * the organization in context and need a manager.
+ * Organization Settings › Notifications. First what this person hears from
+ * the organization (every member), then the organization's shared channels,
+ * which only its owners and managers manage; anyone else sees a sentence.
  */
-/**
- * The organization's own channels, on their own: what Organization settings
- * shows under Notifications. Personal channels stay on the account page.
- */
-export function OrganizationChannelsSection({
-  orgId,
-}: Readonly<{ orgId: string }>) {
+export function OrganizationChannelsSection({ orgId }: Readonly<{ orgId: string }>) {
   const router = useRouter()
   const eventsQuery = useNotificationEventsQuery()
-  const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data])
+  const events = useMemo(
+    () => organizationChannelEvents(eventsQuery.data ?? []),
+    [eventsQuery.data]
+  )
   return (
-    <View style={styles.page}>
+    <View style={styles.tab}>
+      <OrganizationNotificationPreferences orgId={orgId} />
       <SectionPanel
-        title="Organization channels"
-        hint="Shared by the organization; managers may edit them."
+        title="Organization Channels"
+        hint="Shared by the organization, such as a team chat room; owners and managers edit them and choose their events."
       >
         <ChannelsPanel scope="organization" events={events} organizationId={orgId} />
       </SectionPanel>
       <SectionPanel
-        title="Your own channels"
-        hint="Yours alone; they follow your account across organizations."
+        title="Your Channels"
+        hint="Your own email, chat and webhook channels follow your account across organizations."
       >
-        <Pressable
+        <TextLink
+          label="Open Your Notification Settings"
           onPress={() => router.push('/account/notifications')}
-          accessibilityRole="link"
-          accessibilityLabel="Open your notification channels"
-          style={webPointer}
-        >
-          <Text style={panelStyles.muted}>Open your notification channels</Text>
-        </Pressable>
+        />
       </SectionPanel>
     </View>
+  )
+}
+
+/** Each organization the person belongs to, with a link to its Notifications tab. */
+function OrganizationSettingsLinks() {
+  const router = useRouter()
+  const organizationsQuery = useOrganizationsQuery()
+  const organizations = organizationsQuery.data?.organizations ?? []
+  if (organizations.length === 0) return null
+  return (
+    <SectionPanel
+      title="Organization Notifications"
+      hint="Set what you hear from one organization, by project, environment and server, on its own settings page."
+    >
+      <View style={styles.eventList}>
+        {organizations.map((organization) => (
+          <TextLink
+            key={organization.id}
+            label={organization.name ?? 'Untitled organization'}
+            accessibilityLabel={`Open the notification settings of ${organization.name ?? 'this organization'}`}
+            onPress={() =>
+              router.push(orgSettingsTabHref(organization.id, 'notifications') as Href)
+            }
+          />
+        ))}
+      </View>
+    </SectionPanel>
   )
 }
 
 export function NotificationChannelsSectionContent() {
   const router = useRouter()
-  const eventsQuery = useNotificationEventsQuery()
-  const events = useMemo(() => eventsQuery.data ?? [], [eventsQuery.data])
-  // This screen sits outside the org shell, so the active organization may be
-  // unset; the person's preferred one (stored, or their only one) stands in.
-  const organizationsQuery = useOrganizationsQuery()
-  const organizationId = useMemo(() => {
-    const organizations = organizationsQuery.data?.organizations ?? []
-    return getActiveOrganizationId() ?? resolvePreferredOrganizationId(organizations)
-  }, [organizationsQuery.data])
-  const organizationName = organizationsQuery.data?.organizations.find((o) => o.id === organizationId)?.name ?? null
   // The confirmation link redirects here with `?channelVerified=1|0`.
-  const verifiedBanner = channelVerifiedBanner(useLocalSearchParams<{ channelVerified?: string }>().channelVerified)
+  const verifiedBanner = channelVerifiedBanner(
+    useLocalSearchParams<{ channelVerified?: string }>().channelVerified
+  )
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.page}
+      showsVerticalScrollIndicator={false}
+    >
       <Pressable
         onPress={() => {
           if (router.canGoBack()) {
@@ -566,29 +717,29 @@ export function NotificationChannelsSectionContent() {
         <Text style={panelStyles.pageEyebrow}>Account</Text>
         <Text style={panelStyles.pageTitle}>Notifications</Text>
         <Text style={panelStyles.pageCopy}>
-          Everything that happens in your organizations lands in the bell. Add a channel to be
-          told somewhere else too — an email, a chat room, a webhook — and choose which events
-          reach it.
+          Nothing reaches you until you turn it on. Pick a preset to start, then fine-tune by
+          channel, organization, project or server. Your own channels below decide where it goes
+          besides the bell.
         </Text>
       </View>
 
       {verifiedBanner ? (
-        <InlineNotice tone={verifiedBanner.tone} title={verifiedBanner.title} body={verifiedBanner.body} />
+        <InlineNotice
+          tone={verifiedBanner.tone}
+          title={verifiedBanner.title}
+          body={verifiedBanner.body}
+        />
       ) : null}
 
-      <SectionPanel title="Your channels" hint="Yours alone; they follow your account across organizations.">
-        <ChannelsPanel scope="user" events={events} organizationId={null} />
-      </SectionPanel>
+      <GlobalNotificationPreferences />
+      <OrganizationSettingsLinks />
+      <NotificationOverridesList />
 
       <SectionPanel
-        title="Organization channels"
-        hint={organizationName ? `Shared by ${organizationName}; managers may edit them.` : 'Shared by an organization; managers may edit them.'}
+        title="Your Channels"
+        hint="Yours alone; they follow your account across organizations. Your notification settings decide what each receives; digest and quiet hours are set per channel."
       >
-        {organizationId ? (
-          <ChannelsPanel scope="organization" events={events} organizationId={organizationId} />
-        ) : (
-          <Text style={panelStyles.muted}>Open an organization first, then come back here.</Text>
-        )}
+        <ChannelsPanel scope="user" events={[]} organizationId={null} />
       </SectionPanel>
     </ScrollView>
   )
@@ -632,6 +783,10 @@ const styles = StyleSheet.create({
   },
   header: {
     gap: spacing.xs,
+  },
+  tab: {
+    width: '100%',
+    gap: spacing.lg,
   },
   stack: {
     gap: spacing.md,

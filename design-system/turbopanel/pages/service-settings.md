@@ -11,6 +11,8 @@ Per-service operational settings live in `service.options` (not compose YAML). D
 | `healthCheck.policy` | `disabled` | optional; `warn`/`required` gate only when set; compose `healthcheck:` (or image HEALTHCHECK) is enough when present |
 | `preDeployCommand` / `postDeployCommand` | — | daemon shell hooks |
 | `resources.cpus` / `memoryBytes` | — | compose limits |
+| `postDeployCommands` / `postDeployTimeoutSeconds` / `postDeployTiming` | — / 900 / `before-traffic` | PHP sites only: commands run in each new release (shown in the PHP App section) |
+| `workers[]` | — | PHP sites only: background workers restarted after every deploy (PHP App section) |
 
 UI: `service-settings-panel.tsx` on environment detail.
 

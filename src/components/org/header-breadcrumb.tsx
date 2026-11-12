@@ -1,7 +1,13 @@
 import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
-import { breadcrumbStyles, CRUMB_LINE_HEIGHT } from '@/components/org/breadcrumb-styles'
+import { BreadcrumbChevron } from '@/components/header-chevron'
+import {
+  breadcrumbStyles,
+  CRUMB_HEIGHT,
+  CRUMB_LINE_HEIGHT,
+  CRUMB_PADDING,
+} from '@/components/org/breadcrumb-styles'
 import { StatusChip } from '@/components/ui/v4/status-chip'
 import type { Breadcrumb } from '@/lib/header-breadcrumb'
 import { colors, spacing, webPointer } from '@/lib/theme'
@@ -11,9 +17,9 @@ const tooltip = (label: string) => ({ title: label }) as object
 
 function Separator() {
   return (
-    <Text style={breadcrumbStyles.separator} aria-hidden>
-      {'›'}
-    </Text>
+    <View style={breadcrumbStyles.separator} aria-hidden testID="breadcrumb-separator">
+      <BreadcrumbChevron tight color={colors.textDim} />
+    </View>
   )
 }
 
@@ -77,20 +83,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexShrink: 1,
     minWidth: 0,
-    gap: spacing.xs,
   },
+  // No gaps here: each crumb's own side padding is the space around a
+  // separator, so the gap is the same on both sides of every `›`.
   segment: {
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 3,
     minWidth: 0,
-    gap: spacing.xs,
   },
   current: {
     flexDirection: 'row',
     alignItems: 'center',
     flexShrink: 1,
     minWidth: 0,
+    minHeight: CRUMB_HEIGHT,
+    paddingLeft: CRUMB_PADDING,
     gap: spacing.sm,
   },
   currentText: {

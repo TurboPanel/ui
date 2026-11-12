@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { EnvironmentNameField } from './details-step'
+import { DetailsStep, EnvironmentNameField, workspaceSummary } from './details-step'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
@@ -17,20 +17,24 @@ vi.mock('@/components/ui', () => ({
   FormField: () => null,
   LoadingState: () => null,
   SegmentedControl: () => null,
+  TextLink: ({ label }: { label: string }) => <a href="#d">{label}</a>,
   TextField: ({
     accessibilityLabel,
     value,
     placeholder,
     adornment,
+    leading,
     onChangeText,
   }: {
     accessibilityLabel: string
     value: string
     placeholder?: string
     adornment?: unknown
+    leading?: unknown
     onChangeText: (value: string) => void
   }) => (
     <div>
+      {leading as never}
       <input
         aria-label={accessibilityLabel}
         value={value}
@@ -43,6 +47,51 @@ vi.mock('@/components/ui', () => ({
 }))
 
 afterEach(cleanup)
+
+function details(icon?: Parameters<typeof DetailsStep>[0]['icon']) {
+  return render(
+    <DetailsStep
+      displayName="Shop"
+      description=""
+      workspaceMode="existing"
+      workspaces={[]}
+      loadingWorkspaces={false}
+      pickedWorkspaceId=""
+      newWorkspaceNameValue=""
+      fieldErrors={{}}
+      onDisplayNameChange={vi.fn()}
+      onDescriptionChange={vi.fn()}
+      onWorkspaceModeChange={vi.fn()}
+      onPickedWorkspaceIdChange={vi.fn()}
+      onNewWorkspaceNameChange={vi.fn()}
+      openWorkspaceByDefault={false}
+      icon={icon}
+    />
+  )
+}
+
+describe('DetailsStep icon', () => {
+  it('puts an icon button left of the name that opens the picker', () => {
+    const onChoose = vi.fn()
+    details({
+      value: 'rocket',
+      isEmojiIconAllowed: true,
+      fallback: <span data-testid="default" />,
+      onChoose,
+    })
+    const button = screen.getByRole('button', { name: 'Choose an icon' })
+    expect(button.compareDocumentPosition(screen.getByLabelText('Project name'))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+    fireEvent.click(button)
+    expect(onChoose).toHaveBeenCalledTimes(1)
+  })
+
+  it('draws no icon button without the icon field', () => {
+    details()
+    expect(screen.queryByRole('button', { name: 'Choose an icon' })).toBeNull()
+  })
+})
 
 function field(value: string, defaultName: string | null, onChange = vi.fn()) {
   return render(
@@ -95,5 +144,26 @@ describe('EnvironmentNameField', () => {
       target: { value: 'Edge' },
     })
     expect(onChange).toHaveBeenCalledWith('Edge')
+  })
+})
+
+describe('workspaceSummary', () => {
+  const workspaces = [
+    { id: 'w1', name: 'Marketing' },
+    { id: 'w2', name: null },
+  ] as never[]
+
+  it('names the picked workspace', () => {
+    expect(workspaceSummary('existing', workspaces, 'w1', '')).toBe('Marketing')
+    expect(workspaceSummary('existing', workspaces, 'w2', '')).toBe('Workspace')
+  })
+
+  it('asks for a pick when none is picked', () => {
+    expect(workspaceSummary('existing', workspaces, '', '')).toBe('Choose a workspace')
+  })
+
+  it('names a new workspace once it has a name', () => {
+    expect(workspaceSummary('new', workspaces, 'w1', '  Shop  ')).toBe('New: Shop')
+    expect(workspaceSummary('new', workspaces, 'w1', ' ')).toBe('New workspace')
   })
 })

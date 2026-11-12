@@ -153,7 +153,7 @@ describe('instance hostname and update queries', () => {
 })
 
 describe("Let's Encrypt terms guard before a hostnames save", () => {
-  const letsEncryptRow = [{ host: 'https://panel.example.com', source: 'lets-encrypt' as const }]
+  const letsEncryptRow = [{ host: 'https://panel.example.com', source: 'acme-http-01' as const }]
   const platformRow = [{ host: 'https://panel.example.com', source: 'platform-ca' as const }]
 
   it('refuses while the settings are loading, then follows the server answer', async () => {

@@ -1,0 +1,79 @@
+import type { BadgeTone } from '@/components/ui'
+import type { PinnedBy } from '@/lib/instance-api'
+
+/** A control plane key fingerprint is 43 base64url characters (SHA-256, no padding). */
+export const PANEL_FINGERPRINT_PATTERN = /^[A-Za-z0-9_-]{43}$/
+
+/**
+ * Nothing is printed beside an install command to compare by eye: the command
+ * carries the key inside it and the installer does the comparing.
+ */
+export const COMPARE_KEY_HELP =
+  'The install command from Add Server carries the current key inside it. The installer checks that key against this control plane before it installs anything, and stops if they differ.'
+
+export const NO_PANEL_KEY_HELP =
+  'This server was installed without a control plane key and cannot tell this control plane from an impostor. Reinstall it with a fresh command.'
+
+export const OTHER_KEY_HELP =
+  'These servers report a control plane key that is not this one. Either they were pointed at another control plane or something is impersonating this one. If you did not expect this, reinstall them with a fresh command.'
+
+/** "name (fingerprint)" for each server whose signed pin names another key. */
+export function serversPinnedToAnotherKey(
+  servers: readonly {
+    id: string
+    name: string | null
+    pinReport?: { fingerprint: string; matches: boolean } | null
+  }[]
+): string[] {
+  return servers
+    .filter((server) => server.pinReport?.matches === false)
+    .map((server) => `${server.name ?? server.id} (${server.pinReport?.fingerprint || 'no key'})`)
+}
+
+/**
+ * Pinned servers that cannot follow a key change yet: their pin report shows
+ * no rotation passkeys (""), or they are pinned and never reported them
+ * (null: an older daemon). A control plane from before rotation passkeys
+ * sends no such field at all, and nothing is listed.
+ */
+export function serversNotRotatable(
+  servers: readonly {
+    id: string
+    name: string | null
+    pinnedBy?: PinnedBy
+    pinPasskeys?: string | null
+  }[]
+): string[] {
+  const pinned = (pinnedBy: PinnedBy | undefined) =>
+    pinnedBy === 'install' || pinnedBy === 'upgrade'
+  return servers
+    .filter(
+      (server) =>
+        server.pinPasskeys === '' || (server.pinPasskeys === null && pinned(server.pinnedBy))
+    )
+    .map((server) => server.name ?? server.id)
+}
+
+export function isPanelFingerprint(value: string): boolean {
+  return PANEL_FINGERPRINT_PATTERN.test(value)
+}
+
+export type PinnedByDisplay = Readonly<{ label: string; tone: BadgeTone; help: string | null }>
+
+/**
+ * How a server's pin reads. `none` means no pin is recorded, which an older
+ * control plane (or one that has not learned it yet) also reports, so it shows
+ * nothing rather than a warning on every server.
+ */
+export function pinnedByDisplay(pinnedBy: PinnedBy | undefined): PinnedByDisplay | null {
+  switch (pinnedBy) {
+    case 'install':
+      return { label: 'Pinned at Install', tone: 'ok', help: null }
+    case 'upgrade':
+      return { label: 'Pinned on Upgrade', tone: 'info', help: null }
+    case 'unsafe':
+      return { label: 'No Control Plane Key', tone: 'danger', help: NO_PANEL_KEY_HELP }
+    default:
+      return null
+  }
+}

@@ -96,7 +96,7 @@ function ServerHeader({ row }: Readonly<{ row: UpgradeRunServerRow }>) {
       </View>
       <Line label="Change" value={serverChangeText(row)} />
       <Line label="Organization" value={row.organizationName?.trim() || EMPTY_CELL} />
-      <Line label="Datacenter" value={row.datacenterName?.trim() || EMPTY_CELL} />
+      <Line label="Datacenter Network" value={row.datacenterName?.trim() || EMPTY_CELL} />
       <Line label="Heartbeat" value={heartbeatText(row, timeText)} />
     </View>
   )

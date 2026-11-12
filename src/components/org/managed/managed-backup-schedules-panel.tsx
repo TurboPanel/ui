@@ -6,7 +6,6 @@ import {
   Button,
   ButtonRow,
   Checkbox,
-  ConfirmButton,
   EmptyState,
   FormField,
   InlineNotice,
@@ -16,6 +15,7 @@ import {
   Select,
   TextField,
   Toggle,
+  TypeNameDeleteButton,
   type SegmentedOption,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -422,10 +422,11 @@ function PolicyRow({
           size="sm"
           onPress={onToggleHistory}
         />
-        <ConfirmButton
+        <TypeNameDeleteButton
           label="Delete"
-          confirmLabel="Confirm delete"
-          prompt="Delete this schedule? Backups it already made stay on the server."
+          thing="Backup Schedule"
+          name={policy.name}
+          description="Backups it already made stay on the server."
           disabled={busy}
           onConfirm={onDelete}
         />

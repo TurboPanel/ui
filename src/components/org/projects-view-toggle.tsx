@@ -31,7 +31,7 @@ const LABEL: Record<ProjectsView, string> = { grid: 'Grid', list: 'List' }
 function ViewIcon({ view, color }: Readonly<{ view: ProjectsView; color: string }>) {
   const stroke = { fill: 'none', stroke: color, strokeWidth: 1.75 } as const
   return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" accessibilityElementsHidden>
+    <Svg width={16} height={16} viewBox="0 0 24 24" aria-hidden>
       {view === 'grid' ? (
         <>
           <Rect x={4} y={4} width={6.5} height={6.5} rx={1.5} {...stroke} />
@@ -95,6 +95,7 @@ export function ProjectsViewToggle({
             accessibilityRole="radio"
             accessibilityLabel={LABEL[view]}
             accessibilityState={{ checked: on }}
+            aria-checked={on}
             tabIndex={on ? 0 : -1}
             {...({ onKeyDown: onKey } as object)}
             onPress={() => onChange(view)}

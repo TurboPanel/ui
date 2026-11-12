@@ -4,6 +4,7 @@ import {
   coveringCertificates,
   type PickerCertificate,
   pinnedCertificateGap,
+  stalePinReset,
 } from './hosting-tls-picker'
 
 function cert(
@@ -79,5 +80,28 @@ describe('pinnedCertificateGap', () => {
     expect(gap?.note).toBe(
       'This certificate doesn’t cover app.io, so the deploy will be refused. Pick another or change the hostnames.'
     )
+  })
+})
+
+describe('stalePinReset', () => {
+  const editor = (tlsId: string | null, hostnames: string) => ({ tlsId, hostnames, www: null })
+
+  it('lets a Let’s Encrypt pin go and asks for a new certificate when the name changed', () => {
+    expect(stalePinReset(rows, editor('le', 'shop.turbopanel.io'), 'turbopanel.io')).toEqual({
+      tlsId: null,
+      getLetsEncrypt: true,
+    })
+  })
+
+  it('lets an uploaded pin go without asking for a certificate', () => {
+    expect(stalePinReset(rows, editor('up-bare', 'shop.turbopanel.io'), 'turbopanel.io')).toEqual({
+      tlsId: null,
+    })
+  })
+
+  it('keeps a pin that still covers the new name, or when the names did not change', () => {
+    expect(stalePinReset(rows, editor('wild', 'shop.turbopanel.io'), 'turbopanel.io')).toBeNull()
+    expect(stalePinReset(rows, editor('le', ' TurboPanel.io '), 'turbopanel.io')).toBeNull()
+    expect(stalePinReset(rows, editor(null, 'shop.turbopanel.io'), 'turbopanel.io')).toBeNull()
   })
 })

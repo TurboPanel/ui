@@ -7,10 +7,7 @@ import {
   type UseMutationOptions,
   type UseMutationResult,
 } from '@tanstack/react-query'
-import {
-  canQueryControlPlane,
-  useControlPlaneStore,
-} from '@/lib/control-plane-accounts'
+import { canQueryControlPlane, useControlPlaneStore } from '@/lib/control-plane-accounts'
 import {
   checkPermission,
   fetchInstallStatus,
@@ -106,7 +103,7 @@ export type ApiMutationResult<T> =
  */
 export function useApiMutation<TData, TVariables = void, TContext = unknown>(
   options: UseMutationOptions<TData, Error, TVariables, TContext> &
-    Readonly<{ fallbackError?: string }>,
+    Readonly<{ fallbackError?: string }>
 ): UseMutationResult<TData, Error, TVariables, TContext> & {
   actionError: string | null
   run: (variables: TVariables) => Promise<ApiMutationResult<TData>>
@@ -116,10 +113,7 @@ export function useApiMutation<TData, TVariables = void, TContext = unknown>(
 
   let actionError: string | null = null
   if (mutation.error && !isForbiddenError(mutation.error)) {
-    actionError =
-      mutation.error instanceof Error
-        ? mutation.error.message
-        : fallbackError
+    actionError = mutation.error instanceof Error ? mutation.error.message : fallbackError
   }
 
   return {
@@ -167,11 +161,11 @@ function needsResourceIdLookup(entityType: string): boolean {
  * Client-side display hint for whether the current user likely has a permission
  * on a resource. This is **not** a security boundary — the API enforces authz.
  */
-export function useCan(
+export function useCanState(
   entityType: string | null,
   entityId: string,
-  permissionKey: PermissionKey,
-): boolean {
+  permissionKey: PermissionKey
+): Readonly<{ allowed: boolean; loading: boolean }> {
   const lookup = entityType !== null && needsResourceIdLookup(entityType)
   const resourceQuery = useQuery({
     queryKey: queryKeys.auth.resourceId(entityType ?? '', entityId),
@@ -194,9 +188,16 @@ export function useCan(
     staleTime: 30_000,
   })
 
-  if (entityType === null || resourceQuery.isLoading || canQuery.isLoading) {
-    return false
-  }
+  if (entityType === null) return { allowed: false, loading: false }
+  if (resourceQuery.isLoading || canQuery.isLoading) return { allowed: false, loading: true }
+  return { allowed: canQuery.data ?? false, loading: false }
+}
 
-  return canQuery.data ?? false
+/** Whether the signed-in person holds the permission; false while the answer is loading. */
+export function useCan(
+  entityType: string | null,
+  entityId: string,
+  permissionKey: PermissionKey
+): boolean {
+  return useCanState(entityType, entityId, permissionKey).allowed
 }

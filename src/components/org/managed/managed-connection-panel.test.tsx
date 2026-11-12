@@ -8,17 +8,24 @@ const { useServerAddresses, useCan, downloadCaBundle } = vi.hoisted(() => ({
   downloadCaBundle: vi.fn(async () => undefined),
 }))
 vi.mock('expo-router', () => ({
-  Link: ({ href, children }: { href: string; children?: unknown }) => <a href={href}>{children as never}</a>,
+  Link: ({ href, children }: { href: string; children?: unknown }) => (
+    <a href={href}>{children as never}</a>
+  ),
 }))
 vi.mock('@/lib/queries/servers', () => ({ useServerAddresses }))
 vi.mock('@/lib/query-client', () => ({ useCan }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
   SectionPanel: ({ children }: { children?: unknown }) => <div>{children as never}</div>,
-  Button: ({ label, onPress }: { label: string; onPress?: () => void }) => <button onClick={onPress}>{label}</button>,
+  Button: ({ label, onPress }: { label: string; onPress?: () => void }) => (
+    <button onClick={onPress}>{label}</button>
+  ),
   CopyButton: ({ value, accessibilityLabel }: { value: string; accessibilityLabel?: string }) => (
     <button data-copy={value} aria-label={accessibilityLabel}>
       Copy DSN
@@ -46,7 +53,7 @@ describe('managed connection panel endpoints', () => {
           { reach: 'external', host: 'db.example.com', port: 15432 },
           { reach: 'local', host: '127.0.0.1', port: 15432 },
         ]}
-      />,
+      />
     )
     expect(screen.getByText('Reachable endpoints')).toBeTruthy()
     expect(screen.getByText(/From outside the server/)).toBeTruthy()
@@ -65,13 +72,27 @@ const connection = {
 
 describe('managed connection panel connection strings', () => {
   it('downloads the Organization CA of the organization the panel shows', () => {
-    render(<ManagedConnectionPanel orgId="org-1" managed={managed} connection={connection} server={null} />)
+    render(
+      <ManagedConnectionPanel
+        orgId="org-1"
+        managed={managed}
+        connection={connection}
+        server={null}
+      />
+    )
     fireEvent.click(screen.getByText('Download Organization CA'))
     expect(downloadCaBundle).toHaveBeenCalledExactlyOnceWith('org-1')
   })
 
   it('keeps the single DSN when the control plane sends no list', () => {
-    render(<ManagedConnectionPanel orgId="org-1" managed={managed} connection={connection} server={null} />)
+    render(
+      <ManagedConnectionPanel
+        orgId="org-1"
+        managed={managed}
+        connection={connection}
+        server={null}
+      />
+    )
     expect(screen.getByText('DSN')).toBeTruthy()
     expect(screen.getAllByText('Copy DSN')).toHaveLength(1)
     expect(screen.queryByText(/Set the address clients use/)).toBeNull()
@@ -95,21 +116,37 @@ describe('managed connection panel connection strings', () => {
         server={null}
         connections={[{ ...connection, label: 'Public', scope: 'public', primary: true }, dc]}
         endpoints={[
-          { reach: 'external', host: 'omega.example.com', port: 15432, label: 'Public', scope: 'public' },
-          { reach: 'external', host: 'omega.dc1.example.com', port: 15432, label: 'Ashburn', scope: 'datacenter' },
+          {
+            reach: 'external',
+            host: 'omega.example.com',
+            port: 15432,
+            label: 'Public',
+            scope: 'public',
+          },
+          {
+            reach: 'external',
+            host: 'omega.dc1.example.com',
+            port: 15432,
+            label: 'Ashburn',
+            scope: 'datacenter',
+          },
           { reach: 'local', host: '127.0.0.1', port: 15432 },
         ]}
-      />,
+      />
     )
     const labels = [
       screen.getByText('Public: omega.example.com (main)'),
-      screen.getByText('Datacenter Ashburn: omega.dc1.example.com'),
+      screen.getByText('Datacenter Network Ashburn: omega.dc1.example.com'),
     ]
-    expect(labels[0].compareDocumentPosition(labels[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(
+      labels[0].compareDocumentPosition(labels[1]) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
     const copies = screen.getAllByText('Copy DSN').map((el) => el.dataset.copy)
     expect(copies).toEqual([connection.dsn, dc.dsn])
-    expect(screen.getByLabelText('Copy DSN for Datacenter Ashburn: omega.dc1.example.com')).toBeTruthy()
-    expect(screen.getByText(/From outside the server \(Datacenter Ashburn\)/)).toBeTruthy()
+    expect(
+      screen.getByLabelText('Copy DSN for Datacenter Network Ashburn: omega.dc1.example.com')
+    ).toBeTruthy()
+    expect(screen.getByText(/From outside the server \(Datacenter Network Ashburn\)/)).toBeTruthy()
     expect(screen.queryByText(/^DSN$/)).toBeNull()
   })
 
@@ -121,13 +158,25 @@ describe('managed connection panel connection strings', () => {
         connection={connection}
         server={null}
         connections={[
-          { ...connection, host: 'a.example.com', label: 'Public', scope: 'public', primary: false },
-          { ...connection, host: 'b.example.com', label: 'Ashburn', scope: 'datacenter', primary: true },
+          {
+            ...connection,
+            host: 'a.example.com',
+            label: 'Public',
+            scope: 'public',
+            primary: false,
+          },
+          {
+            ...connection,
+            host: 'b.example.com',
+            label: 'Ashburn',
+            scope: 'datacenter',
+            primary: true,
+          },
         ]}
-      />,
+      />
     )
     expect(screen.getByText('Public: a.example.com')).toBeTruthy()
-    expect(screen.getByText('Datacenter Ashburn: b.example.com (main)')).toBeTruthy()
+    expect(screen.getByText('Datacenter Network Ashburn: b.example.com (main)')).toBeTruthy()
   })
 
   it('prompts to set the address clients use with a link to the Network tab', () => {
@@ -138,15 +187,23 @@ describe('managed connection panel connection strings', () => {
         connection={null}
         server={{ id: 'srv-1', name: 'omega', hostname: 'omega' }}
         addressNeeded
-      />,
+      />
     )
     expect(screen.getByText('Set the address clients use').closest('a')?.getAttribute('href')).toBe(
-      '/org-1/servers/srv-1?tab=network',
+      '/org-1/servers/srv-1?tab=network'
     )
   })
 
   it('still says who can set it when there is no link to show', () => {
-    render(<ManagedConnectionPanel orgId="org-1" managed={managed} connection={null} server={null} addressNeeded />)
+    render(
+      <ManagedConnectionPanel
+        orgId="org-1"
+        managed={managed}
+        connection={null}
+        server={null}
+        addressNeeded
+      />
+    )
     expect(screen.getByText(/owner or manager can set the address clients use/)).toBeTruthy()
     expect(screen.queryByText('Set the address clients use')).toBeNull()
   })

@@ -2,19 +2,10 @@ import { useRouter } from 'expo-router'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { PlatformBadge } from '@/components/org/platform-badge'
 import { panelStyles } from '@/components/ui/panel-styles'
-import {
-  Button,
-  ButtonRow,
-  EmptyState,
-  LoadingState,
-  SectionPanel,
-} from '@/components/ui'
+import { Button, ButtonRow, EmptyState, LoadingState, SectionPanel } from '@/components/ui'
 import { useProjects, useWorkspace } from '@/lib/queries'
 import type { ProjectRecord, WorkspaceRecord } from '@/lib/instance-api'
-import {
-  isTurbopanelWorkspace,
-  TURBOPANEL_WORKSPACE_DESCRIPTION,
-} from '@/lib/system-inventory'
+import { isTurbopanelWorkspace, TURBOPANEL_WORKSPACE_DESCRIPTION } from '@/lib/system-inventory'
 import { spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 
@@ -51,13 +42,9 @@ function renderWorkspaceBody({
           </Text>
           {system ? <PlatformBadge /> : null}
         </View>
-        {!system ? (
-          <Button label="Edit" variant="secondary" size="sm" onPress={onEdit} />
-        ) : null}
+        {!system ? <Button label="Edit" variant="secondary" size="sm" onPress={onEdit} /> : null}
       </View>
-      {description ? (
-        <Text style={panelStyles.detailLine}>{description}</Text>
-      ) : null}
+      {description ? <Text style={panelStyles.detailLine}>{description}</Text> : null}
     </>
   )
 }
@@ -85,9 +72,7 @@ function renderProjectsBody({
           style={panelStyles.detailCard}
           onPress={() => onOpenProject(project.id)}
         >
-          <Text style={panelStyles.detailTitle}>
-            {project.name?.trim() || 'Unnamed project'}
-          </Text>
+          <Text style={panelStyles.detailTitle}>{project.name?.trim() || 'Unnamed project'}</Text>
           {project.description ? (
             <Text style={panelStyles.detailLine}>{project.description}</Text>
           ) : null}
@@ -122,9 +107,7 @@ export function WorkspaceDetailSection({
   return (
     <View style={styles.root}>
       <View style={styles.headingRow}>
-        <Text style={panelStyles.pageTitle}>
-          {workspace?.name?.trim() || 'Workspace'}
-        </Text>
+        <Text style={panelStyles.pageTitle}>{workspace?.name?.trim() || 'Workspace'}</Text>
         {system ? <PlatformBadge /> : null}
       </View>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
@@ -141,12 +124,10 @@ export function WorkspaceDetailSection({
         <ButtonRow>
           {!system ? (
             <Button
-              label="New project"
+              label="New Project"
               variant="primary"
               onPress={() =>
-                router.push(
-                  `/${orgId}/projects/new?workspaceId=${encodeURIComponent(workspaceId)}`,
-                )
+                router.push(`/${orgId}/projects/new?workspaceId=${encodeURIComponent(workspaceId)}`)
               }
             />
           ) : null}
@@ -155,9 +136,7 @@ export function WorkspaceDetailSection({
             variant="secondary"
             size="sm"
             onPress={() =>
-              router.push(
-                `/${orgId}/projects?workspaceId=${encodeURIComponent(workspaceId)}`,
-              )
+              router.push(`/${orgId}/projects?workspaceId=${encodeURIComponent(workspaceId)}`)
             }
           />
         </ButtonRow>

@@ -163,7 +163,7 @@ describe('HeaderSearch', () => {
 
   it('lists general actions first on an empty query and runs one on Enter', async () => {
     const input = await mount()
-    expect(screen.getAllByRole('option')[0]?.textContent).toContain('Add server')
+    expect(screen.getAllByRole('option')[0]?.textContent).toContain('Add Server')
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(push).toHaveBeenCalledWith('/o1/servers?add=1')
   })

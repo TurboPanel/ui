@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { DnsCertificatePanel } from '@/components/org/dns-certificate-panel'
+import { NO_RENEWAL_MESSAGE } from '@/lib/dns-certificates'
 import { OrganizationCaPanel } from '@/components/org/organization-ca-panel'
+import { TlsAcmeOptIn, TlsAcmeTermsRenewal } from '@/components/org/tls-acme-opt-in'
+import { TlsContactEmailField } from '@/components/org/tls-contact-email-field'
 import {
   Button,
-  ConfirmButton,
   EmptyState,
   LoadingState,
   SectionPanel,
@@ -13,9 +16,11 @@ import {
   SettingRow,
   TextField,
   Toggle,
+  TypeNameDeleteButton,
 } from '@/components/ui'
 import {
   fetchOrgTlsSettings,
+  type OrgTlsSettings,
   saveOrgTlsSettings,
   type TlsRecord,
   type TlsSource,
@@ -34,8 +39,10 @@ function tlsTitle(row: TlsRecord): string {
   return row.name?.trim() || row.metadata.dnsNames[0] || row.id
 }
 
-function tlsSourceLabel(source: string): string {
-  switch (source) {
+function tlsSourceLabel(row: TlsRecord): string {
+  // A certificate TurboPanel orders by DNS challenge is stored as a library upload.
+  if (row.metadata.acme?.managedBy === 'panel') return "Let's Encrypt"
+  switch (row.source) {
     case 'organization_ca':
       return 'Organization CA'
     case 'upload':
@@ -44,9 +51,30 @@ function tlsSourceLabel(source: string): string {
       return 'Self-signed'
     case 'lets_encrypt':
       return "Let's Encrypt"
+    case 'provider_origin':
+      return 'Cloudflare Origin'
     default:
-      return source
+      return row.source
   }
+}
+
+/**
+ * Who issued a certificate and from when it is valid, for every row the
+ * stored-copy lines leave out (they cover Let's Encrypt rows the serving host
+ * renews). A certificate TurboPanel ordered by DNS challenge is kept as an
+ * upload, so it is read here too. Placeholder values (empty issuer, epoch
+ * start) say nothing and are skipped.
+ */
+export function tlsIssuerLines(row: TlsRecord, locale?: string): string[] {
+  if (row.source === 'lets_encrypt') return []
+  const { issuer, notBefore } = row.metadata
+  const lines: string[] = []
+  if (issuer) lines.push(`Issued by ${issuer}`)
+  const started = notBefore ? Date.parse(notBefore) : Number.NaN
+  if (Number.isFinite(started) && started > 0) {
+    lines.push(`Valid from ${new Date(started).toLocaleString(locale)}`)
+  }
+  return lines
 }
 
 function formatSans(row: TlsRecord): string {
@@ -57,7 +85,8 @@ function tlsStatusLabel(row: TlsRecord): string {
   if (row.metadata.status === 'automatic') {
     return 'Issued and renewed by the serving host'
   }
-  return row.metadata.status
+  const status = row.metadata.status ?? ''
+  return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
 const SOURCE_OPTIONS = [
@@ -96,7 +125,7 @@ function TlsCertificateList({
     <View key={row.id} style={panelStyles.detailCard}>
       <Text style={panelStyles.detailTitle}>{tlsTitle(row)}</Text>
       <Text style={panelStyles.muted}>
-        {tlsSourceLabel(row.source)} · {tlsStatusLabel(row)}
+        {tlsSourceLabel(row)} · {tlsStatusLabel(row)}
       </Text>
       <Text style={styles.sans}>{formatSans(row)}</Text>
       {tlsDateLines(row).map((line) => (
@@ -104,7 +133,7 @@ function TlsCertificateList({
           {line}
         </Text>
       ))}
-      {tlsStoredCopyLines(row).map((line) => (
+      {[...tlsIssuerLines(row), ...tlsStoredCopyLines(row)].map((line) => (
         <Text key={line} style={panelStyles.muted}>
           {line}
         </Text>
@@ -112,11 +141,22 @@ function TlsCertificateList({
       {row.metadata.acme?.lastError ? (
         <Text style={panelStyles.error}>Issuance failing: {row.metadata.acme.lastError}</Text>
       ) : null}
-      {canManage ? (
-        <ConfirmButton
+      {row.metadata.acme?.managedBy === 'panel' && row.metadata.status === 'ready' ? (
+        <Text style={panelStyles.muted}>{NO_RENEWAL_MESSAGE}</Text>
+      ) : null}
+      {canManage && row.source === 'organization_ca' ? (
+        <Text style={panelStyles.muted}>Replace it with Rotate on the Organization CA panel.</Text>
+      ) : null}
+      {canManage && row.source !== 'organization_ca' ? (
+        <TypeNameDeleteButton
           label={deletingId === row.id ? 'Deleting…' : 'Delete'}
-          confirmLabel="Delete certificate"
-          prompt="Remove this certificate?"
+          thing="Certificate"
+          name={tlsTitle(row)}
+          description={
+            row.source === 'provider_origin'
+              ? 'The certificate is removed and also revoked at Cloudflare.'
+              : 'The certificate is removed.'
+          }
           busy={deletingId === row.id}
           disabled={deletePending && deletingId !== row.id}
           onConfirm={() => onDelete(row.id)}
@@ -137,7 +177,19 @@ function TlsLetsEncryptPanel({
   settingsLoading,
   pending,
   onToggle,
+  orgId,
+  contactEmail,
+  termsUrl,
+  termsAcceptedAt,
+  acceptedTermsUrl,
+  termsChanged,
 }: Readonly<{
+  orgId: string
+  contactEmail: string | null
+  termsUrl: string | null
+  termsAcceptedAt: string | null
+  acceptedTermsUrl: string | null
+  termsChanged: boolean
   canManage: boolean
   acmeEnabled: boolean
   acmeError: string | null
@@ -149,7 +201,13 @@ function TlsLetsEncryptPanel({
   return (
     <SectionPanel
       title="Let's Encrypt"
-      hint="On for new organizations — turn it off to stop any Let's Encrypt certificate being requested"
+      // Only while it is off and the setting loaded: once it is on, the hint would
+      // contradict the switch, and after a failed read nobody knows it is off.
+      hint={
+        acmeEnabled || settingsLoading || settingsError
+          ? undefined
+          : "Off until your organization accepts the Let's Encrypt terms and turns it on"
+      }
     >
       {acmeError ? <Text style={panelStyles.error}>{acmeError}</Text> : null}
       {settingsError && !acmeError ? (
@@ -157,19 +215,75 @@ function TlsLetsEncryptPanel({
           {errorMessage(settingsError, "Failed to load the Let's Encrypt setting")}
         </Text>
       ) : null}
-      <SettingRow
-        label="Allow Let's Encrypt certificates"
-        description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate (or whose compose asks for tls.mode automatic) is refused until it is turned back on or the choice is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
-      >
-        <Toggle
-          value={acmeEnabled}
-          onValueChange={onToggle}
-          disabled={!canManage || pending || settingsLoading}
-          accessibilityLabel="Allow Let's Encrypt certificates"
+      {acmeEnabled ? (
+        <>
+          <SettingRow
+            label="Allow Let's Encrypt certificates"
+            description="When off, no new Let's Encrypt / ACME certificate can be requested for this organization, and a deploy that still pins a Let's Encrypt certificate (or whose compose asks for tls.mode automatic) is refused until it is turned back on or the choice is changed. Certificates already issued are not revoked by turning this off, but the encrypted copies of their keys that the panel stores are erased."
+          >
+            <Toggle
+              value={acmeEnabled}
+              onValueChange={onToggle}
+              disabled={!canManage || pending || settingsLoading}
+              accessibilityLabel="Allow Let's Encrypt certificates"
+            />
+          </SettingRow>
+          {termsAcceptedAt ? (
+            <Text style={panelStyles.muted}>
+              Let&apos;s Encrypt terms accepted {new Date(termsAcceptedAt).toLocaleString()}.
+            </Text>
+          ) : null}
+          {canManage && termsUrl !== null && (termsChanged || acceptedTermsUrl === null) ? (
+            <TlsAcmeTermsRenewal
+              orgId={orgId}
+              termsUrl={termsUrl}
+              changed={termsChanged}
+              disabled={settingsLoading || Boolean(settingsError)}
+            />
+          ) : null}
+          <TlsContactEmailField
+            orgId={orgId}
+            canManage={canManage}
+            savedEmail={contactEmail}
+            loaded={!settingsLoading && !settingsError}
+          />
+        </>
+      ) : null}
+      {!acmeEnabled && canManage && !settingsLoading && !settingsError ? (
+        <TlsAcmeOptIn
+          orgId={orgId}
+          savedEmail={contactEmail}
+          termsUrl={termsUrl}
+          termsAcceptedAt={termsAcceptedAt}
+          disabled={settingsLoading || Boolean(settingsError)}
         />
-      </SettingRow>
+      ) : null}
+      {!acmeEnabled && !canManage ? (
+        <Text style={panelStyles.muted}>
+          Off. An organization manager can accept the Let&apos;s Encrypt terms and turn it on.
+        </Text>
+      ) : null}
     </SectionPanel>
   )
+}
+
+/**
+ * What the Let's Encrypt panel reads from the settings query. A failed refresh
+ * with settings already shown is not an error here, so the form (and what was
+ * typed) stays.
+ */
+function letsEncryptSettingsProps(
+  query: Readonly<{ data?: OrgTlsSettings; isError: boolean; error: unknown }>
+) {
+  const data = query.data
+  return {
+    contactEmail: data?.acmeContactEmail ?? null,
+    termsUrl: data?.acmeTermsUrl ?? null,
+    termsAcceptedAt: data?.acmeTermsAcceptedAt ?? null,
+    acceptedTermsUrl: data?.acmeAcceptedTermsUrl ?? null,
+    termsChanged: data?.acmeTermsChanged ?? false,
+    settingsError: query.isError && !data ? query.error : null,
+  }
 }
 
 export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
@@ -280,9 +394,10 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
       <OrganizationCaPanel orgId={orgId} />
       <TlsLetsEncryptPanel
         canManage={canManage}
+        orgId={orgId}
+        {...letsEncryptSettingsProps(tlsSettingsQuery)}
         acmeEnabled={acmeEnabled}
         acmeError={acmeError}
-        settingsError={tlsSettingsQuery.isError ? tlsSettingsQuery.error : null}
         settingsLoading={tlsSettingsQuery.isLoading}
         pending={acmeMutation.isPending}
         onToggle={onToggleAcme}
@@ -304,6 +419,8 @@ export function TlsOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         />
         {queryError ? <Text style={panelStyles.error}>{queryError}</Text> : null}
       </SectionPanel>
+
+      {canManage ? <DnsCertificatePanel orgId={orgId} /> : null}
 
       {canManage ? (
         <SectionPanel

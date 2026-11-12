@@ -1,0 +1,232 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setActiveOrganizationId } from '@/lib/org-context'
+import {
+  addTunnelHostname,
+  confirmedDnsRecords,
+  createTunnel,
+  deleteTunnel,
+  fetchExistingOriginCertificates,
+  fetchOriginCertificates,
+  fetchTunnelHostnames,
+  fetchTunnels,
+  removeTunnelHostname,
+  rotateTunnelRunToken,
+  setServerTunnelCarrying,
+  setTunnelVerifyOrigin,
+  TunnelDnsRecordExistsError,
+  tunnelDnsRefusal,
+  TunnelDnsReplaceIncompleteError,
+  updateTunnelPlacement,
+} from './instance-api'
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+}
+
+describe('instance-api tunnel wrappers', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    fetchMock.mockImplementation(async () => jsonResponse({ ok: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    setActiveOrganizationId(null)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    setActiveOrganizationId(null)
+  })
+
+  function lastCall(): { url: string; init: RequestInit } {
+    const [url, init] = fetchMock.mock.calls.at(-1) ?? []
+    return { url: String(url), init: (init ?? {}) as RequestInit }
+  }
+
+  it('lists tunnels', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ tunnels: [] }))
+    await expect(fetchTunnels('org-1')).resolves.toEqual({ tunnels: [] })
+    expect(lastCall().url).toMatch(/\/organizations\/org-1\/tunnels$/)
+  })
+
+  it('creates a tunnel with the account, name and where it runs', async () => {
+    await createTunnel('org-1', {
+      carrierId: 'c1',
+      name: 'main',
+      placement: 'all',
+      datacenterId: 'd1',
+      exceptServerIds: ['s2'],
+    })
+    const { url, init } = lastCall()
+    expect(url).toMatch(/\/organizations\/org-1\/tunnels$/)
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({
+      carrierId: 'c1',
+      name: 'main',
+      placement: 'all',
+      datacenterId: 'd1',
+      exceptServerIds: ['s2'],
+    })
+  })
+
+  it('changes where a tunnel runs with a PUT', async () => {
+    await updateTunnelPlacement('org-1', 't1', { placement: 'chosen', serverIds: ['s1'] })
+    const { url, init } = lastCall()
+    expect(url).toMatch(/\/tunnels\/t1\/placement$/)
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(String(init.body))).toEqual({ placement: 'chosen', serverIds: ['s1'] })
+  })
+
+  it('removes a tunnel', async () => {
+    await deleteTunnel('org-1', 't1')
+    expect(lastCall().url).toMatch(/\/tunnels\/t1$/)
+    expect(lastCall().init.method).toBe('DELETE')
+  })
+
+  it('keeps the code on a refusal so the screen can word it', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'tunnel_in_use', message: 'This Tunnel still carries hostnames.' }, 409)
+    )
+    await expect(deleteTunnel('org-1', 't1')).rejects.toThrow(/HTTP 409: tunnel_in_use/)
+  })
+
+  it('lists, adds and removes hostnames', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ hostnames: [] }))
+    await expect(fetchTunnelHostnames('org-1', 't1')).resolves.toEqual({ hostnames: [] })
+    expect(lastCall().url).toMatch(/\/tunnels\/t1\/hostnames$/)
+    await addTunnelHostname('org-1', 't1', { hostname: 'app.example.com', isLocalOnly: true })
+    expect(lastCall().init.method).toBe('POST')
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({
+      hostname: 'app.example.com',
+      isLocalOnly: true,
+    })
+    await removeTunnelHostname('org-1', 't1', 'h1')
+    expect(lastCall().url).toMatch(/\/tunnels\/t1\/hostnames\/h1$/)
+    expect(lastCall().init.method).toBe('DELETE')
+  })
+
+  it('marks a server as never running tunnels', async () => {
+    await setServerTunnelCarrying('org-1', 's1', false)
+    const { url, init } = lastCall()
+    expect(url).toMatch(/\/organizations\/org-1\/servers\/s1\/tunnel-carrying$/)
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(String(init.body))).toEqual({ carry: false })
+  })
+
+  it('turns the verified connection on with the wildcard choice, or off', async () => {
+    await setTunnelVerifyOrigin('org-1', 't1', { enabled: true, wildcard: true })
+    expect(lastCall().url).toMatch(/\/organizations\/org-1\/tunnels\/t1\/verify-origin$/)
+    expect(lastCall().init.method).toBe('PUT')
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ enabled: true, wildcard: true })
+    await setTunnelVerifyOrigin('org-1', 't1', { enabled: false })
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ enabled: false })
+  })
+
+  it('lists the origin certificates TurboPanel issued for an account', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ originCertificates: [] }))
+    await expect(fetchOriginCertificates('org-1', 'c1')).resolves.toEqual({
+      originCertificates: [],
+    })
+    expect(lastCall().url).toMatch(/\/organizations\/org-1\/carriers\/c1\/origin-certificates$/)
+  })
+
+  it('looks up what the provider holds for a zone, with the zone encoded', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ zone: 'example.com', certificates: [] }))
+    await fetchExistingOriginCertificates('org-1', 'c1', 'example.com')
+    expect(lastCall().url).toMatch(
+      /\/carriers\/c1\/origin-certificates\/existing\?zone=example\.com$/
+    )
+    await fetchExistingOriginCertificates('org-1', 'c1', 'a b&c')
+    expect(lastCall().url).toContain('zone=a%20b%26c')
+  })
+  it('a name held by DNS records is a typed refusal naming them, and a confirmed add sends their ids', async () => {
+    const records = [{ id: 'rec-a', type: 'A', content: '192.0.2.10', proxied: true }]
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse(
+        {
+          error: 'dns_record_exists',
+          message: 'A DNS record for app.example.com already exists: A 192.0.2.10 (proxied).',
+          hostname: 'app.example.com',
+          records,
+        },
+        409
+      )
+    )
+    const refused = await addTunnelHostname('org-1', 't1', { hostname: 'app.example.com' }).catch(
+      (err: unknown) => err
+    )
+    expect(refused).toBeInstanceOf(TunnelDnsRecordExistsError)
+    expect((refused as TunnelDnsRecordExistsError).records).toEqual(records)
+    expect((refused as TunnelDnsRecordExistsError).hostname).toBe('app.example.com')
+    await addTunnelHostname('org-1', 't1', {
+      hostname: 'app.example.com',
+      replaceDnsRecords: confirmedDnsRecords(records),
+    })
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({
+      hostname: 'app.example.com',
+      replaceDnsRecords: [{ id: 'rec-a', type: 'A', content: '192.0.2.10' }],
+    })
+    expect((refused as TunnelDnsRecordExistsError).replaceable).toBe(true)
+  })
+
+  it('reads replaceable: false as records that are only listed', () => {
+    const refused = tunnelDnsRefusal(409, {
+      error: 'dns_record_exists',
+      message: 'Remove them at your DNS provider first.',
+      hostname: 'app.example.com',
+      records: [{ id: 'rec-a', type: 'A', content: '192.0.2.10', proxied: false }],
+      replaceable: false,
+    })
+    expect(refused).toBeInstanceOf(TunnelDnsRecordExistsError)
+    expect((refused as TunnelDnsRecordExistsError).replaceable).toBe(false)
+  })
+
+  it('reads a partial replacement as the records it already removed', async () => {
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse(
+        {
+          error: 'dns_replace_incomplete',
+          message: 'The DNS records for app.example.com were only partly replaced.',
+          hostname: 'app.example.com',
+          removedRecords: [
+            { type: 'AAAA', content: '2001:db8::10', proxied: false },
+            { content: 'no type' },
+          ],
+        },
+        502
+      )
+    )
+    const refused = await addTunnelHostname('org-1', 't1', {
+      hostname: 'app.example.com',
+      replaceDnsRecords: [{ id: 'rec-6', type: 'AAAA', content: '2001:db8::10' }],
+    }).catch((err: unknown) => err)
+    expect(refused).toBeInstanceOf(TunnelDnsReplaceIncompleteError)
+    const incomplete = refused as TunnelDnsReplaceIncompleteError
+    expect(incomplete.hostname).toBe('app.example.com')
+    expect(incomplete.message).toContain('only partly replaced')
+    expect(incomplete.removedRecords).toEqual([
+      { type: 'AAAA', content: '2001:db8::10', proxied: false },
+    ])
+    expect(tunnelDnsRefusal(502, { error: 'provider_unavailable' })).toBeNull()
+  })
+
+  it('any other refusal of an added hostname stays a plain error with its code', async () => {
+    fetchMock.mockImplementationOnce(async () => jsonResponse({ error: 'hostname_in_use' }, 409))
+    const refused = await addTunnelHostname('org-1', 't1', { hostname: 'app.example.com' }).catch(
+      (err: unknown) => err
+    )
+    expect(refused).not.toBeInstanceOf(TunnelDnsRecordExistsError)
+    expect(String(refused)).toContain('hostname_in_use')
+  })
+  it('rotates a run token, sending the single-server confirmation only when asked', async () => {
+    await rotateTunnelRunToken('org-1', 't1')
+    expect(lastCall().url).toMatch(/\/tunnels\/t1\/run-token\/rotate$/)
+    expect(lastCall().init.method).toBe('POST')
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({})
+    await rotateTunnelRunToken('org-1', 't1', { confirmSingleServer: true })
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ confirmSingleServer: true })
+  })
+})

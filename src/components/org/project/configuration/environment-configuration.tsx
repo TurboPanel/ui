@@ -11,6 +11,7 @@ import {
   VariablesSection,
 } from '@/components/org/project/configuration/config-sections'
 import type { EditingApi } from '@/components/org/project/configuration/editing'
+import { CacheVariablesGroup } from '@/components/org/project/caches/cache-variables-group'
 import { SaveBar } from '@/components/org/project/configuration/save-bar'
 import { useStagedEdits } from '@/components/org/project/configuration/use-staged-edits'
 import { useProjectContext } from '@/components/org/project/project-context'
@@ -123,6 +124,7 @@ export function EnvironmentConfigurationView({
             onManage={onManageHosting}
           />
           <VariablesSection variables={model.variables} envName={model.envName} editing={editing} />
+          <CacheVariablesGroup />
           <LinuxUsersSection users={model.linuxUsers} editing={editing} />
           <DataSection data={model.data} />
         </>

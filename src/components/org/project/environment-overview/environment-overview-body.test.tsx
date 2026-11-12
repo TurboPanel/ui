@@ -15,6 +15,9 @@ vi.mock(
   '@/lib/theme-preference',
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
+vi.mock('@/components/org/project/caches/caches-section', () => ({
+  CachesSection: () => null,
+}))
 vi.mock('expo-router', () => ({
   Link: ({ href, children }: Readonly<{ href: string; children: ReactNode }>) => (
     <div data-href={href}>{children}</div>

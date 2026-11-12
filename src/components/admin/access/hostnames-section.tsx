@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { AddPublicUrlRow, PublicUrlsApplyFeedback } from '@/components/admin/public-url-fields'
 import {
-  AddPublicUrlRow,
-  PublicUrlsApplyFeedback,
-} from '@/components/admin/public-url-fields'
+  ConnectionModeCell,
+  IngressPhaseChip,
+  SAVE_FIRST_HINT,
+  SAVE_OTHERS_HINT,
+} from '@/components/admin/access/connection-mode-cell'
+import { ModePublicPortCell, PrimaryCell } from '@/components/admin/access/hostname-ingress-cells'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   Badge,
@@ -33,22 +37,37 @@ import {
   requiresPlatformCaConfirm,
 } from '@/lib/instance-certificates'
 import {
+  type EdgeGate,
+  type IngressAccountRecord,
+  type IngressCapabilities,
   InstanceHostnameValidationError,
   type InstanceHostnameInput,
   type InstanceHostnameRecord,
   type InstanceHostnameSource,
   type UploadedCertificateRecord,
 } from '@/lib/instance-api'
+import {
+  applyConfirm,
+  type ApplyConfirm,
+  isEffectivePrimary,
+  PRIMARY_HOST_CONFIRM,
+  primaryChangeNotice,
+  primaryHostWouldChange,
+  withPrimary,
+} from '@/lib/hostname-ingress'
 import { HA_CERT_APPLY_NOTE } from '@/lib/platform-copy'
+import { isProviderMode } from '@/lib/connection-modes'
+import { useControlPlaneRuntime } from '@/lib/queries/auth'
+import { useIngressAccounts, useIngressCapabilities } from '@/lib/queries/ingress'
+import { EdgeGateStatus } from '@/components/admin/access/edge-gate-status'
+import { Dns01HostnameStatus } from '@/components/admin/access/dns01-certificates-panel'
 import {
   addPublicUrlEntry,
   parsePublicUrlEntry,
+  publicOriginForRecord,
   type PublicUrlDraft,
 } from '@/lib/public-url-entry'
-import {
-  reconnectedStatus,
-  type PublicUrlsApplyStatus,
-} from '@/lib/public-urls-apply'
+import { reconnectedStatus, type PublicUrlsApplyStatus } from '@/lib/public-urls-apply'
 import {
   type ApplyPublicUrlsOutcome,
   useApplyPublicUrls,
@@ -66,10 +85,7 @@ const WORKERS_APPLY_MESSAGE = 'cert apply is not applicable on this runtime'
 
 const EMPTY_ENTRY: PublicUrlDraft = { scheme: 'https', host: '', port: '' }
 
-const OUTCOME_STATUS: Record<
-  ApplyPublicUrlsOutcome['kind'],
-  PublicUrlsApplyStatus
-> = {
+const OUTCOME_STATUS: Record<ApplyPublicUrlsOutcome['kind'], PublicUrlsApplyStatus> = {
   applied: 'applied',
   reconnected: 'reconnected',
   'not-issued': 'failed',
@@ -79,11 +95,26 @@ const OUTCOME_STATUS: Record<
 
 const COLUMNS: readonly DataTableColumn[] = [
   { key: 'address', header: 'Address', flex: 2, minWidth: 200 },
+  { key: 'mode', header: 'Connection Mode', flex: 2, minWidth: 240, gap: 6 },
+  { key: 'publicPort', header: 'Public Port', minWidth: 150 },
+  { key: 'primary', header: 'Primary', minWidth: 120 },
   { key: 'certificate', header: 'Certificate', flex: 2, minWidth: 220, gap: 6 },
   { key: 'status', header: 'Status', minWidth: 120 },
   { key: 'expires', header: 'Expires', minWidth: 110 },
   { key: 'actions', header: 'Actions', width: 168, align: 'end' },
 ]
+
+const TABLE_MIN_WIDTH = 1370
+
+/** What the Connection Mode column needs: the modes, the edge gate and the accounts. */
+type IngressContext = {
+  modes: readonly IngressCapabilities[]
+  gate: EdgeGate | null
+  accounts: readonly IngressAccountRecord[]
+  /** Unsaved edits elsewhere would be lost when a mode change refreshes the rows. */
+  dirty: boolean
+  enabled: boolean
+}
 
 const ADDRESS_ONLY_COLUMNS: readonly DataTableColumn[] = [
   { key: 'address', header: 'Address', flex: 1 },
@@ -97,13 +128,45 @@ function toInput(record: InstanceHostnameRecord): InstanceHostnameInput {
     host: record.host,
     source: record.source,
     uploadedCertId: record.uploadedCertId,
+    publicPort: record.publicPort,
+    isPrimary: record.isPrimary,
   }
 }
 
+const SOURCES: ReadonlySet<string> = new Set([
+  'platform-ca',
+  'uploaded',
+  'acme-http-01',
+  'acme-dns-01',
+])
+
 function isSource(value: string | null): value is InstanceHostnameSource {
-  return (
-    value === 'platform-ca' || value === 'uploaded' || value === 'lets-encrypt'
-  )
+  return value !== null && SOURCES.has(value)
+}
+
+function sameDraft(
+  stored: readonly InstanceHostnameRecord[],
+  draft: readonly InstanceHostnameInput[]
+) {
+  return JSON.stringify(stored.map(toInput)) === JSON.stringify(draft)
+}
+
+/** The modes, gate and accounts for the Connection Mode column; nothing is read on High Availability. */
+function useIngressContext(
+  stored: readonly InstanceHostnameRecord[],
+  draft: readonly InstanceHostnameInput[]
+): IngressContext {
+  const { runtime } = useControlPlaneRuntime()
+  const enabled = runtime !== 'workers'
+  const capabilities = useIngressCapabilities({ enabled })
+  const accounts = useIngressAccounts({ enabled })
+  return {
+    modes: capabilities.data?.modes ?? [],
+    gate: capabilities.data?.gate ?? null,
+    accounts: accounts.data?.accounts ?? [],
+    dirty: !sameDraft(stored, draft),
+    enabled,
+  }
 }
 
 function hostnameOf(entry: string): string {
@@ -115,38 +178,89 @@ function invalidFrom(cause: unknown): string[] {
   return []
 }
 
-function PlatformManagedHostnames({ origin }: Readonly<{ origin: string | null }>) {
+/** High Availability: one read-only address from the platform's environment, never the editor. */
+function PlatformManagedHostnames() {
+  const hostnamesQuery = useInstanceHostnames()
+  const data = hostnamesQuery.data
+  const origin =
+    data && 'platformManagedOrigin' in data ? (data.platformManagedOrigin ?? null) : null
+  let body = (
+    <DataTable columns={ADDRESS_ONLY_COLUMNS} minWidth={280}>
+      {origin ? (
+        <DataTableRow last>
+          <DataTableCell column={ADDRESS_ONLY_COLUMNS[0]!}>{origin}</DataTableCell>
+        </DataTableRow>
+      ) : (
+        <DataTableEmpty>No fixed address configured</DataTableEmpty>
+      )}
+    </DataTable>
+  )
+  if (hostnamesQuery.isLoading) body = <LoadingState />
+  else if (hostnamesQuery.isError) {
+    body = (
+      <Text style={panelStyles.error}>
+        {userErrorMessage(hostnamesQuery.error, 'Failed to load hostnames')}
+      </Text>
+    )
+  }
   return (
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Hostnames</Text>
       <Text style={panelStyles.pageCopy}>
-        Every address this control plane answers on. They become the Platform CA
-        leaf SANs used for daemon → control-plane trust (explicitly not the
-        per-organization Organization CA), the webhook endpoint a Git provider
-        delivers to, and the origin baked into generated install commands.
+        Every address this control plane answers on. They become the Platform CA leaf SANs used for
+        daemon → control-plane trust (explicitly not the per-organization Organization CA), the
+        webhook endpoint a Git provider delivers to, and the origin baked into generated install
+        commands.
       </Text>
       <InlineNotice
         title="Platform-managed"
         body="TurboPanel High Availability answers on one fixed address per environment. Cloudflare terminates TLS for it at the edge, so there is nothing to add or configure here."
       />
       <SectionPanel title="Address" hint="Fixed by this deployment's environment">
-        <DataTable columns={ADDRESS_ONLY_COLUMNS} minWidth={280}>
-          {origin
-            ? (
-              <DataTableRow last>
-                <DataTableCell column={ADDRESS_ONLY_COLUMNS[0]!}>
-                  {origin}
-                </DataTableCell>
-              </DataTableRow>
-            )
-            : <DataTableEmpty>No fixed address configured</DataTableEmpty>}
-        </DataTable>
+        {body}
       </SectionPanel>
     </View>
   )
 }
 
+/**
+ * The view follows the runtime, not the hostnames response, so High
+ * Availability never shows the editor while that read loads or after it fails.
+ * The runtime comes from the shared status query; when that read fails the
+ * screen says so and offers Retry instead of loading for ever.
+ */
 export function HostnamesSection() {
+  const status = useControlPlaneRuntime()
+  if (status.runtime === undefined) {
+    return (
+      <View style={styles.root}>
+        <Text style={panelStyles.pageTitle}>Hostnames</Text>
+        {status.failed ? (
+          <View style={styles.runtimeError}>
+            <Text style={panelStyles.error}>
+              {userErrorMessage(status.error, 'Could not reach the control plane')}
+            </Text>
+            <ButtonRow>
+              <Button
+                label="Retry"
+                size="sm"
+                busy={status.retrying}
+                accessibilityLabel="Ask the control plane again"
+                onPress={status.retry}
+              />
+            </ButtonRow>
+          </View>
+        ) : (
+          <LoadingState />
+        )}
+      </View>
+    )
+  }
+  if (status.runtime === 'workers') return <PlatformManagedHostnames />
+  return <SelfHostedHostnames />
+}
+
+function SelfHostedHostnames() {
   const hostnamesQuery = useInstanceHostnames()
   const termsBlock = useLetsEncryptTermsGuard()
   const certificatesQuery = useInstanceCertificates()
@@ -159,11 +273,24 @@ export function HostnamesSection() {
   const [applyStatus, setApplyStatus] = useState<PublicUrlsApplyStatus>('idle')
   const [applyError, setApplyError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [primaryNotice, setPrimaryNotice] = useState<string | null>(null)
   const [invalidHosts, setInvalidHosts] = useState<string[]>([])
   const [entry, setEntry] = useState<PublicUrlDraft>(EMPTY_ENTRY)
   const [entryError, setEntryError] = useState<string | null>(null)
   const [applyNotAvailable, setApplyNotAvailable] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  // Kept after closing so the dialog does not go blank while it fades out.
+  const [applyConfirmShown, setApplyConfirmShown] = useState<ApplyConfirm | null>(null)
+  const [applyConfirmOpen, setApplyConfirmOpen] = useState(false)
+  const [passkeyConfirm, setPasskeyConfirm] = useState(false)
+  const [badPorts, setBadPorts] = useState<string[]>([])
+
+  const onPortValidity = useCallback((host: string, valid: boolean) => {
+    setBadPorts((current) => {
+      const has = current.includes(host)
+      if (valid === !has) return current
+      return valid ? current.filter((item) => item !== host) : [...current, host]
+    })
+  }, [])
 
   useEffect(() => {
     if (!hostnamesQuery.data) return
@@ -171,6 +298,7 @@ export function HostnamesSection() {
     setDraft(hostnamesQuery.data.hostnames.map(toInput))
   }, [hostnamesQuery.data])
 
+  const ingress = useIngressContext(stored, draft)
   const certificates = certificatesQuery.data?.certificates ?? []
   const capabilities = daemonQuery.data?.capabilities ?? null
   const capabilitiesStatus = daemonCapabilitiesStatus(daemonQuery)
@@ -178,8 +306,7 @@ export function HostnamesSection() {
 
   let queryError: string | null = null
   if (hostnamesQuery.isError) {
-    queryError =
-      userErrorMessage(hostnamesQuery.error, 'Failed to load hostnames')
+    queryError = userErrorMessage(hostnamesQuery.error, 'Failed to load hostnames')
   }
   const displayError = error ?? saveMutation.actionError ?? queryError
 
@@ -192,6 +319,7 @@ export function HostnamesSection() {
     const result = addPublicUrlEntry(
       draft.map((row) => row.host),
       entry,
+      { selfHosted: ingress.enabled }
     )
     if (!result.ok) {
       setEntryError(result.error)
@@ -222,12 +350,13 @@ export function HostnamesSection() {
       return
     }
     const next = result.value.hostnames
+    setPrimaryNotice(primaryChangeNotice(result.value))
     setStored(next)
     setDraft(next.map(toInput))
   }
 
   const runApply = async () => {
-    setConfirmOpen(false)
+    setApplyConfirmOpen(false)
     setError(null)
     setInvalidHosts([])
     setApplyError(null)
@@ -246,6 +375,7 @@ export function HostnamesSection() {
       return
     }
     const next = saved.value.hostnames.map(toInput)
+    setPrimaryNotice(primaryChangeNotice(saved.value))
     setStored(saved.value.hostnames)
     setDraft(next)
     const applied = await applyMutation.run({
@@ -266,7 +396,7 @@ export function HostnamesSection() {
     setApplyStatus(
       outcome.kind === 'reconnected'
         ? reconnectedStatus(outcome.hostnames, outcome.kept)
-        : OUTCOME_STATUS[outcome.kind],
+        : OUTCOME_STATUS[outcome.kind]
     )
   }
 
@@ -284,43 +414,54 @@ export function HostnamesSection() {
     setApplyError(message)
   }
 
+  const onSaveClick = () => {
+    if (primaryHostWouldChange(stored, draft)) {
+      setPasskeyConfirm(true)
+      return
+    }
+    void onSave()
+  }
+
+  // One dialog for everything the apply would change, never two in a row.
   const onSaveAndApply = () => {
-    if (requiresPlatformCaConfirm(stored, draft)) {
-      setConfirmOpen(true)
+    const confirm = applyConfirm(
+      primaryHostWouldChange(stored, draft),
+      requiresPlatformCaConfirm(stored, draft)
+    )
+    if (confirm) {
+      setApplyConfirmShown(confirm)
+      setApplyConfirmOpen(true)
       return
     }
     void runApply()
-  }
-
-  if (hostnamesQuery.data && 'platformManagedOrigin' in hostnamesQuery.data) {
-    return (
-      <PlatformManagedHostnames
-        origin={hostnamesQuery.data.platformManagedOrigin ?? null}
-      />
-    )
   }
 
   return (
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Hostnames</Text>
       <Text style={panelStyles.pageCopy}>
-        Every address this control plane answers on. They become the Platform CA
-        leaf SANs used for daemon → control-plane trust (explicitly not the
-        per-organization Organization CA), the webhook endpoint a Git provider
-        delivers to, and the origin baked into generated install commands.
+        Every address this control plane answers on. They become the Platform CA leaf SANs used for
+        daemon → control-plane trust (explicitly not the per-organization Organization CA), the
+        webhook endpoint a Git provider delivers to, and the origin baked into generated install
+        commands.
       </Text>
+      {ingress.enabled ? <EdgeGateStatus gate={ingress.gate} /> : null}
 
       <SectionPanel
         title="Hostnames"
         hint="Scheme, host, and port — each name keeps its own certificate source"
       >
         {displayError ? <Text style={panelStyles.error}>{displayError}</Text> : null}
+        {primaryNotice ? (
+          <InlineNotice tone="warning" title="Primary Address Changed" body={primaryNotice} />
+        ) : null}
         {hostnamesQuery.isLoading ? (
           <LoadingState />
         ) : (
           <HostnamesEditor
             draft={draft}
             stored={stored}
+            ingress={ingress}
             certificates={certificates}
             capabilities={capabilities}
             capabilitiesStatus={capabilitiesStatus}
@@ -336,23 +477,47 @@ export function HostnamesSection() {
             onEntryChange={setEntry}
             onAddUrl={onAddUrl}
             onDraftChange={setDraft}
-            onSave={() => {
-              void onSave()
-            }}
+            portsInvalid={badPorts.length > 0}
+            onPortValidity={onPortValidity}
+            onSave={onSaveClick}
             onSaveAndApply={onSaveAndApply}
           />
         )}
       </SectionPanel>
 
       <ModalSheet
-        visible={confirmOpen}
-        title="Keep a Platform CA address"
-        description="This apply removes the last Platform CA hostname, or moves the only reachable name off it. https://<host>:8443 with the Platform CA leaf stays bound as the recovery address."
-        onRequestClose={() => setConfirmOpen(false)}
+        visible={passkeyConfirm}
+        title="Change the Primary Host"
+        description={PRIMARY_HOST_CONFIRM}
+        onRequestClose={() => setPasskeyConfirm(false)}
         footer={
           <ButtonRow>
-            <Button label="Cancel" onPress={() => setConfirmOpen(false)} />
-            <Button label="Apply anyway" variant="primary" onPress={() => void runApply()} />
+            <Button label="Cancel" onPress={() => setPasskeyConfirm(false)} />
+            <Button
+              label="Change Primary Host"
+              variant="primary"
+              onPress={() => {
+                setPasskeyConfirm(false)
+                void onSave()
+              }}
+            />
+          </ButtonRow>
+        }
+      />
+
+      <ModalSheet
+        visible={applyConfirmOpen}
+        title={applyConfirmShown?.title ?? ''}
+        description={applyConfirmShown?.body}
+        onRequestClose={() => setApplyConfirmOpen(false)}
+        footer={
+          <ButtonRow>
+            <Button label="Cancel" onPress={() => setApplyConfirmOpen(false)} />
+            <Button
+              label={applyConfirmShown?.confirmLabel ?? ''}
+              variant="primary"
+              onPress={() => void runApply()}
+            />
           </ButtonRow>
         }
       />
@@ -363,6 +528,7 @@ export function HostnamesSection() {
 function HostnamesEditor({
   draft,
   stored,
+  ingress,
   certificates,
   capabilities,
   capabilitiesStatus,
@@ -378,11 +544,14 @@ function HostnamesEditor({
   onEntryChange,
   onAddUrl,
   onDraftChange,
+  portsInvalid,
+  onPortValidity,
   onSave,
   onSaveAndApply,
 }: Readonly<{
   draft: InstanceHostnameInput[]
   stored: InstanceHostnameRecord[]
+  ingress: IngressContext
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
   capabilitiesStatus: DaemonCapabilitiesStatus
@@ -398,6 +567,8 @@ function HostnamesEditor({
   onEntryChange: (entry: PublicUrlDraft) => void
   onAddUrl: () => void
   onDraftChange: (next: InstanceHostnameInput[]) => void
+  portsInvalid: boolean
+  onPortValidity: (host: string, valid: boolean) => void
   onSave: () => void
   onSaveAndApply: () => void
 }>) {
@@ -405,23 +576,24 @@ function HostnamesEditor({
   const byHost = new Map(stored.map((record) => [record.host, record]))
   return (
     <>
-      {warning ? (
-        <InlineNotice tone="warning" title="Recovery address" body={warning} />
-      ) : null}
+      {warning ? <InlineNotice tone="warning" title="Recovery address" body={warning} /> : null}
       <HostnameTable
         draft={draft}
         byHost={byHost}
+        ingress={ingress}
         certificates={certificates}
         capabilities={capabilities}
         capabilitiesStatus={capabilitiesStatus}
         invalidHosts={invalidHosts}
         busy={busy}
         onDraftChange={onDraftChange}
+        onPortValidity={onPortValidity}
       />
       <AddPublicUrlRow
         entry={entry}
         entryError={entryError}
         busy={busy}
+        selfHosted={ingress.enabled}
         onEntryChange={onEntryChange}
         onAddUrl={onAddUrl}
       />
@@ -431,18 +603,16 @@ function HostnamesEditor({
           busyLabel="Saving…"
           variant="primary"
           busy={saving}
-          disabled={applying}
+          disabled={applying || portsInvalid}
           onPress={onSave}
         />
         {applyNotAvailable ? null : (
           <Button
             label="Save & Apply"
-            busyLabel={
-              applyStatus === 'reconnecting' ? 'Reconnecting…' : 'Saving & Applying…'
-            }
+            busyLabel={applyStatus === 'reconnecting' ? 'Reconnecting…' : 'Saving & Applying…'}
             variant="primary"
             busy={applying}
-            disabled={saving}
+            disabled={saving || portsInvalid}
             onPress={onSaveAndApply}
           />
         )}
@@ -456,37 +626,42 @@ function HostnamesEditor({
 function HostnameTable({
   draft,
   byHost,
+  ingress,
   certificates,
   capabilities,
   capabilitiesStatus,
   invalidHosts,
   busy,
   onDraftChange,
+  onPortValidity,
 }: Readonly<{
   draft: InstanceHostnameInput[]
   byHost: Map<string, InstanceHostnameRecord>
+  ingress: IngressContext
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
   capabilitiesStatus: DaemonCapabilitiesStatus
   invalidHosts: string[]
   busy: boolean
   onDraftChange: (next: InstanceHostnameInput[]) => void
+  onPortValidity: (host: string, valid: boolean) => void
 }>) {
   if (draft.length === 0) {
     return (
-      <DataTable columns={COLUMNS} minWidth={860}>
+      <DataTable columns={COLUMNS} minWidth={TABLE_MIN_WIDTH}>
         <DataTableEmpty>No hostnames configured.</DataTableEmpty>
       </DataTable>
     )
   }
 
   return (
-    <DataTable columns={COLUMNS} minWidth={860}>
+    <DataTable columns={COLUMNS} minWidth={TABLE_MIN_WIDTH}>
       {draft.map((row, index) => (
         <HostnameRow
           key={`${row.host}-${index}`}
           row={row}
           record={byHost.get(row.host) ?? null}
+          ingress={ingress}
           certificates={certificates}
           capabilities={capabilities}
           capabilitiesStatus={capabilitiesStatus}
@@ -494,6 +669,9 @@ function HostnameTable({
           busy={busy}
           alt={index % 2 === 1}
           last={index === draft.length - 1}
+          primary={isEffectivePrimary(draft, index)}
+          onMakePrimary={() => onDraftChange(withPrimary(draft, index))}
+          onPortValidity={onPortValidity}
           onChange={(next) => {
             onDraftChange(draft.map((item, i) => (i === index ? next : item)))
           }}
@@ -509,6 +687,7 @@ function HostnameTable({
 function HostnameRow({
   row,
   record,
+  ingress,
   certificates,
   capabilities,
   capabilitiesStatus,
@@ -516,11 +695,15 @@ function HostnameRow({
   busy,
   alt,
   last,
+  primary,
+  onMakePrimary,
+  onPortValidity,
   onChange,
   onRemove,
 }: Readonly<{
   row: InstanceHostnameInput
   record: InstanceHostnameRecord | null
+  ingress: IngressContext
   certificates: UploadedCertificateRecord[]
   capabilities: Record<string, boolean> | null
   capabilitiesStatus: DaemonCapabilitiesStatus
@@ -528,22 +711,48 @@ function HostnameRow({
   busy: boolean
   alt: boolean
   last: boolean
+  primary: boolean
+  onMakePrimary: () => void
+  onPortValidity: (host: string, valid: boolean) => void
   onChange: (next: InstanceHostnameInput) => void
   onRemove: () => void
 }>) {
   const status = record ? hostnameStatusPresentation(record) : null
   const address = panelHostnameHttpsUrl(row.host)
+  const mode = record?.mode ?? 'direct'
+  const edge = record !== null && isProviderMode(ingress.modes, mode)
   return (
     <DataTableRow alt={alt} last={last}>
       <DataTableCell column={COLUMNS[0]}>
         <Text selectable style={styles.address}>
           {address}
         </Text>
-        {invalid ? (
-          <Text style={styles.rowError}>This hostname was refused.</Text>
-        ) : null}
+        {invalid ? <Text style={styles.rowError}>This hostname was refused.</Text> : null}
       </DataTableCell>
       <DataTableCell column={COLUMNS[1]}>
+        <ConnectionModeCell
+          record={record}
+          modes={ingress.modes}
+          gate={ingress.gate}
+          accounts={ingress.accounts}
+          lockedReason={modeLockedReason(record, ingress.dirty)}
+          busy={busy}
+        />
+      </DataTableCell>
+      <DataTableCell column={COLUMNS[2]}>
+        <ModePublicPortCell
+          mode={mode}
+          selfHosted={ingress.enabled}
+          row={row}
+          busy={busy}
+          onChange={onChange}
+          onValidityChange={onPortValidity}
+        />
+      </DataTableCell>
+      <DataTableCell column={COLUMNS[3]}>
+        <PrimaryCell primary={primary} busy={busy} onMakePrimary={onMakePrimary} />
+      </DataTableCell>
+      <DataTableCell column={COLUMNS[4]}>
         <CertificatePicker
           row={row}
           certificates={certificates}
@@ -553,7 +762,7 @@ function HostnameRow({
           onChange={onChange}
         />
       </DataTableCell>
-      <DataTableCell column={COLUMNS[2]}>
+      <DataTableCell column={COLUMNS[5]}>
         {status ? (
           <View style={styles.status}>
             <StatusDot tone={status.dot} />
@@ -562,13 +771,19 @@ function HostnameRow({
         ) : (
           <Text style={styles.muted}>Not saved</Text>
         )}
+        {edge && record ? (
+          <IngressPhaseChip hostnameId={record.id} enabled={ingress.enabled} />
+        ) : null}
+        {record?.source === 'acme-dns-01' ? (
+          <Dns01HostnameStatus hostnameId={record.id} enabled={ingress.enabled} />
+        ) : null}
       </DataTableCell>
-      <DataTableCell column={COLUMNS[3]}>
+      <DataTableCell column={COLUMNS[6]}>
         <Text style={styles.muted}>{status?.expiry ?? '—'}</Text>
       </DataTableCell>
-      <DataTableCell column={COLUMNS[4]}>
+      <DataTableCell column={COLUMNS[7]}>
         <View style={styles.actions}>
-          <CopyButton value={address} />
+          <CopyButton value={publicOriginForRecord(row)} />
           <Button label="Remove" size="sm" disabled={busy} onPress={onRemove} />
         </View>
       </DataTableCell>
@@ -597,13 +812,11 @@ function CertificatePicker({
     capabilitiesStatus,
   })
   const covering = certificates.filter((certificate) =>
-    coversHostname(certificate.dnsNames, hostnameOf(row.host)),
+    coversHostname(certificate.dnsNames, hostnameOf(row.host))
   )
   return (
     <View style={styles.certStack}>
-      <Text style={styles.sourceLabel}>
-        {INSTANCE_HOSTNAME_SOURCE_LABELS[row.source]}
-      </Text>
+      <Text style={styles.sourceLabel}>{INSTANCE_HOSTNAME_SOURCE_LABELS[row.source]}</Text>
       <Select
         value={row.source}
         disabled={busy}
@@ -618,10 +831,16 @@ function CertificatePicker({
             detail: refused.uploaded ?? null,
           },
           {
-            value: 'lets-encrypt',
-            label: INSTANCE_HOSTNAME_SOURCE_LABELS['lets-encrypt'],
-            disabled: Boolean(refused['lets-encrypt']),
-            detail: refused['lets-encrypt'] ?? null,
+            value: 'acme-http-01',
+            label: INSTANCE_HOSTNAME_SOURCE_LABELS['acme-http-01'],
+            disabled: Boolean(refused['acme-http-01']),
+            detail: refused['acme-http-01'] ?? null,
+          },
+          {
+            value: 'acme-dns-01',
+            label: INSTANCE_HOSTNAME_SOURCE_LABELS['acme-dns-01'],
+            disabled: Boolean(refused['acme-dns-01']),
+            detail: refused['acme-dns-01'] ?? null,
           },
         ]}
         onChange={(value) => {
@@ -648,10 +867,15 @@ function CertificatePicker({
   )
 }
 
+function modeLockedReason(record: InstanceHostnameRecord | null, dirty: boolean): string | null {
+  if (record === null) return SAVE_FIRST_HINT
+  return dirty ? SAVE_OTHERS_HINT : null
+}
+
 function uploadedIdFor(
   source: InstanceHostnameSource,
   covering: readonly UploadedCertificateRecord[],
-  current: string | null,
+  current: string | null
 ): string | null {
   if (source !== 'uploaded') return null
   if (current && covering.some((certificate) => certificate.id === current)) {
@@ -660,9 +884,7 @@ function uploadedIdFor(
   return covering.length === 1 ? covering[0].id : null
 }
 
-function ApplyAvailabilityNote({
-  applyNotAvailable,
-}: Readonly<{ applyNotAvailable: boolean }>) {
+function ApplyAvailabilityNote({ applyNotAvailable }: Readonly<{ applyNotAvailable: boolean }>) {
   if (applyNotAvailable) {
     return <Text style={panelStyles.muted}>{HA_CERT_APPLY_NOTE}</Text>
   }
@@ -673,6 +895,9 @@ const styles = StyleSheet.create({
   root: {
     width: '100%',
     gap: spacing.lg,
+  },
+  runtimeError: {
+    gap: spacing.sm,
   },
   status: {
     flexDirection: 'row',

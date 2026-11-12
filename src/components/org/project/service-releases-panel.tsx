@@ -82,7 +82,7 @@ function shortImageTag(imageTag: string): string {
 /**
  * What the operator is about to put back.
  *
- * A Railpack release has no promoted tree: rolling it back redeploys the image
+ * An image release has no promoted tree: rolling it back redeploys the image
  * it built, so the prompt names that image rather than implying a directory
  * swap. Otherwise the commit subject leads — it is the thing an operator
  * recognizes, where a seven-character SHA is an identifier, not a description.
@@ -98,7 +98,7 @@ function rollbackPrompt(release: ReleaseRecord): string {
 }
 
 /**
- * Which image a Railpack release ran, and what built it.
+ * Which image an image release ran, and what built it.
  *
  * Shown only for that lane — a native release has no image, and printing an
  * empty row for it would suggest the field failed to load rather than that it
@@ -106,9 +106,11 @@ function rollbackPrompt(release: ReleaseRecord): string {
  */
 function ReleaseImageIdentity({ release }: Readonly<{ release: ReleaseRecord }>) {
   if (!release.imageTag) return null
+  const frontendVersion = release.builderFrontendVersion ?? release.railpackFrontendVersion
+  const planVersion = release.builderPlanVersion ?? release.railpackPlanVersion
   const built = [
-    release.railpackFrontendVersion ? `Railpack frontend ${release.railpackFrontendVersion}` : null,
-    release.railpackPlanVersion ? `plan ${release.railpackPlanVersion}` : null,
+    frontendVersion ? `Builder ${frontendVersion}` : null,
+    planVersion ? `plan ${planVersion}` : null,
   ].filter((part): part is string => part !== null)
 
   return (

@@ -64,10 +64,7 @@ export function linuxUserFromRecord(record: LinuxUserRecordFields): LinuxUser {
 }
 
 /** A user the Base declares that no deploy has created yet. */
-export function linuxUserFromDeclared(
-  name: string,
-  access: PrincipalAccess = 'none',
-): LinuxUser {
+export function linuxUserFromDeclared(name: string, access: PrincipalAccess = 'none'): LinuxUser {
   return {
     name,
     systemName: name,
@@ -79,10 +76,7 @@ export function linuxUserFromDeclared(
 }
 
 /** The user a service falls back to: the first Linux user, else the project name. */
-export function defaultLinuxUser(
-  users: readonly LinuxUser[],
-  projectName: string,
-): string {
+export function defaultLinuxUser(users: readonly LinuxUser[], projectName: string): string {
   return users[0]?.name ?? slugify(projectName)
 }
 
@@ -415,7 +409,7 @@ export function linuxUserNameLimit(scheme: NameScheme = 'plain'): number {
 function isTaken(name: string, taken: LinuxUserNameOptions['taken']): boolean {
   const key = name.trim().toLowerCase()
   return (taken ?? []).some(
-    (user) => user.name.trim().toLowerCase() === key || user.systemName.trim().toLowerCase() === key,
+    (user) => user.name.trim().toLowerCase() === key || user.systemName.trim().toLowerCase() === key
   )
 }
 
@@ -425,7 +419,7 @@ function isTaken(name: string, taken: LinuxUserNameOptions['taken']): boolean {
  */
 export function checkLinuxUserName(
   name: string,
-  options: LinuxUserNameOptions = {},
+  options: LinuxUserNameOptions = {}
 ): LinuxUserNameCheck {
   const limit = linuxUserNameLimit(options.scheme)
   if (name === '') return { ok: false, msg: 'Give the user a name' }
@@ -436,7 +430,12 @@ export function checkLinuxUserName(
       msg: 'Lowercase letters, numbers, - and _ only, starting with a letter',
     }
   }
-  if (isSystemUserName(name)) return { ok: false, msg: 'The system keeps that name' }
+  if (isSystemUserName(name)) {
+    const msg = name.trim().toLowerCase().startsWith('tp')
+      ? "Names starting with tp are kept for TurboPanel's own accounts"
+      : 'The system keeps that name'
+    return { ok: false, msg }
+  }
   if (isTaken(name, options.taken)) {
     return { ok: false, msg: `A Linux user called ${name} already exists` }
   }

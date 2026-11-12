@@ -71,7 +71,10 @@ export function ServerTimezoneSettingsSection({ orgId }: Readonly<{ orgId: strin
         overrides live on each host unless enforcement is on.
       </Text>
 
-      <SectionPanel title="Default server timezone" hint="Manage-gated · Postgres-backed settings">
+      <SectionPanel
+        title="Default Server Timezone"
+        hint="Default for every server in this organization"
+      >
         {error ? <Text style={panelStyles.error}>{error}</Text> : null}
         {query.isError && !error ? (
           <Text style={panelStyles.error}>

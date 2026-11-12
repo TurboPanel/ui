@@ -27,7 +27,7 @@ import { spacing } from '@/lib/theme'
 
 function resolveInheritServerLabel(
   inheritedServer: OrgServerRecord | undefined,
-  projectDefaultServerId: string | null,
+  projectDefaultServerId: string | null
 ): string {
   if (inheritedServer) {
     return `Using project server: ${serverDisplayName(inheritedServer)}`
@@ -38,9 +38,7 @@ function resolveInheritServerLabel(
   return 'No project server set — pick a server for this environment'
 }
 
-function ResourceTabChrome({
-  children,
-}: Readonly<{ children: ReactNode }>) {
+function ResourceTabChrome({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <ComposeEditorChrome>
       <View style={styles.body}>{children}</View>
@@ -63,9 +61,7 @@ function EnvironmentHostingPanel({
 }>) {
   return (
     <View style={styles.envBlock}>
-      {heading ? (
-        <Text style={panelStyles.detailTitle}>{heading}</Text>
-      ) : null}
+      {heading ? <Text style={panelStyles.detailTitle}>{heading}</Text> : null}
       <EnvironmentDetailBody
         orgId={orgId}
         projectId={projectId}
@@ -104,14 +100,8 @@ function ProjectDefaultServerPanel() {
  * environment; environment scope edits that env only.
  */
 export function ComposeHostingTab() {
-  const {
-    orgId,
-    projectId,
-    environments,
-    selectedEnvironment,
-    baseSelected,
-    draft,
-  } = useProjectContext()
+  const { orgId, projectId, environments, selectedEnvironment, baseSelected, draft } =
+    useProjectContext()
   const { hostingId: hostingIdParam } = useLocalSearchParams<{
     hostingId?: string | string[]
   }>()
@@ -183,8 +173,7 @@ export function ComposeHostingTab() {
  * account's home, and the daemon skips any release with nobody assigned.
  */
 function SystemUsersPanel() {
-  const { orgId, projectId, canManage, projectAllowsMutations } =
-    useProjectContext()
+  const { orgId, projectId, canManage, projectAllowsMutations } = useProjectContext()
   const router = useRouter()
   // The organization list is owner/manager only, so others get no link to it.
   const orgManager = useCan('organization', orgId, 'organization:manage')
@@ -232,7 +221,7 @@ export function ComposeBindingsTab() {
   if (draft) {
     return (
       <ResourceTabChrome>
-        <EmptyState title="Create the project to add system users and databases." />
+        <EmptyState title="Create the project to add Hosting Accounts and databases." />
       </ResourceTabChrome>
     )
   }
@@ -302,9 +291,7 @@ function EnvironmentServerPinBody({
   }
   return (
     <>
-      {!selectedEnvironment.serverId ? (
-        <Text style={panelStyles.muted}>{inheritLabel}</Text>
-      ) : null}
+      {!selectedEnvironment.serverId ? <Text style={panelStyles.muted}>{inheritLabel}</Text> : null}
       <ServerPinSelect
         label="Server"
         hint="Pin a server for this environment, or clear to inherit the project default."
@@ -324,8 +311,7 @@ function EnvironmentServersPanel({
 }: Readonly<{
   selectedEnvironment: EnvironmentRecord
 }>) {
-  const { orgId, project, canManage, projectAllowsMutations, setError } =
-    useProjectContext()
+  const { orgId, project, canManage, projectAllowsMutations, setError } = useProjectContext()
   const canEdit = canManage && projectAllowsMutations
   const serversQuery = useOrgServers(orgId)
   const updateEnvironment = useUpdateEnvironment(orgId, selectedEnvironment.id)
@@ -334,10 +320,7 @@ function EnvironmentServersPanel({
   const inheritedServer = projectDefaultServerId
     ? servers.find((server) => server.id === projectDefaultServerId)
     : undefined
-  const inheritLabel = resolveInheritServerLabel(
-    inheritedServer,
-    projectDefaultServerId,
-  )
+  const inheritLabel = resolveInheritServerLabel(inheritedServer, projectDefaultServerId)
 
   return (
     <Section title="Server" note="This environment only — deploys to one server">
@@ -388,9 +371,7 @@ function EnvironmentStoragePanel({
 }>) {
   return (
     <View style={styles.envBlock}>
-      {heading ? (
-        <Text style={panelStyles.detailTitle}>{heading}</Text>
-      ) : null}
+      {heading ? <Text style={panelStyles.detailTitle}>{heading}</Text> : null}
       <EnvironmentDetailBody
         orgId={orgId}
         projectId={projectId}
@@ -408,14 +389,8 @@ function EnvironmentStoragePanel({
  * every environment; environment scope edits that environment only.
  */
 export function ComposeStorageTab() {
-  const {
-    orgId,
-    projectId,
-    environments,
-    selectedEnvironment,
-    baseSelected,
-    draft,
-  } = useProjectContext()
+  const { orgId, projectId, environments, selectedEnvironment, baseSelected, draft } =
+    useProjectContext()
 
   if (draft) {
     return (
@@ -442,11 +417,7 @@ export function ComposeStorageTab() {
             orgId={orgId}
             projectId={projectId}
             environmentId={environment.id}
-            heading={
-              showHeadings
-                ? environment.name?.trim() || 'Environment'
-                : undefined
-            }
+            heading={showHeadings ? environment.name?.trim() || 'Environment' : undefined}
           />
         ))}
       </ResourceTabChrome>
@@ -480,8 +451,7 @@ export function ComposeStorageTab() {
  */
 export function ComposeSettingsTab() {
   const router = useRouter()
-  const { orgId, projectId, selectedEnvironment, baseSelected, draft } =
-    useProjectContext()
+  const { orgId, projectId, selectedEnvironment, baseSelected, draft } = useProjectContext()
 
   if (draft) {
     return (
@@ -513,9 +483,7 @@ export function ComposeSettingsTab() {
         key={selectedEnvironment.id}
         selectedEnvironment={selectedEnvironment}
         onOpenProjectSettings={() => {
-          router.push(
-            projectComposeSectionHref(orgId, projectId, 'settings') as Href,
-          )
+          router.push(projectComposeSectionHref(orgId, projectId, 'settings') as Href)
         }}
       />
     </ResourceTabChrome>

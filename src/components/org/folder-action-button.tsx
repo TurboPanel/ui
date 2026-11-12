@@ -1,4 +1,4 @@
-import { Button, ConfirmButton } from '@/components/ui'
+import { Button, TypeNameDeleteButton } from '@/components/ui'
 
 /**
  * The one action a folder row offers. Removing an orphan deletes its files on
@@ -7,21 +7,26 @@ import { Button, ConfirmButton } from '@/components/ui'
  */
 export function FolderActionButton({
   action,
+  name,
   busy,
   disabled,
   onRun,
 }: Readonly<{
   action: 'remove' | 'retry' | 'forget' | null
+  /** The folder's name on the server, typed to remove it. */
+  name: string
   busy: boolean
   disabled: boolean
   onRun: () => void
 }>) {
   if (action === 'remove') {
     return (
-      <ConfirmButton
-        label="Remove from server"
-        confirmLabel="Delete its files"
-        prompt="This deletes the folder and everything in it on the server."
+      <TypeNameDeleteButton
+        label="Remove From Server"
+        thing="Folder"
+        verb="Remove"
+        name={name}
+        description="This deletes the folder and everything in it on the server."
         busy={busy}
         disabled={disabled}
         onConfirm={onRun}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  processesTile,
   celsiusToDisplay,
   cpuBusyPercent,
   formatAxisTime,
@@ -211,14 +212,14 @@ describe('hardwareSignalDisplayTitle', () => {
         signalId: 'signal:other:power',
         kind: 'power',
         label: 'package-0',
-      }),
+      })
     ).toBe('CPU package power')
     expect(
       hardwareSignalDisplayTitle({
         signalId: 'signal:other:temp',
         kind: 'temperature',
         label: 'Package id 1',
-      }),
+      })
     ).toBe('CPU package temperature')
   })
 
@@ -242,7 +243,7 @@ describe('hardwareSignalDisplayTitle', () => {
         signalId: 'signal:fan:1',
         kind: 'rpm',
         label: '',
-      }),
+      })
     ).toBe('signal:fan:1')
   })
 })
@@ -401,5 +402,24 @@ describe('presentSamplesFromGaps', () => {
     expect(presentSamplesFromGaps(60, 10)).toBe(50)
     expect(presentSamplesFromGaps(60, 80)).toBe(0)
     expect(presentSamplesFromGaps(60, -5)).toBe(60)
+  })
+})
+
+describe('processesTile', () => {
+  it('is left out when no process figure is known', () => {
+    expect(processesTile(null, null, null)).toBeNull()
+  })
+
+  it('shows the process count when known', () => {
+    expect(processesTile(212, 3, 0)).toEqual({
+      value: '212',
+      label: 'PROCESSES',
+      accessibilityLabel: '212 processes, 3 runnable, 0 blocked',
+    })
+  })
+
+  it('falls back to running / blocked', () => {
+    expect(processesTile(null, 4, null)?.value).toBe('4 / 0')
+    expect(processesTile(null, 4, null)?.label).toBe('RUNNING / BLOCKED')
   })
 })

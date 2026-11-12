@@ -16,6 +16,9 @@ import {
   createManagedBackup,
   createManagedDatabase,
   createManagedAppLogins,
+  createManagedBackupLogin,
+  deleteManagedBackupLogin,
+  fetchManagedBackupLogin,
   createManagedUser,
   deleteBinding,
   deleteEnvironmentManaged,
@@ -252,11 +255,13 @@ describe('instance-api managed-engine fetch wrappers', () => {
         serverId: 'srv-1',
       })
     )
-    await expect(deleteEnvironmentManaged('env-1', { force: true })).resolves.toMatchObject({
+    await expect(
+      deleteEnvironmentManaged('env-1', { force: true, confirmName: 'Shop DB' })
+    ).resolves.toMatchObject({
       deleted: true,
       commandId: 'cmd-force',
     })
-    expect(String(lastFetch().url)).toContain('force=true')
+    expect(String(lastFetch().url)).toContain('/managed?force=true&confirmName=Shop+DB')
   })
 
   it('runEnvironmentLifecycle posts start stop and restart', async () => {
@@ -394,6 +399,22 @@ describe('instance-api managed-engine fetch wrappers', () => {
     expect(lastJsonBody()).toEqual({ prefix: 'shop', straightThrough: true })
   })
 
+  it('reads, creates and deletes the backup login', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ login: null }))
+    await expect(fetchManagedBackupLogin('env-1')).resolves.toEqual({ login: null })
+    expect(String(lastFetch().url)).toContain('/environments/env-1/managed/backup-login')
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ok: true, login: { id: 'b-1' }, commandId: 'cmd-1', serverId: 'srv-1' })
+    )
+    await createManagedBackupLogin('env-1', { allowedSources: ['internal'], username: 'nightly' })
+    expect(lastFetch().init.method).toBe('POST')
+    expect(lastJsonBody()).toEqual({ allowedSources: ['internal'], username: 'nightly' })
+    fetchMock.mockResolvedValueOnce(jsonResponse(managedCommand))
+    await expect(deleteManagedBackupLogin('env-1')).resolves.toEqual(managedCommand)
+    expect(lastFetch().init.method).toBe('DELETE')
+    expect(String(lastFetch().url)).toContain('/environments/env-1/managed/backup-login')
+  })
+
   it('sends straightThrough true, false and null on the wire', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, user: {}, password: 'p' }))
     await createManagedUser('env-1', { username: 'a', databases: ['app'], straightThrough: true })
@@ -515,12 +536,14 @@ describe('instance-api managed-engine fetch wrappers', () => {
         serverId: 'srv-1',
       })
     )
-    await expect(deleteManagedDatabase('env-1', 'app/db name')).resolves.toMatchObject({
+    await expect(
+      deleteManagedDatabase('env-1', 'app/db name', 'app/db name')
+    ).resolves.toMatchObject({
       ok: true,
     })
     expect(lastFetch().init.method).toBe('DELETE')
     expect(String(lastFetch().url)).toContain(
-      `/managed/databases/${encodeURIComponent('app/db name')}`
+      `/managed/databases/${encodeURIComponent('app/db name')}?confirmName=app%2Fdb+name`
     )
   })
 

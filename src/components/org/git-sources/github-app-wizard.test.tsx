@@ -10,8 +10,12 @@ import {
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
+vi.mock('@/components/ui/wizard-steps', () => ({ WizardSteps: () => null }))
 vi.mock('@/components/org/form-select', () => ({
   FormSelect: ({ options }: { options: { value: string }[] }) => (
     <select aria-label="Webhook endpoint">
@@ -41,7 +45,6 @@ vi.mock('@/components/ui', () => {
     SectionPanel: Wrap,
     SegmentedControl: () => null,
     TextField: () => null,
-    WizardSteps: () => null,
   }
 })
 vi.mock('@/lib/queries/admin', () => ({
@@ -63,7 +66,7 @@ function renderStep(originsState: WebhookOriginsState) {
       busy={false}
       onBack={() => {}}
       onRegister={() => {}}
-    />,
+    />
   )
 }
 

@@ -16,7 +16,8 @@ import {
   useRunEnvironmentLifecycle,
   useCancelDeployment,
   useStopEnvironment,
-  useStopEnvironmentMutation,
+  useLifecycleStopMutation,
+  useEnvironmentDataVolumes,
   useUpdateEnvironment,
 } from '@/lib/queries/environments'
 
@@ -34,6 +35,7 @@ const {
   stopEnvironment,
   cancelDeployment,
   fetchEnvironmentDeletePreview,
+  fetchEnvironmentDataVolumes,
 } = vi.hoisted(() => ({
   fetchVisibleEnvironments: vi.fn(),
   fetchDeployPreview: vi.fn(),
@@ -48,6 +50,7 @@ const {
   stopEnvironment: vi.fn(),
   cancelDeployment: vi.fn(),
   fetchEnvironmentDeletePreview: vi.fn(),
+  fetchEnvironmentDataVolumes: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
@@ -67,6 +70,7 @@ vi.mock('@/lib/instance-api', async (importOriginal) => {
     stopEnvironment,
     cancelDeployment,
     fetchEnvironmentDeletePreview,
+    fetchEnvironmentDataVolumes,
   }
 })
 
@@ -326,7 +330,9 @@ describe('environments query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run(environmentId)).resolves.toMatchObject({
+    await expect(
+      result.current.run({ id: environmentId, confirmName: 'production' })
+    ).resolves.toMatchObject({
       ok: true,
     })
 
@@ -334,6 +340,20 @@ describe('environments query hooks', () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: queryKeys.org(orgId).environments.all,
       })
+    })
+  })
+
+  it('useDeleteEnvironment sends confirmName when given', async () => {
+    deleteEnvironment.mockResolvedValueOnce({ ok: true })
+    const { result } = renderHook(() => useDeleteEnvironment(orgId), {
+      wrapper: createWrapper(createAppQueryClient()),
+    })
+
+    await expect(
+      result.current.run({ id: environmentId, confirmName: 'production' })
+    ).resolves.toMatchObject({ ok: true })
+    expect(deleteEnvironment).toHaveBeenLastCalledWith(environmentId, {
+      confirmName: 'production',
     })
   })
 
@@ -350,7 +370,7 @@ describe('environments query hooks', () => {
       wrapper: createWrapper(client),
     })
 
-    await expect(result.current.run()).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run(undefined)).resolves.toMatchObject({ ok: true })
     expect(stopEnvironment).toHaveBeenCalledWith(environmentId)
     await waitFor(() => {
       expect(invalidate).toHaveBeenCalledWith({
@@ -385,21 +405,50 @@ describe('environments query hooks', () => {
     })
   })
 
-  it('useStopEnvironmentMutation stops any environment by id', async () => {
-    stopEnvironment.mockResolvedValueOnce({
-      ok: true,
-      commandId: 'cmd-4',
-      serverId: 'srv-1',
-    })
+  it('useLifecycleStopMutation stops any environment by id without destroying it', async () => {
+    runEnvironmentLifecycle.mockResolvedValueOnce({ ok: true, commands: [] })
 
-    const { result } = renderHook(() => useStopEnvironmentMutation(orgId), {
+    const { result } = renderHook(() => useLifecycleStopMutation(orgId), {
       wrapper: createWrapper(),
     })
 
     await expect(result.current.run(environmentId)).resolves.toMatchObject({
       ok: true,
     })
-    expect(stopEnvironment.mock.calls[0]?.[0]).toBe(environmentId)
+    expect(runEnvironmentLifecycle).toHaveBeenCalledWith(environmentId, 'stop')
+    expect(stopEnvironment).not.toHaveBeenCalled()
+  })
+
+  it('useStopEnvironment sends the delete-data choice only when given', async () => {
+    stopEnvironment.mockResolvedValue({ ok: true, commandId: 'cmd-5', serverId: 'srv-1' })
+    const { result } = renderHook(() => useStopEnvironment(orgId, environmentId), {
+      wrapper: createWrapper(),
+    })
+    await result.current.run({ deleteVolumes: true, confirmName: 'staging', volumeIds: ['v1'] })
+    expect(stopEnvironment).toHaveBeenLastCalledWith(environmentId, {
+      deleteVolumes: true,
+      confirmName: 'staging',
+      volumeIds: ['v1'],
+    })
+  })
+})
+
+describe('useEnvironmentDataVolumes', () => {
+  it('reads the volumes only once it is enabled', async () => {
+    fetchEnvironmentDataVolumes.mockResolvedValueOnce({
+      volumes: [],
+      kept: [],
+      outdatedServers: [],
+    })
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useEnvironmentDataVolumes('org-1', 'env-1', { enabled }),
+      { wrapper: createWrapper(), initialProps: { enabled: false } }
+    )
+    expect(result.current.fetchStatus).toBe('idle')
+    rerender({ enabled: true })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(fetchEnvironmentDataVolumes).toHaveBeenCalledWith('env-1')
   })
 })
 

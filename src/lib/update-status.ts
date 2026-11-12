@@ -11,6 +11,7 @@ import {
   type ConsoleBuild,
   type UpdatePiece,
 } from '@/lib/instance-updates'
+import { isDevelopmentInstall } from '@/lib/development-updates'
 import { joinWithAnd } from '@/lib/upgrade-display'
 import { plainStepFailureMessage } from '@/lib/user-error'
 
@@ -40,9 +41,13 @@ export function installerHostForChannel(channel: string | null | undefined): str
   }
 }
 
-/** Refreshes the co-located daemon in place (instance, UI and database untouched). */
+/**
+ * Refreshes the co-located daemon in place (instance, UI and database
+ * untouched). Always `https://`: a bare host makes curl's first request
+ * plain HTTP, and whoever answers it picks the script that runs as root.
+ */
 export function daemonReinstallCommand(channel?: string | null): string {
-  return `curl -fsSL ${installerHostForChannel(channel)} | TURBOPANEL_DAEMON_ONLY=1 sh`
+  return `curl -fsSL https://${installerHostForChannel(channel)} | TURBOPANEL_DAEMON_ONLY=1 sh`
 }
 
 export const DAEMON_LOGS_COMMAND = 'journalctl -u turbopaneld -n 100 --no-pager'
@@ -339,7 +344,8 @@ export type UpdateBanner = Readonly<{
 }>
 
 type UpdateOfferInput = Readonly<{
-  updates: Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged'> | null | undefined
+  updates:
+    Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged' | 'development'> | null | undefined
   activeRun: boolean
   /** This app's build, so a UI-only update counts as an offer. */
   consoleBuild?: ConsoleBuild | null
@@ -348,12 +354,15 @@ type UpdateOfferInput = Readonly<{
 /**
  * Whether a self-hosted control plane has an update on offer, dismissed or
  * not (the admin sidebar badge): the control plane or its daemon has an
- * update with a build to name, and no run is active.
+ * update with a build to name, and no run is active. Never on a development
+ * install.
  */
 export function updateOffered(input: UpdateOfferInput): boolean {
   const updates = input.updates
   if (!updates || input.activeRun) return false
   if (updates.updatesManaged === true || updates.runtime === 'workers') return false
+  // A development install runs from its checkouts: there is no release build to offer.
+  if (isDevelopmentInstall(updates)) return false
   if (!selfHostedUpdateAvailable(updates.units, input.consoleBuild ?? null)) return false
   return Boolean(
     updates.units.instance.target ?? updates.units.daemon.target ?? updates.units.instance.uiTarget

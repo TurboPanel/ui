@@ -1,4 +1,5 @@
 import { PhpModePolicyPanel } from '@/components/org/php-mode-policy-panel'
+import { PanelKeyBadge } from '@/components/org/panel-key-badge'
 import {
   useCallback,
   useEffect,
@@ -44,6 +45,7 @@ import {
   Button,
   ButtonRow,
   ConfirmButton,
+  InlineNotice,
   LoadingState,
   MonoText,
   SectionPanel,
@@ -52,6 +54,7 @@ import {
 import { channelLabel, daemonUnsupportedLabel, runningBuildLabel } from '@/lib/daemon-update-labels'
 import { SERVER_UPDATES_AUTOMATIC_COPY } from '@/lib/update-automation'
 import { formatLocalDateTime } from '@/lib/format-datetime'
+import { hostRestartNeeded, restartNeededBody } from '@/lib/host-facts'
 import { configuredSourceLabel } from '@/lib/host-defaults'
 import { formatMemoryPageSize, memoryPageSizeHint } from '@/lib/memory-page-size'
 import {
@@ -63,6 +66,8 @@ import {
 } from '@/lib/org-navigation'
 import { ServerDangerZone } from '@/components/org/server-danger-zone'
 import { ServerDeletePanel } from '@/components/org/server-delete-panel'
+import { ServerReenrollTokenPanel } from '@/components/org/server-reenroll-token-panel'
+import { ServerColocatedRepairPanel } from '@/components/org/server-colocated-repair-panel'
 import {
   formatServerDeleteBlockedError,
   isForbiddenError,
@@ -85,6 +90,7 @@ import {
   useResetServerUpdateStatus,
   useRevokeServerDaemonKey,
   useServerDetail,
+  useServerMetricsFacts,
   useServerUpdateStatus,
   useSetServerHostname,
   useUpdateServer,
@@ -480,11 +486,16 @@ function renderServerDeletePanel(
     colocated: boolean
     orgId: string
     serverId: string
+    serverName: string
     serverConnected: boolean
     deleting: boolean
     deleteError: string | null
     deleteBlocked: boolean
-    onConfirm: (forgetResources: boolean, principals: PrincipalRemovalChoice[]) => void
+    onConfirm: (
+      forgetResources: boolean,
+      principals: PrincipalRemovalChoice[],
+      confirmName: string
+    ) => void
   }>
 ): ReactNode {
   if (!input.canManage) return null
@@ -497,11 +508,33 @@ function renderServerDeletePanel(
     <ServerDeletePanel
       orgId={input.orgId}
       serverId={input.serverId}
+      serverName={input.serverName}
       serverConnected={input.serverConnected}
       deleting={input.deleting}
       deleteError={input.deleteError}
       deleteBlocked={input.deleteBlocked}
       onConfirm={input.onConfirm}
+    />
+  )
+}
+
+/**
+ * Automatic security updates never restart a server; when one (a new kernel)
+ * needs a restart the host reports it, and this says so above every tab.
+ */
+function RestartNeededNotice({
+  orgId,
+  serverId,
+  canManage,
+  colocated,
+}: Readonly<{ orgId: string; serverId: string; canManage: boolean; colocated: boolean }>) {
+  const factsQuery = useServerMetricsFacts(orgId, serverId)
+  if (!hostRestartNeeded(factsQuery.data)) return null
+  return (
+    <InlineNotice
+      tone="warning"
+      title="Restart Needed"
+      body={restartNeededBody({ canManage, colocated })}
     />
   )
 }
@@ -770,15 +803,16 @@ export function ServerDetailSection({
     colocated: updateVm.colocated,
     orgId,
     serverId,
+    serverName: title,
     serverConnected: server?.connected === true,
     deleting: deleteMutation.isPending,
     deleteError,
     deleteBlocked,
-    onConfirm: (forgetResources, principals) => {
+    onConfirm: (forgetResources, principals, confirmName) => {
       setDeleteError(null)
       setDeleteBlocked(false)
       deleteMutation.mutate(
-        { serverId, forgetResources, principals },
+        { serverId, forgetResources, principals, confirmName },
         {
           onSuccess: () => {
             router.replace(serversRemovedHref(orgId, title))
@@ -838,9 +872,17 @@ export function ServerDetailSection({
               </View>
             ) : null}
           </View>
+          <PanelKeyBadge pinnedBy={server.trustPinnedBy} withHelp />
           {connectedVia ? <MonoText style={styles.connectedVia}>{connectedVia}</MonoText> : null}
         </View>
       </View>
+
+      <RestartNeededNotice
+        orgId={orgId}
+        serverId={serverId}
+        canManage={canManage}
+        colocated={updateVm.colocated}
+      />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <SegmentedControl
@@ -892,6 +934,13 @@ export function ServerDetailSection({
         offline={!server.connected}
         revokeKeyPanel={revokeKeyPanel}
         deletePanel={deletePanel}
+        reenrollPanel={
+          updateVm.colocated ? (
+            <ServerColocatedRepairPanel orgId={orgId} serverId={serverId} />
+          ) : (
+            <ServerReenrollTokenPanel orgId={orgId} serverId={serverId} />
+          )
+        }
       />
     </View>
   )
@@ -1013,7 +1062,7 @@ function ServerOverviewTab({
             <Text style={panelStyles.muted}>Source: {timezoneSource}</Text>
             {server.datacenterEnforceServerTimezone ? (
               <Text style={panelStyles.muted}>
-                Datacenter enforces {server.datacenterDefaultTimezone ?? 'its default'}.
+                Datacenter network enforces {server.datacenterDefaultTimezone ?? 'its default'}.
               </Text>
             ) : null}
             {!server.datacenterEnforceServerTimezone && server.enforceServerTimezone ? (

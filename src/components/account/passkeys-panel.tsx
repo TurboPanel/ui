@@ -2,15 +2,16 @@ import { useCallback, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { StepUpPasswordField } from '@/components/account/step-up-password-field'
 import {
+  Badge,
   Button,
   ButtonRow,
-  ConfirmButton,
   DataTable,
   DataTableCell,
   DataTableEmpty,
   DataTableRow,
   InlineNotice,
   TextField,
+  TypeNameDeleteButton,
   type DataTableColumn,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -33,6 +34,7 @@ import {
   passkeyDeviceLabel,
   passkeyDisplayName,
   resolvePasskeyName,
+  ROTATION_PASSKEY_DELETE_HELP,
 } from '@/lib/security-display'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -84,8 +86,8 @@ export function PasskeysPanel({
   return (
     <View style={styles.stack}>
       <Text style={panelStyles.muted}>
-        Sign in with the fingerprint, face, or screen lock you already use. A
-        passkey replaces both the password and the code.
+        Sign in with the fingerprint, face, or screen lock you already use. A passkey replaces both
+        the password and the code.
       </Text>
       <PasskeyList passkeys={passkeys} loading={loading} />
       <AddPasskey />
@@ -128,7 +130,7 @@ function PasskeyList({
           setPendingId(null)
         })
     },
-    [password, remove],
+    [password, remove]
   )
 
   let body = null
@@ -140,15 +142,14 @@ function PasskeyList({
     body = <DataTableEmpty>No passkeys registered.</DataTableEmpty>
   } else {
     body = passkeys.map((passkey, index) => (
-      <DataTableRow
-        key={passkey.id}
-        alt={index % 2 === 1}
-        last={index === passkeys.length - 1}
-      >
+      <DataTableRow key={passkey.id} alt={index % 2 === 1} last={index === passkeys.length - 1}>
         <DataTableCell column={COLUMNS[0]}>
-          <Text style={styles.name} numberOfLines={1}>
-            {passkeyDisplayName(passkey)}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              {passkeyDisplayName(passkey)}
+            </Text>
+            {passkey.isRotation ? <Badge label="Rotation" tone="info" /> : null}
+          </View>
         </DataTableCell>
         <DataTableCell column={COLUMNS[1]}>
           <Text style={panelStyles.muted}>{passkeyDeviceLabel(passkey)}</Text>
@@ -157,11 +158,16 @@ function PasskeyList({
           <Text style={panelStyles.muted}>{passkeyCreatedLabel(passkey)}</Text>
         </DataTableCell>
         <DataTableCell column={COLUMNS[3]}>
-          {readOnly ? null : (
-            <ConfirmButton
+          {passkey.isRotation && !readOnly ? (
+            <Text style={panelStyles.muted}>{ROTATION_PASSKEY_DELETE_HELP}</Text>
+          ) : null}
+          {readOnly || passkey.isRotation ? null : (
+            <TypeNameDeleteButton
               label="Remove"
-              confirmLabel="Remove"
-              prompt="Remove?"
+              thing="Passkey"
+              verb="Remove"
+              name={passkeyDisplayName(passkey)}
+              description="This passkey can no longer be used to sign in."
               busy={remove.isPending && pendingId === passkey.id}
               onConfirm={() => onDelete(passkey.id)}
             />
@@ -228,9 +234,7 @@ function AddPasskey() {
         }
       })
       .catch((err: unknown) => {
-        setMessage(
-          userErrorMessage(err, 'Passkey registration failed'),
-        )
+        setMessage(userErrorMessage(err, 'Passkey registration failed'))
       })
       .finally(() => {
         setCeremonyBusy(false)
@@ -283,5 +287,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 13,
     fontWeight: '600',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
 })

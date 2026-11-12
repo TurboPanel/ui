@@ -68,7 +68,7 @@ export function environmentDeployShortcut(
   }
 }
 
-const SETTINGS_LINK_LABEL = 'Organization settings \u203a Domains & certificates'
+const SETTINGS_LINK_LABEL = 'Organization Settings \u203a Domains & Certificates'
 
 /** A refused Let's Encrypt request in plain words, with the way to fix it when there is one. */
 function RefusalNote({ orgId, refusal }: Readonly<{ orgId: string; refusal: LetsEncryptRefusal }>) {

@@ -3,20 +3,30 @@ import { colors } from '@/lib/theme'
 import { CHIP_HEIGHT } from '@/lib/v4/ui-scale'
 
 /**
- * One line height for every breadcrumb level, the separators and the small
- * status chip beside the current object, so their text shares a centre line.
+ * One line height for every breadcrumb level and the small status chip beside
+ * the current object, so their text shares a centre line.
  */
 export const CRUMB_LINE_HEIGHT = CHIP_HEIGHT.sm
 
-/** Space above and below a crumb's text: every crumb box is the same height. */
-export const CRUMB_PADDING = 4
+/**
+ * Every crumb box is as tall as the header's other buttons (profile and
+ * notifications), so the organization button lines up with the profile button.
+ */
+export const CRUMB_HEIGHT = 40
 
-/** The box of one crumb: the organization button and every trail link use it. */
+/**
+ * Space between a crumb's text and the side of its box. The separator has no
+ * space of its own, so this is the gap on each side of every `›`.
+ */
+export const CRUMB_PADDING = 8
+
+/** The box of one trail link. */
 export const CRUMB_BOX: ViewStyle = {
   flexShrink: 1,
   minWidth: 0,
-  borderRadius: 6,
-  paddingVertical: CRUMB_PADDING,
+  minHeight: CRUMB_HEIGHT,
+  justifyContent: 'center',
+  borderRadius: 8,
   paddingHorizontal: CRUMB_PADDING,
 }
 
@@ -30,9 +40,8 @@ export const breadcrumbStyles = StyleSheet.create({
     lineHeight: CRUMB_LINE_HEIGHT,
   },
   separator: {
-    color: colors.textDim,
-    fontSize: 14,
-    lineHeight: CRUMB_LINE_HEIGHT,
     flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })

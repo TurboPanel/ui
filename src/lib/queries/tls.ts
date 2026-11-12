@@ -13,10 +13,7 @@ import {
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 
-export function useTlsLibrary(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useTlsLibrary(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).tls,
     queryFn: fetchTlsLibrary,
@@ -36,15 +33,25 @@ export function useCreateTlsCertificate(orgId: string) {
   })
 }
 
+/**
+ * A certificate TurboPanel orders shows both in the library and in the list of
+ * orders, so a change to one refreshes the other too.
+ */
+export async function invalidateCertificateLists(
+  queryClient: QueryClient,
+  orgId: string
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).tls }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).dnsCertificates }),
+  ])
+}
+
 export function useDeleteTlsCertificate(orgId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: deleteTlsCertificate,
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.org(orgId).tls,
-      })
-    },
+    onSuccess: () => invalidateCertificateLists(queryClient, orgId),
   })
 }
 
@@ -56,10 +63,7 @@ export function useOrganizationCaRotation(orgId: string) {
   })
 }
 
-function invalidateOrganizationCaQueries(
-  queryClient: QueryClient,
-  orgId: string,
-) {
+function invalidateOrganizationCaQueries(queryClient: QueryClient, orgId: string) {
   return Promise.all([
     queryClient.invalidateQueries({
       queryKey: queryKeys.org(orgId).tlsCa,
@@ -73,10 +77,7 @@ function invalidateOrganizationCaQueries(
   ])
 }
 
-export function useOrganizationCaLeaves(
-  orgId: string,
-  options?: Readonly<{ enabled?: boolean }>,
-) {
+export function useOrganizationCaLeaves(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.org(orgId).tlsCaLeaves,
     queryFn: fetchOrganizationCaLeaves,

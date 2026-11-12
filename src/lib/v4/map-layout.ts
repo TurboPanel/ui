@@ -59,6 +59,19 @@ export type MapDomain = Readonly<{
   serviceId?: string
   /** "Served from 203.0.113.24", "Served on this server only"; absent when not known. */
   servedFrom?: string
+  /** Set when visitors reach this hostname through a tunnel instead of directly. */
+  tunnel?: MapTunnel
+}>
+
+/** A tunnel in front of a hostname, in words the caller already worked out. */
+export type MapTunnel = Readonly<{
+  /** "Cloudflare Tunnel". */
+  provider: string
+  /** The tunnel's own name. */
+  name: string
+  /** How the tunnel reaches the site: "HTTPS on z · 10.0.0.5", then the certificate words. */
+  origin: readonly string[]
+  originVerified: boolean
 }>
 
 export type MapVolume = Readonly<{
@@ -114,6 +127,8 @@ export type MapNode = Readonly<{
   jobsLabel: string
   /** Lines under the name, one each: a Visitors box's other hostnames and where it is served from. */
   lines?: readonly string[]
+  /** A tunnel's Visitors box: the tunnel under the name, and how it reaches the site after the badge. */
+  tunnel?: Readonly<{ label: string; origin: readonly string[] }>
   /** What the station opens. */
   target: MapTarget
   /** What the station is joined to, in words ("-> postgres"), for the phone form. */
@@ -169,8 +184,7 @@ export type MapLayout = Readonly<{
 }>
 
 type DataEntry =
-  | Readonly<{ id: string; service: V4Service }>
-  | Readonly<{ id: string; volume: MapVolume }>
+  Readonly<{ id: string; service: V4Service }> | Readonly<{ id: string; volume: MapVolume }>
 
 type DomainEntry = MapDomain & Readonly<{ to: string | null }>
 
@@ -180,6 +194,7 @@ type VisitorGroup = Readonly<{
   name: string
   to: string | null
   servedFrom: string | undefined
+  tunnel: MapTunnel | undefined
   hosts: readonly DomainEntry[]
   lines: readonly string[]
   status: MapStatus
@@ -221,7 +236,7 @@ function planRows(
   apps: readonly V4Service[],
   groups: readonly VisitorGroup[],
   data: readonly DataEntry[],
-  links: readonly MapLink[],
+  links: readonly MapLink[]
 ): RowPlan {
   const appRow = new Map(apps.map((app, index) => [app.id, index]))
   const dataIds = new Set(data.map((entry) => entry.id))
@@ -247,7 +262,7 @@ function planRows(
 function place(
   column: MapColumnKey,
   row: number,
-  height: number,
+  height: number
 ): Pick<MapNode, 'x' | 'y' | 'w' | 'h'> {
   // A station taller than its slot starts at the top of its first row.
   const offset = height <= MAP.slot ? (MAP.slot - height) / 2 : 0
@@ -283,7 +298,7 @@ function describeConnections(
   apps: readonly V4Service[],
   groups: readonly VisitorGroup[],
   data: readonly DataEntry[],
-  links: readonly MapLink[],
+  links: readonly MapLink[]
 ): Map<string, string[]> {
   const result = new Map<string, string[]>()
   const add = (id: string, label: string) => {
@@ -306,7 +321,7 @@ function describeConnections(
 
 function appTags(
   input: MapInput,
-  app: V4Service,
+  app: V4Service
 ): Readonly<{ tags: string[]; changed: boolean; removed: boolean }> {
   const shorts = changedShorts(input.changes, app.id)
   if (input.envName === null || shorts.length === 0) {
@@ -315,9 +330,7 @@ function appTags(
   if (input.mode !== 'diff') {
     return { tags: [`${input.envName} change`], changed: true, removed: false }
   }
-  const removed = input.changes.some(
-    (change) => change.key === `svc:${app.id}` && change.removed,
-  )
+  const removed = input.changes.some((change) => change.key === `svc:${app.id}` && change.removed)
   if (removed) {
     return { tags: [`Removed in ${input.envName}`], changed: false, removed: true }
   }
@@ -353,37 +366,67 @@ function groupStatus(hosts: readonly DomainEntry[]): MapStatus {
   return hosts.reduce((worst, domain) => (rank(domain) > rank(worst) ? domain : worst)).status
 }
 
+/** "Cloudflare Tunnel · edge": the line under a tunnel box's hostname. */
+function tunnelLabel(tunnel: MapTunnel): string {
+  return tunnel.name.trim() === '' ? tunnel.provider : `${tunnel.provider} · ${tunnel.name}`
+}
+
+/** Which box a domain goes in: its app, and the tunnel it arrives through (none for direct). */
+function groupKey(domain: DomainEntry): string {
+  const tunnel = domain.tunnel
+  const via = tunnel === undefined ? '' : `${tunnelLabel(tunnel)}|${tunnel.origin.join('|')}`
+  return `${domain.to ?? ''}#${via}`
+}
+
+/** Extra lines a tunnel box shows: the tunnel under the name, the "Origin" heading and its lines. */
+function tunnelLineCount(tunnel: MapTunnel | undefined): number {
+  return tunnel === undefined ? 0 : 2 + tunnel.origin.length
+}
+
 /**
- * One Visitors box per app: its hostnames (the primary hostname first, else
- * the order they were read in), where they are served from, and one
- * certificate badge. The box grows a line for each extra line it shows.
+ * One Visitors box per app and path: its hostnames (the primary hostname
+ * first, else the order they were read in), where they are served from, and
+ * one certificate badge. Hostnames reached through a tunnel get a box of their
+ * own that names the tunnel and says how it reaches the site, so a hostname
+ * served both ways shows both. The box grows a line for each extra line.
  */
 function visitorGroups(
   domains: readonly DomainEntry[],
   primaryHost: string | null | undefined
 ): VisitorGroup[] {
-  const byApp = new Map<string | null, DomainEntry[]>()
-  for (const domain of domains) byApp.set(domain.to, [...(byApp.get(domain.to) ?? []), domain])
+  const byPath = new Map<string, DomainEntry[]>()
+  for (const domain of domains) {
+    const key = groupKey(domain)
+    byPath.set(key, [...(byPath.get(key) ?? []), domain])
+  }
   const primary = primaryHost?.toLowerCase()
-  return [...byApp.entries()].map(([to, entries]) => {
+  return [...byPath.values()].map((entries) => {
     const lead = entries.find((domain) => domain.host.toLowerCase() === primary) ?? entries[0]
     const first = lead as DomainEntry
     const others = entries.filter((domain) => domain !== first)
-    const servedFrom = [first, ...others].find(
-      (domain) => domain.servedFrom !== undefined
-    )?.servedFrom
+    const tunnel = first.tunnel
+    const servedFrom =
+      tunnel === undefined
+        ? [first, ...others].find((domain) => domain.servedFrom !== undefined)?.servedFrom
+        : undefined
     const lines = [...otherHostLines(others), ...(servedFrom === undefined ? [] : [servedFrom])]
     return {
-      id: `d:${first.host}`,
+      id: `${tunnel === undefined ? 'd' : 't'}:${first.host}`,
       name: first.host,
-      to,
+      to: first.to,
       hosts: [first, ...others],
       lines,
       servedFrom,
+      tunnel,
       status: groupStatus(entries),
-      h: MAP.h.domain + lines.length * MAP.domainLine,
+      h: MAP.h.domain + (lines.length + tunnelLineCount(tunnel)) * MAP.domainLine,
     }
   })
+}
+
+/** Each hostname once, in order: a hostname served both directly and through a tunnel counts once. */
+function uniqueHosts(domains: readonly DomainEntry[]): string[] {
+  return [...new Set(domains.map((domain) => domain.host))]
 }
 
 /** Spoken description: the parts that exist, separated by commas. */
@@ -429,7 +472,7 @@ function baseNode(
   id: string,
   column: MapColumnKey,
   row: number,
-  height: number,
+  height: number
 ): Pick<MapNode, 'id' | 'column' | 'connections' | 'x' | 'y' | 'w' | 'h'> {
   return {
     id,
@@ -453,12 +496,17 @@ function domainNode(build: Build, group: VisitorGroup): MapNode {
     removed: false,
     jobsLabel: '',
     lines: group.lines,
+    ...(group.tunnel === undefined
+      ? {}
+      : { tunnel: { label: tunnelLabel(group.tunnel), origin: group.tunnel.origin } }),
     target: { kind: 'domain', id: group.name },
     aria: joinAria([
       group.hosts.map((domain) => domain.host).join(', '),
       group.hosts.length > 1 ? 'domains' : 'domain',
+      group.tunnel && `through ${tunnelLabel(group.tunnel)}`,
       group.status.label.toLowerCase(),
       group.servedFrom?.toLowerCase(),
+      group.tunnel && `origin: ${group.tunnel.origin.join(', ').toLowerCase()}`,
       app && `shows ${app.name}`,
     ]),
   }
@@ -469,9 +517,9 @@ function appNode(build: Build, app: V4Service): MapNode {
   const status = useEnv ? input.status(app) : null
   const runs = input.runsAs(app, useEnv)
   const { tags, changed, removed } = appTags(input, app)
-  const shows = build.domains
-    .filter((domain) => domain.to === app.id && domain.redirectTo === undefined)
-    .map((domain) => domain.host)
+  const shows = uniqueHosts(
+    build.domains.filter((domain) => domain.to === app.id && domain.redirectTo === undefined)
+  )
   const uses = build.links
     .filter((link) => link.from === app.id)
     .map((link) => {
@@ -587,7 +635,7 @@ function route(
     lines.segments.push(
       h(x1, y1, gutterX - x1 + 1),
       { orientation: 'v', kind, x: gutterX, y: Math.min(y1, y2), w: t, h: Math.abs(y2 - y1) },
-      h(gutterX - 1, y2, x2 - gutterX + 1),
+      h(gutterX - 1, y2, x2 - gutterX + 1)
     )
   }
   lines.heads.push({ kind, x: x2, y: y2 })
@@ -624,11 +672,11 @@ function drawLines(build: Build, nodes: ReadonlyMap<string, MapNode>): Lines {
         w: round(s.w),
         h: round(s.h),
       })),
-      (s) => `${s.orientation}-${s.kind}-${s.x}-${s.y}-${s.w}-${s.h}`,
+      (s) => `${s.orientation}-${s.kind}-${s.x}-${s.y}-${s.w}-${s.h}`
     ),
     heads: uniqueBy(
       lines.heads.map((s) => ({ ...s, x: round(s.x), y: round(s.y) })),
-      (s) => `${s.kind}-${s.x}-${s.y}`,
+      (s) => `${s.kind}-${s.x}-${s.y}`
     ),
   }
 }
@@ -645,10 +693,7 @@ function uniqueBy<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
 
 // --- assembly ------------------------------------------------------------------
 
-function volumeLinks(
-  services: readonly V4Service[],
-  volumes: readonly MapVolume[],
-): MapLink[] {
+function volumeLinks(services: readonly V4Service[], volumes: readonly MapVolume[]): MapLink[] {
   const links: MapLink[] = []
   volumes.forEach((volume, index) => {
     const owner = volume.mount.split(':')[0]
@@ -660,11 +705,7 @@ function volumeLinks(
   return links
 }
 
-function bandNote(
-  key: MapColumnKey,
-  useEnv: boolean,
-  counts: MapLayout['counts'],
-): string {
+function bandNote(key: MapColumnKey, useEnv: boolean, counts: MapLayout['counts']): string {
   if (key === 'visitors') {
     if (!useEnv) return 'Hostnames are set per environment'
     return counts.domains > 0 ? '' : 'No hostnames yet'
@@ -697,7 +738,10 @@ export function mapLayout(input: MapInput): MapLayout {
   const links = [...input.links, ...volumeLinks(input.services, volumes)]
   const web = apps.find((app) => app.web === true) ?? apps[0]
   const domains: DomainEntry[] = useEnv
-    ? input.domains.map((domain) => ({ ...domain, to: answeringApp(apps, domain) ?? web?.id ?? null }))
+    ? input.domains.map((domain) => ({
+        ...domain,
+        to: answeringApp(apps, domain) ?? web?.id ?? null,
+      }))
     : []
   const groups = visitorGroups(domains, input.primaryHost)
   const plan = planRows(apps, groups, data, links)
@@ -719,7 +763,7 @@ export function mapLayout(input: MapInput): MapLayout {
   ]
   const byId = new Map(nodes.map((node) => [node.id, node]))
   const { segments, heads } = drawLines(build, byId)
-  const counts = { domains: domains.length, apps: apps.length, data: data.length }
+  const counts = { domains: uniqueHosts(domains).length, apps: apps.length, data: data.length }
   const envName = input.envName ?? 'Base'
   return {
     mode: input.mode,

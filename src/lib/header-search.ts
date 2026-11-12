@@ -4,6 +4,7 @@ import {
   orgAreaHref,
   orgBillingHref,
   orgManageHref,
+  orgProjectSettingsHref,
   orgRouteHref,
 } from '@/lib/org-navigation'
 import { projectsHrefForScope, projectsListHref } from '@/lib/workspace-scope'
@@ -18,7 +19,7 @@ export type SearchDestination = Readonly<{
   id: string
   name: string
   /** Muted label at the right of the row. */
-  type: 'Page' | 'Projects'
+  type: 'Page' | 'Projects' | 'Organization Settings'
   href: string
   icon: SearchIconId
 }>
@@ -69,12 +70,16 @@ export function searchDestinations(
     ...page('projects'),
     ...projectSub('git-sources', 'Git Sources', 'git-sources'),
     ...projectSub('repositories', 'Repositories', 'repositories'),
-    ...projectSub('settings', 'Project Settings', 'project-settings'),
+    {
+      id: 'projects-settings',
+      name: 'Project Settings',
+      type: 'Organization Settings',
+      href: orgProjectSettingsHref(orgId),
+      icon: 'project-settings',
+    },
     ...page('activity'),
     ...page('servers'),
     ...page('managed', 'Managed Databases'),
-    ...page('network'),
-    ...page('access'),
     {
       id: 'org-settings',
       name: 'Organization Settings',

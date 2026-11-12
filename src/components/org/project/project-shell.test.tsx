@@ -56,6 +56,7 @@ vi.mock('@/components/org/project/project-title-icon', () => ({ ProjectTitleIcon
 vi.mock('@/components/org/project/project-context', () => ({
   useProjectContext: () => state.ctx,
 }))
+vi.mock('@/lib/queries/auth', () => ({ useOrganizationRecord: () => undefined }))
 vi.mock('@/lib/queries', () => ({
   commandStatusById: () => ({}),
   isTerminalCommandStatus: () => false,

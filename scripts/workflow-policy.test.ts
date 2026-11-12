@@ -124,12 +124,46 @@ describe('Verify concurrency', () => {
     )
   })
 
-  it('never cancels a promotion PR run (head trunk or staging): its group ends in the run id', () => {
+  it('has no job named promote-ok, and every Promote OK call grants checks: write', () => {
+    // promote-ok is the check run the evaluation writes; a job with that name
+    // could end skipped, which passes a required check.
+    for (const file of ['promote-ok.yml', 'promote-ok-recheck.yml']) {
+      expect(text(file), file).not.toMatch(/^ {2}promote-ok:$/m)
+      expect(text(file), file).not.toMatch(/^ {4}name: promote-ok$/m)
+    }
+    for (const [file, name] of PROMOTE_OK_JOBS) {
+      expect(jobText(text(file), name), `${file} ${name}`).toContain('      checks: write\n')
+    }
+  })
+
+  it('runs one Promote OK evaluation per PR head: a superseded head is never cancelled', () => {
     expect(text('promote-ok.yml')).toContain(
-      "cancel-in-progress: ${{ github.head_ref != 'trunk' && github.head_ref != 'staging' }}"
+      [
+        'concurrency:',
+        '  group: promote-ok-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}',
+        '  cancel-in-progress: true',
+        '',
+      ].join('\n')
     )
-    expect(text('promote-ok.yml')).toContain("format('-{0}', github.run_id)")
     expect(text('promote-prs.yml')).toContain('  cancel-in-progress: false\n  queue: max\n')
+  })
+
+  it('runs one Promote OK recheck at a time, queued, none dropped', () => {
+    expect(text('promote-ok-recheck.yml')).toContain(
+      [
+        'concurrency:',
+        '  group: promote-ok-recheck',
+        '  cancel-in-progress: false',
+        '  queue: max',
+        '',
+      ].join('\n')
+    )
+  })
+
+  it('titles each canary run with the commit it builds, for the recheck', () => {
+    expect(text('canary.yml')).toMatch(
+      /^run-name: Canary \$\{\{ github\.event\.workflow_run\.head_sha \}\}$/m
+    )
   })
 })
 
@@ -138,6 +172,15 @@ describe('ci-ok', () => {
 
   it('keeps its required-check name', () => {
     expect(ciOk.name).toBe('ci-ok')
+  })
+
+  it('tells a fork pull request why the code scan was skipped', () => {
+    type Step = { name?: string; if?: string; run?: string }
+    const { steps } = workflow('verify.yml').jobs.verify as Job & { steps: Step[] }
+    const note = steps.find((step) => step.name === 'Note a skipped code scan')
+    expect(note?.if).toBe("github.event_name == 'pull_request' && env.SONAR_TOKEN == ''")
+    expect(note?.run).toContain('::notice title=Code scan skipped::')
+    expect(note?.run).toContain('>> "$GITHUB_STEP_SUMMARY"')
   })
 
   it('always reports on a PR, and stays grey on a cancelled push run', () => {
@@ -165,13 +208,15 @@ function jobText(source: string, name: string): string {
 }
 
 /**
- * The jobs that call gh-promote-ok.yml. The Promote OK check pins its own dev
- * commit, so its fixes can ship without moving the rest of the promotion chain.
+ * The jobs that call gh-promote-ok.yml or gh-promote-ok-recheck.yml. The
+ * Promote OK check and its recheck pin their own dev commit, so their fixes
+ * ship together without moving the rest of the promotion chain.
  */
-const PROMOTE_OK_JOBS: Record<string, string> = {
-  'promote-ok.yml': 'evaluate',
-  'promote-ok-recheck.yml': 'dry-run',
-}
+const PROMOTE_OK_JOBS: [file: string, job: string][] = [
+  ['promote-ok.yml', 'evaluate'],
+  ['promote-ok-recheck.yml', 'dry-run'],
+  ['promote-ok-recheck.yml', 'recheck'],
+]
 
 describe('versions from tags', () => {
   const GONE = [
@@ -182,10 +227,13 @@ describe('versions from tags', () => {
     /--title "Start /,
   ]
 
-  it.each(files)('%s has none of the old Start PR or minor gate steps and reads no version out of package.json', (f) => {
-    for (const gone of GONE) expect(text(f)).not.toMatch(gone)
-    expect(text(f)).not.toMatch(/contents\/package\.json|version-file:|GITHUB_RUN_NUMBER/)
-  })
+  it.each(files)(
+    '%s has none of the old Start PR or minor gate steps and reads no version out of package.json',
+    (f) => {
+      for (const gone of GONE) expect(text(f)).not.toMatch(gone)
+      expect(text(f)).not.toMatch(/contents\/package\.json|version-file:|GITHUB_RUN_NUMBER/)
+    }
+  )
 
   it('works out the canary version from the tags and stamps the base before the export', () => {
     const release = text('release.yml')
@@ -231,24 +279,27 @@ describe('versions from tags', () => {
       // The start-version-pr job's dev actions and the Promote OK jobs are
       // pinned on their own.
       let promote = text(f).split(START_JOB)[0]
-      const ok = jobText(promote, PROMOTE_OK_JOBS[f] ?? '')
-      if (ok) promote = promote.replace(ok, '')
-      expect(promote).not.toContain('gh-promote-ok.yml@')
+      for (const [okFile, name] of PROMOTE_OK_JOBS) {
+        const ok = okFile === f ? jobText(promote, name) : ''
+        if (ok) promote = promote.replace(ok, '')
+      }
+      expect(promote).not.toMatch(/gh-promote-ok(?:-recheck)?\.yml@/)
       for (const m of promote.matchAll(
         /TurboPanel\/dev\/\.github\/(?:workflows\/[\w.-]+|actions\/version)@([0-9a-f]{40})/g
       )) {
         pins.add(m[1])
       }
-      for (const m of promote.matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm)) pins.add(m[1])
+      for (const m of promote.matchAll(/^ +(?:dev-)?ref: ([0-9a-f]{40})(?: #.*)?$/gm))
+        pins.add(m[1])
     }
     expect([...pins]).toHaveLength(1)
   })
 
   it('pins the Promote OK jobs to one TurboPanel/dev commit, handed on as dev-ref', () => {
     const pins = new Set<string>()
-    for (const [file, name] of Object.entries(PROMOTE_OK_JOBS)) {
+    for (const [file, name] of PROMOTE_OK_JOBS) {
       const job = jobText(text(file), name)
-      const uses = [...job.matchAll(/gh-promote-ok\.yml@([0-9a-f]{40}) # dev#\d+$/gm)]
+      const uses = [...job.matchAll(/gh-promote-ok(?:-recheck)?\.yml@([0-9a-f]{40}) # dev#\d+$/gm)]
       const refs = [...job.matchAll(/^ +dev-ref: ([0-9a-f]{40})(?: #.*)?$/gm)]
       expect(uses, `${file} ${name}`).toHaveLength(1)
       expect(refs, `${file} ${name}`).toHaveLength(1)
@@ -263,20 +314,30 @@ describe('versions from tags', () => {
     const job = release.split(START_JOB)[1] ?? ''
     expect(job).toMatch(/^ {4}needs: \[prepare, finalize\]$/m)
     expect(job).toMatch(/^ {6}contents: read/m)
-    expect(job).toContain('uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0')
+    expect(job).toContain(
+      'uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0'
+    )
     expect(job).toContain('repositories: ${{ github.event.repository.name }}')
     expect(job).toMatch(
       /uses: TurboPanel\/dev\/\.github\/actions\/version@[0-9a-f]{40} # dev#\d+\n {8}with:\n {10}mode: base\n/
     )
     expect(job).toContain('NEWEST: ${{ steps.next.outputs.release }}')
     expect(job).toContain('RELEASED: ${{ needs.prepare.outputs.version }}')
-    expect(job).toMatch(/uses: TurboPanel\/dev\/\.github\/actions\/start-version-pr@[0-9a-f]{40} # dev#\d+\n/)
+    expect(job).toMatch(
+      /uses: TurboPanel\/dev\/\.github\/actions\/start-version-pr@[0-9a-f]{40} # dev#\d+\n/
+    )
     expect(job).toContain('version: ${{ steps.next.outputs.base }}')
     expect(job).toContain('github-token: ${{ steps.app.outputs.token }}')
-    expect(job).toContain('reason: It was opened after v${{ needs.prepare.outputs.version }} was released.')
+    expect(job).toContain(
+      'reason: It was opened after v${{ needs.prepare.outputs.version }} was released.'
+    )
     expect(job).toContain('auto-merge: "true"')
     // One dev commit for both of the job's actions.
-    const pins = new Set([...job.matchAll(/TurboPanel\/dev\/\.github\/actions\/[\w-]+@([0-9a-f]{40})/g)].map((m) => m[1]))
+    const pins = new Set(
+      [...job.matchAll(/TurboPanel\/dev\/\.github\/actions\/[\w-]+@([0-9a-f]{40})/g)].map(
+        (m) => m[1]
+      )
+    )
     expect([...pins]).toHaveLength(1)
     expect(release).not.toContain('Nothing opens a "Start <next>" PR')
   })

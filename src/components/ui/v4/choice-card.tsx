@@ -38,10 +38,7 @@ const styles = themedStyles((p) => ({
 }))
 
 /** A group of choice cards: one is selected, like radio buttons. */
-export function ChoiceGroup({
-  label,
-  children,
-}: Readonly<{ label: string; children: ReactNode }>) {
+export function ChoiceGroup({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
   const s = styles(usePalette())
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel={label} style={s.group}>
@@ -75,6 +72,7 @@ export function ChoiceCard({
       accessibilityRole="radio"
       accessibilityLabel={body ? `${title}. ${body}` : title}
       accessibilityState={{ checked: selected }}
+      aria-checked={selected}
       style={({ pressed }) => [
         s.card,
         alone && s.alone,
