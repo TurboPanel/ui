@@ -40,7 +40,7 @@ export function ServerBuildLimitsSettingsSection({ orgId }: Readonly<{ orgId: st
     >
       {canOwn ? null : (
         <Text style={panelStyles.muted}>
-          Only an owner can change the organization's build limits.
+          Only an owner can change the build limits of the organization.
         </Text>
       )}
       {query.isError && !error ? (
