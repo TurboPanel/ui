@@ -178,6 +178,39 @@ function scrollToSettings() {
   })
 }
 
+function FieldNotes({
+  fieldKey,
+  value,
+  isEnv,
+  isDefault,
+}: Readonly<{ fieldKey: FullKey; value: string; isEnv: boolean; isDefault: boolean }>) {
+  const isEncryption = fieldKey === ENCRYPTION_KEY
+  return (
+    <>
+      {isEnv ? (
+        <Text style={styles.help}>
+          This setting is controlled by the {envVarName(fieldKey)} environment variable and cannot
+          be changed here.
+        </Text>
+      ) : null}
+
+      {isEncryption ? <Text style={styles.help}>{SMTP_ENCRYPTION_HELP}</Text> : null}
+
+      {isEncryption && smtpEncryptionValue(value) === 'none' ? (
+        <InlineNotice
+          tone="warning"
+          title="Unencrypted Email"
+          body={SMTP_ENCRYPTION_NONE_WARNING}
+        />
+      ) : null}
+
+      {isDefault && !isEncryption ? (
+        <Text style={styles.helpMuted}>Using default value.</Text>
+      ) : null}
+    </>
+  )
+}
+
 export function EmailSettingsSection() {
   const emailQuery = useEmailSettings()
   const saveMutation = useSaveEmailSettings()
@@ -341,7 +374,6 @@ export function EmailSettingsSection() {
     const isSecret = isSecretKey(key)
     const label = LABELS[key]
     const placeholder = PLACEHOLDERS[key]
-    const envName = envVarName(key)
     const isProvider = key === 'TURBOPANEL_SYSTEM_EMAIL__PROVIDER'
 
     let fieldControl: ReactNode
@@ -407,26 +439,7 @@ export function EmailSettingsSection() {
 
         {fieldControl}
 
-        {isEnv ? (
-          <Text style={styles.help}>
-            This setting is controlled by the {envName} environment variable and cannot be changed
-            here.
-          </Text>
-        ) : null}
-
-        {key === ENCRYPTION_KEY ? <Text style={styles.help}>{SMTP_ENCRYPTION_HELP}</Text> : null}
-
-        {key === ENCRYPTION_KEY && smtpEncryptionValue(value) === 'none' ? (
-          <InlineNotice
-            tone="warning"
-            title="Unencrypted Email"
-            body={SMTP_ENCRYPTION_NONE_WARNING}
-          />
-        ) : null}
-
-        {isDefault && key !== ENCRYPTION_KEY ? (
-          <Text style={styles.helpMuted}>Using default value.</Text>
-        ) : null}
+        <FieldNotes fieldKey={key} value={value} isEnv={isEnv} isDefault={isDefault} />
       </View>
     )
   }
