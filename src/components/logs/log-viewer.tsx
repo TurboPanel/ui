@@ -858,7 +858,7 @@ export function LogViewer({
     [lines, plan, commandStatus]
   )
   const openSteps = useOpenSteps(steps)
-  const [pickedStep, setStepFilter] = useState<string | null>(null)
+  const [pickedStep, setPickedStep] = useState<string | null>(null)
   // A picked step that is no longer in the log (a new run) falls back to All Steps.
   const stepFilter = grouped && steps.some((step) => step.id === pickedStep) ? pickedStep : null
   const stepOptions = useMemo<SelectOption[]>(
@@ -895,7 +895,7 @@ export function LogViewer({
     (id: string) => {
       resetSearch()
       setErrorsOnly(false)
-      setStepFilter(null)
+      setPickedStep(null)
       openSteps.open(id)
       scrollTo({ key: `step:${id}` })
     },
@@ -903,7 +903,7 @@ export function LogViewer({
   )
   const jumpToError = useCallback(() => {
     if (!errorStep) return
-    setStepFilter(null)
+    setPickedStep(null)
     resetSearch()
     openSteps.open(errorStep)
     scrollTo({ firstError: true })
@@ -952,7 +952,7 @@ export function LogViewer({
     setErrorsOnly,
     stepOptions,
     stepFilter,
-    setStepFilter,
+    setStepFilter: setPickedStep,
     wrap,
     setWrap: setWrapChoice,
     timestamps,
