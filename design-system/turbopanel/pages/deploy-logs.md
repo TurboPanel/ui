@@ -9,9 +9,11 @@
   `src/components/logs/deployment-log-screen.tsx`). This is where a build and
   deploy log lives. A Deployments row opens it; there is no expandable
   transcript in the history list any more.
-- Project → environment **Overview** — the deploy-progress card for the deploy
-  that was just enqueued (`overview-environments-panel.tsx`): step rail, the
-  last output and **Open full log**, which goes to the log page above.
+- Project → environment **Deployments** — a deploy that is running shows its
+  progress card at the top of the tab, and only there
+  (`RunningDeploySection` in `overview-environments-panel.tsx`): step rail and
+  the live output. When the deploy ends the card goes away and the finished
+  deploy is the newest row of the list. No other tab shows it.
 - Project → **Services** → a service → **Runtime log** — the same viewer,
   ungrouped, reading the running app's output on demand (rules in
   `container-logs.md`).
@@ -126,8 +128,11 @@ at the end as empty headers.
 - Two filter styles, switched next to the field: **Highlight matches (keep
   context)** (the default: each match with 2 lines either side, "…" between
   runs) and **Only matching lines**.
-- **Errors and warnings** narrows to error and warning rows. The person turns
-  it on; it is never on by default. **Jump to first error** opens that step and
+- **All Steps** (a picker beside the search field, shown when the log has
+  more than one step) limits the log to one step; picking a step opens it.
+  **Jump to first error** and the step strip go back to All Steps.
+- **Errors Only** narrows to the error rows and the warnings the build wrote
+  to stderr. The person turns it on; it is never on by default. **Jump to first error** opens that step and
   scrolls to the row.
 - Matches are marked with a `warnSoft` background; the field and each step
   header also say the count in words.
@@ -144,7 +149,7 @@ bottom of the screen on the web) with 48 pt buttons:
 
 - **Live** (only while the log is being written; shows On or Paused/Off),
   **Jump to error** (only when there is one), **Filter** and **More**.
-- **Filter** opens a panel with Errors and warnings and, while a search is
+- **Filter** opens a panel with the step picker, Errors Only and, while a search is
   typed, Highlight / Only matching. The Filter button is marked while either
   narrows the log.
 - **More** opens a panel with Wrap, Timestamps, Open / Close all steps, Copy

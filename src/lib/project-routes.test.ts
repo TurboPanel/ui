@@ -149,7 +149,7 @@ const OFF_BAR_ROUTES: readonly (readonly [href: string, reachedBy: string])[] = 
   ],
   [
     projectEnvironmentDeploymentHref('o', 'p', 'e', 'd'),
-    "Deployments rows and the Overview progress card's Open full log",
+    'Deployments rows',
   ],
   [
     projectEnvironmentStorageHref('o', 'p', 'e'),
