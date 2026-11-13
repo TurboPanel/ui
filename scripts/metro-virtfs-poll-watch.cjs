@@ -19,7 +19,6 @@ const SKIP_DIR_NAMES = new Set([
   '.expo',
   '.git',
   '.local',
-  '.tamagui',
   'android',
   'coverage',
   'design-system',

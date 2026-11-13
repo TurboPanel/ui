@@ -56,7 +56,6 @@ export const SKIP_DIR_NAMES = new Set([
   'dist',
   'coverage',
   '.expo',
-  '.tamagui',
   '.wrangler',
   '.turbo',
   'android',
@@ -71,13 +70,9 @@ export const SKIP_FILENAMES = new Set([
   'THIRD_PARTY_NOTICES.md',
 ])
 
-export const GENERATED_TYPE_FILES = new Set([
-  'cloudflare-env.d.ts',
-  'worker-configuration.d.ts',
-])
+export const GENERATED_TYPE_FILES = new Set(['cloudflare-env.d.ts', 'worker-configuration.d.ts'])
 
-export const SCAN_EXTENSIONS =
-  /\.(ts|tsx|js|jsx|mjs|cjs|md|mdx|yml|yaml|sh|json|css)$/
+export const SCAN_EXTENSIONS = /\.(ts|tsx|js|jsx|mjs|cjs|md|mdx|yml|yaml|sh|json|css)$/
 
 export type VocabularyFailure = Readonly<{
   rel: string
@@ -87,9 +82,7 @@ export type VocabularyFailure = Readonly<{
 
 export function isSkippedPath(rel: string, selfRel: string): boolean {
   return (
-    rel === selfRel ||
-    rel === VOCABULARY_PHRASE_SOURCE ||
-    /(^|\/)\.agents\/skills(\/|$)/.test(rel)
+    rel === selfRel || rel === VOCABULARY_PHRASE_SOURCE || /(^|\/)\.agents\/skills(\/|$)/.test(rel)
   )
 }
 
@@ -98,11 +91,7 @@ export function isSkippedDirName(name: string, rel: string, selfRel: string): bo
 }
 
 export function isSkippedFileName(name: string, rel: string, selfRel: string): boolean {
-  return (
-    SKIP_FILENAMES.has(name) ||
-    GENERATED_TYPE_FILES.has(name) ||
-    isSkippedPath(rel, selfRel)
-  )
+  return SKIP_FILENAMES.has(name) || GENERATED_TYPE_FILES.has(name) || isSkippedPath(rel, selfRel)
 }
 
 export function shouldScanFile(file: string): boolean {
@@ -113,10 +102,7 @@ export function isAllowlisted(line: string): boolean {
   return ALLOWLIST_LINE_PATTERNS.some((pattern) => pattern.test(line))
 }
 
-export function scanTextForForbiddenPhrases(
-  rel: string,
-  text: string,
-): VocabularyFailure[] {
+export function scanTextForForbiddenPhrases(rel: string, text: string): VocabularyFailure[] {
   const failures: VocabularyFailure[] = []
   const lines = text.split('\n')
   for (let i = 0; i < lines.length; i++) {

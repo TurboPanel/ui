@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.dev/versions/v58.0.0/ before writing any code.
+Expo web UI for TurboPanel, styled with Uniwind classes over the token theme (existing `StyleSheet` code moves over gradually; never hard-code colours). Read the exact versioned docs at https://docs.expo.dev/versions/v58.0.0/ before writing any code.
 This is a short root. Nested `AGENTS.md` files hold the rules for the directory they sit in; the nearest one to the file you edit wins. Long runbooks live in `docs/`.
 
 ## Project Metadata and Public Naming
@@ -59,10 +59,10 @@ Flaky-test rules, CI jobs and the `allowBuilds` note: [docs/testing-and-ci.md](.
 
 ## Always and Never
 
-- Never commit `.tamagui/` cache, secrets or dotenv files; the pre-commit secret scan cannot be skipped ([docs/pre-commit-and-secret-scan.md](./docs/pre-commit-and-secret-scan.md)).
+- Never commit secrets or dotenv files; the pre-commit secret scan cannot be skipped ([docs/pre-commit-and-secret-scan.md](./docs/pre-commit-and-secret-scan.md)).
 - Never run `pnpm test` on the host; use the Vagrant guest.
 - Never use `fetch` plus `useEffect` caches or hand-rolled poll loops for server data; use React Query (`src/lib/queries/AGENTS.md`).
-- Never hard-code hex colors in components; use `src/lib/theme.ts` tokens (`design-system/AGENTS.md`).
+- Never hard-code hex colors in components or classes; use `src/lib/theme.ts` tokens or the token classes (`design-system/AGENTS.md`).
 - Never import from `org/` inside `src/components/ui/` (`src/components/AGENTS.md`).
 - Never use the word "agent" for the daemon in product copy, and never use Apple-associated chrome phrasing (`pnpm check:vocabulary`).
 - Always read the nearest `AGENTS.md` and, for any visual work, the design-system guide before editing.
@@ -74,7 +74,7 @@ Flaky-test rules, CI jobs and the `allowBuilds` note: [docs/testing-and-ci.md](.
 | Any visual or UX work, tokens, themes             | `design-system/AGENTS.md` (mandatory skill and Master/page workflow)       |
 | Shared components, `src/components/ui` barrel     | `src/components/AGENTS.md`                                                 |
 | Org chrome, pull-to-refresh, org scroll           | `src/components/org/AGENTS.md`                                             |
-| Stack, fonts, Tamagui, TypeScript style           | `src/AGENTS.md`                                                            |
+| Stack, fonts, styling, TypeScript style           | `src/AGENTS.md`                                                            |
 | API helpers, contracts, step-up, command pipeline | `src/lib/AGENTS.md`, `src/lib/instance-api.md`, `src/lib/instance-api.ts`  |
 | Server state, query keys, polling                 | `src/lib/queries/AGENTS.md`, `src/lib/query-keys.ts`                       |
 | Project editor logic                              | `src/lib/v4/AGENTS.md`                                                     |
