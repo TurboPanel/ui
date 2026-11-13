@@ -3,6 +3,8 @@ import {
   effectiveEmailProvider,
   emailDeliveryNotice,
   emailProviderSegmentValue,
+  smtpEncryptionLabel,
+  smtpEncryptionValue,
 } from '@/lib/email-settings-view'
 
 describe('emailProviderSegmentValue', () => {
@@ -90,5 +92,25 @@ describe('emailDeliveryNotice', () => {
       body: '2 messages gave up after every retry. Check that the provider settings below are still correct.',
       setUp: true,
     })
+  })
+})
+
+describe('SMTP encryption value', () => {
+  it('treats a missing or unknown value as Auto', () => {
+    expect(smtpEncryptionValue(undefined)).toBe('auto')
+    expect(smtpEncryptionValue(null)).toBe('auto')
+    expect(smtpEncryptionValue('')).toBe('auto')
+    expect(smtpEncryptionValue('bogus')).toBe('auto')
+  })
+
+  it('keeps each known mode', () => {
+    expect(smtpEncryptionValue('tls')).toBe('tls')
+    expect(smtpEncryptionValue(' STARTTLS ')).toBe('starttls')
+    expect(smtpEncryptionValue('none')).toBe('none')
+  })
+
+  it('labels a locked value', () => {
+    expect(smtpEncryptionLabel('starttls')).toBe('STARTTLS')
+    expect(smtpEncryptionLabel(null)).toBe('Auto')
   })
 })

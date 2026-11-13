@@ -20,7 +20,7 @@ import {
 } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useRouter, type Href } from 'expo-router'
-import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
+import { LogViewer } from '@/components/logs/log-viewer'
 import { DeployProgressRail } from '@/components/org/project/deploy-progress-rail'
 import { useDeployLogProgress } from '@/components/org/project/use-deploy-log-progress'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -61,7 +61,8 @@ import {
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { mergeComposeOverlay } from '@/lib/compose'
-import { progressChipLabel } from '@/lib/deploy-progress'
+import { progressChipLabel, stepsOf } from '@/lib/deploy-progress'
+import { liveState, nextLivePaused } from '@/lib/log-viewer'
 import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
 import {
   environmentConfirmName,
@@ -79,7 +80,6 @@ import {
 } from '@/lib/environment-menu'
 import {
   projectEnvironmentBindingsHref,
-  projectEnvironmentDeploymentHref,
   projectEnvironmentHostingHref,
   projectEnvironmentSettingsHref,
   projectOverviewHref,
@@ -559,18 +559,8 @@ function DeployLogSection({
   const log = useCommandLog(orgId, openLog.serverId, openLog.commandId, {
     enabled: !collapsed,
   })
-  const { projectId } = useProjectContext()
-  const router = useRouter()
-  const openFullLog = () =>
-    router.push(
-      projectEnvironmentDeploymentHref(
-        orgId,
-        projectId,
-        openLog.environmentId,
-        openLog.commandId
-      ) as Href
-    )
-
+  const [paused, setPaused] = useState(false)
+  const plan = useMemo(() => stepsOf(progress), [progress])
   return (
     <View style={styles.logSection}>
       <View style={styles.logSectionHeader}>
@@ -580,12 +570,6 @@ function DeployLogSection({
             : `${openLog.label} output`}
         </Text>
         <View style={styles.barSpacer} />
-        <QuietButton
-          label="Open full log"
-          accessibilityLabel="Open the full deploy log"
-          tone="primary"
-          onPress={openFullLog}
-        />
         <QuietButton
           label={collapsed ? 'Show output' : 'Hide output'}
           accessibilityLabel={collapsed ? 'Show deploy output' : 'Hide deploy output'}
@@ -598,9 +582,14 @@ function DeployLogSection({
       <DeployProgressRail progress={progress} />
       <DeployOutcomeBanner status={status} error={error} />
       {collapsed ? null : (
-        <LogTranscriptView
+        <LogViewer
           lines={log.snapshot.lines}
           state={log.state}
+          plan={plan.length > 0 ? plan : null}
+          commandStatus={status}
+          live={liveState(!isTerminalCommandStatus(status) && !log.snapshot.sealed, paused)}
+          onLiveToggle={() => setPaused((current) => nextLivePaused(current, 'toggle'))}
+          onScrolledAway={() => setPaused((current) => nextLivePaused(current, 'scrolled-away'))}
           downloadFileName={`deploy-${openLog.commandId}.log`}
         />
       )}
@@ -1326,11 +1315,41 @@ export function EnvironmentLifecycleActions() {
 }
 
 /**
- * What a lifecycle action says back: errors, the destroy warning, the live
- * deploy output and the preview / confirm sheet. Rendered once, under the
- * header, so it shows on every tab.
+ * The running deploy's live progress and output. Only the Deployments tab
+ * (and a platform project's one panel) draws it; it goes away when the deploy
+ * ends, because the finished deploy is then the newest row of the history list.
  */
-export function EnvironmentLifecycleNotices() {
+export function RunningDeploySection() {
+  const model = useEnvironmentLifecycle()
+  if (!model.openDeployLog || !model.selectedEnvironment) return null
+  // Another environment's deploy belongs on that environment's own tab.
+  if (model.openDeployLog.environmentId !== model.selectedEnvironment.id) return null
+  if (isTerminalCommandStatus(model.deployLogStatus)) return null
+  return (
+    <DeployLogSection
+      orgId={model.orgId}
+      openLog={model.openDeployLog}
+      environmentLabel={model.deployLogEnvironmentLabel}
+      status={model.deployLogStatus}
+      error={model.deployLogError}
+      progress={model.deployLogProgress}
+      collapsed={model.deployLogCollapsed}
+      onToggle={model.toggleDeployLog}
+      onDismiss={model.dismissDeployLog}
+    />
+  )
+}
+
+/**
+ * What a lifecycle action says back: errors, the destroy warning and the
+ * preview / confirm sheet. Rendered once, under the header, so it shows on
+ * every tab. The live deploy output is not here: it belongs to the Deployments
+ * tab (`RunningDeploySection`); `withDeployLog` is for a platform project's
+ * one panel.
+ */
+export function EnvironmentLifecycleNotices({
+  withDeployLog = false,
+}: Readonly<{ withDeployLog?: boolean }> = {}) {
   const model = useEnvironmentLifecycle()
   const {
     orgId,
@@ -1368,19 +1387,7 @@ export function EnvironmentLifecycleNotices() {
         commandError={model.commandError}
       />
 
-      {model.openDeployLog ? (
-        <DeployLogSection
-          orgId={orgId}
-          openLog={model.openDeployLog}
-          environmentLabel={model.deployLogEnvironmentLabel}
-          status={model.deployLogStatus}
-          error={model.deployLogError}
-          progress={model.deployLogProgress}
-          collapsed={model.deployLogCollapsed}
-          onToggle={model.toggleDeployLog}
-          onDismiss={model.dismissDeployLog}
-        />
-      ) : null}
+      {withDeployLog ? <RunningDeploySection /> : null}
 
       <PreviewDeploymentModal
         visible={previewOpen != null}
@@ -1465,7 +1472,7 @@ function SystemEnvironmentPanelBody() {
           }}
         />
       </View>
-      <EnvironmentLifecycleNotices />
+      <EnvironmentLifecycleNotices withDeployLog />
       <EnvironmentGitSourceSection />
       <EnvironmentDeploymentHistoryPanel
         orgId={model.orgId}
