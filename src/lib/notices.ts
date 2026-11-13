@@ -109,7 +109,6 @@ export function defaultLicenseForPackageName(name: string): string | undefined {
   const base = name.includes('/') ? (name.split('/').pop() ?? name) : name
   if (KNOWN_PACKAGE_LICENSES[base]) return KNOWN_PACKAGE_LICENSES[base]
   if (name.startsWith('@std/')) return 'MIT'
-  if (name.startsWith('@tamagui/')) return 'MIT'
   return undefined
 }
 

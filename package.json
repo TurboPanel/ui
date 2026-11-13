@@ -15,11 +15,6 @@
     "@expo/ui": "~58.0.28",
     "@lezer/highlight": "^1.2.3",
     "@replit/codemirror-indentation-markers": "^6.5.3",
-    "@tamagui/babel-plugin": "^2.0.0-rc.26",
-    "@tamagui/config": "^2.0.0-rc.26",
-    "@tamagui/core": "^2.0.0-rc.26",
-    "@tamagui/font-inter": "^2.0.0-rc.26",
-    "@tamagui/native": "^2.0.0-rc.26",
     "@tanstack/react-query": "^5.90.14",
     "@uiw/react-codemirror": "^4.25.11",
     "@xterm/addon-fit": "^0.11.0",
@@ -52,7 +47,8 @@
     "react-native-svg": "15.16.0",
     "react-native-web": "^0.21.4",
     "react-native-worklets": "0.13.0",
-    "tamagui": "^2.0.0-rc.26",
+    "tailwindcss": "4.3.3",
+    "uniwind": "1.13.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

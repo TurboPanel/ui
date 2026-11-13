@@ -308,9 +308,8 @@ describe('classifyLicense', () => {
     )
   })
 
-  it('defaults @std and @tamagui package names to MIT', () => {
+  it('defaults @std package names to MIT', () => {
     expect(defaultLicenseForPackageName('@std/assert')).toBe('MIT')
-    expect(defaultLicenseForPackageName('@tamagui/core')).toBe('MIT')
     expect(defaultLicenseForPackageName('react')).toBeUndefined()
   })
 

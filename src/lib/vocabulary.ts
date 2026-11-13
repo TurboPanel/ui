@@ -56,7 +56,6 @@ export const SKIP_DIR_NAMES = new Set([
   'dist',
   'coverage',
   '.expo',
-  '.tamagui',
   '.wrangler',
   '.turbo',
   'android',

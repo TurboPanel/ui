@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   colorTokens,
@@ -7,6 +8,7 @@ import {
   paletteFor,
   paperPalette,
   themeCss,
+  uniwindThemeCss,
   type Palette,
   type PaletteKey,
 } from '@/lib/theme-palettes'
@@ -68,7 +70,7 @@ describe.each(THEMES)('%s contrast', (_name, p: Palette) => {
       expect(ratio(text, surface)).toBeGreaterThanOrEqual(4.5)
       const soft = over(p[`${tone}Soft` as PaletteKey], surface)
       expect(ratio(text, soft)).toBeGreaterThanOrEqual(4.5)
-    },
+    }
   )
 
   it('keeps body text, secondary text, links and the third text level readable', () => {
@@ -78,9 +80,15 @@ describe.each(THEMES)('%s contrast', (_name, p: Palette) => {
   })
 
   it('puts white on the primary action at 4.5:1 or better', () => {
-    expect(ratio(opaque(p.accentInk, [0, 0, 0]), opaque(p.accent, surface))).toBeGreaterThanOrEqual(4.5)
-    expect(ratio(opaque(p.buttonText, [0, 0, 0]), opaque(p.accent, surface))).toBeGreaterThanOrEqual(4.5)
-    expect(ratio(opaque(p.buttonTextOnBlue, [0, 0, 0]), opaque(p.blue, surface))).toBeGreaterThanOrEqual(4.5)
+    expect(ratio(opaque(p.accentInk, [0, 0, 0]), opaque(p.accent, surface))).toBeGreaterThanOrEqual(
+      4.5
+    )
+    expect(
+      ratio(opaque(p.buttonText, [0, 0, 0]), opaque(p.accent, surface))
+    ).toBeGreaterThanOrEqual(4.5)
+    expect(
+      ratio(opaque(p.buttonTextOnBlue, [0, 0, 0]), opaque(p.blue, surface))
+    ).toBeGreaterThanOrEqual(4.5)
   })
 
   it('keeps input and checkbox boundaries at 3:1 against the surface and the field', () => {
@@ -91,22 +99,39 @@ describe.each(THEMES)('%s contrast', (_name, p: Palette) => {
 
   // The old key names are what the screens that were not rebuilt still read.
   const legacyText: PaletteKey[] = [
-    'text', 'textTitle', 'textBody', 'textMuted', 'textDim', 'textFaint',
-    'textLabel', 'textChip', 'stdout', 'command', 'green', 'errorText',
-    'error', 'errorSoft', 'pending', 'log',
+    'text',
+    'textTitle',
+    'textBody',
+    'textMuted',
+    'textDim',
+    'textFaint',
+    'textLabel',
+    'textChip',
+    'stdout',
+    'command',
+    'green',
+    'errorText',
+    'error',
+    'errorSoft',
+    'pending',
+    'log',
   ]
   const legacySurfaces: PaletteKey[] = [
-    'bg', 'bgPanel', 'bgArea', 'bgAreaHeader', 'bgInput', 'bgSecondary',
-    'bgInset', 'bgSidebar', 'bgActive',
+    'bg',
+    'bgPanel',
+    'bgArea',
+    'bgAreaHeader',
+    'bgInput',
+    'bgSecondary',
+    'bgInset',
+    'bgSidebar',
+    'bgActive',
   ]
   it.each(legacyText)('old text key %s reads on every old surface key', (textKey) => {
     for (const surfaceKey of legacySurfaces) {
       const under = over(p[surfaceKey], page)
       const text = over(p[textKey], under)
-      expect(
-        ratio(text, under),
-        `${textKey} on ${surfaceKey}`,
-      ).toBeGreaterThanOrEqual(4.5)
+      expect(ratio(text, under), `${textKey} on ${surfaceKey}`).toBeGreaterThanOrEqual(4.5)
     }
   })
 
@@ -141,7 +166,9 @@ describe('palettes', () => {
 
   it('differ where it matters: Navy is dark, Paper is light', () => {
     expect(luminance(parseColor(navyPalette.bg).slice(0, 3) as unknown as Rgb)).toBeLessThan(0.05)
-    expect(luminance(parseColor(paperPalette.bg).slice(0, 3) as unknown as Rgb)).toBeGreaterThan(0.85)
+    expect(luminance(parseColor(paperPalette.bg).slice(0, 3) as unknown as Rgb)).toBeGreaterThan(
+      0.85
+    )
   })
 
   it('keeps green for running and blue for ours', () => {
@@ -209,7 +236,7 @@ describe('css variables', () => {
     const css = themeCss()
     expect(css.startsWith(':root{color-scheme:dark;')).toBe(true)
     expect(css).toContain(
-      '@media (prefers-color-scheme: light){:root:not([data-theme]){color-scheme:light;',
+      '@media (prefers-color-scheme: light){:root:not([data-theme]){color-scheme:light;'
     )
   })
 
@@ -218,5 +245,20 @@ describe('css variables', () => {
     expect(css).toContain('[data-theme="light"]{color-scheme:light;')
     expect(css).toContain('[data-theme="dark"]{color-scheme:dark;')
     expect(css).toContain('html,body{background-color:var(--tp-bg);}')
+  })
+})
+
+describe('uniwindThemeCss', () => {
+  it('global.css carries exactly the generated class theme', () => {
+    const file = readFileSync(new URL('../../global.css', import.meta.url), 'utf8')
+    expect(file).toContain(uniwindThemeCss())
+  })
+
+  it('points every colour at the shared variable with the Navy value as fallback', () => {
+    const css = uniwindThemeCss()
+    expect(css).toContain('--color-*: initial;')
+    expect(css).toContain(`--color-bg: var(--tp-bg, ${navyPalette.bg});`)
+    expect(css).toContain(`--color-surface-2: var(--tp-surface-2, ${navyPalette.surface2});`)
+    expect(css).not.toContain('shadow')
   })
 })
