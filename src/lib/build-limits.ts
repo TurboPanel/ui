@@ -10,13 +10,13 @@ export const BUILD_CORES_LABEL = 'Build Cores'
 export const BUILD_MEMORY_LABEL = 'Build Memory'
 
 export const BUILD_CORES_HINT =
-  "Most CPU cores one build may use. The smallest of the organization, server and service limits applies. Empty uses half the server's cores."
+  "Most CPU cores one build may use. The smallest of the organization, server and service limits applies. Empty uses half the server's cores. The default is not a ceiling: a service can set more when no wider level sets less, up to the server's cores."
 export const BUILD_MEMORY_HINT =
-  "Most memory one build may use, in GB. The smallest of the organization, server and service limits applies. Empty uses the server's memory minus 1 GB."
+  "Most memory one build may use, in GB. The smallest of the organization, server and service limits applies. Empty uses the server's memory minus 1 GB. The default is not a ceiling: a service can set more when no wider level sets less, up to the server's memory."
 
 export const BUILD_SWAP_LABEL = 'Build Swap'
 export const BUILD_SWAP_HINT =
-  'Lets a build use swap space. Off unless a level allows it; the service setting wins, then the server, then the organization.'
+  'Lets a build use swap space, up to the size of its memory limit. Off unless a level allows it, and Off at any level wins.'
 
 export type BuildSwapChoice = 'inherit' | 'allowed' | 'off'
 
