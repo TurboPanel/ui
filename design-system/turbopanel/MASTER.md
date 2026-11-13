@@ -9,7 +9,7 @@
 **Project:** TurboPanel  
 **Generated:** 2026-07-19 (curated from ui-ux-pro-max). Rewritten 2026-10-04 for the v4 "Navy & Tee" redesign.  
 **Category:** Developer Tool / DevOps Control Plane (B2B SaaS)  
-**Stack:** Expo 58 · React Native · Tamagui · Expo Router · React Query · gifted-charts  
+**Stack:** Expo 58 · React Native · Uniwind · Expo Router · React Query · gifted-charts  
 **Design Dials:** Variance 4/10 (Balanced) | Motion 4/10 (Standard) | Density 8/10 (Dense / Dashboard)
 
 ---
@@ -63,7 +63,7 @@ Source of truth: the v4 spec tokens in `src/lib/theme-palettes.ts` (two palettes
 
 | Role | Font | Where it is set |
 |------|-------|-------|
-| Page titles (800 italic, 28px, -0.5 tracking), section titles (700) | Plus Jakarta Sans | `src/lib/v4/typography.ts` roles `displayItalic`, `display` (the v4 primitives use them; unconverted screens still use Inter) |
+| Page titles (800 italic, 28px, -0.5 tracking), section titles (700) | Plus Jakarta Sans | `src/lib/v4/typography.ts` roles `displayItalic`, `display` (the v4 primitives use them; unconverted screens set the same role fonts through `StyleSheet`; text with no font set gets the system font) |
 | UI / body | Geist Sans 400 / 500 / 600 | roles `body`, `bodyMedium`, `bodySemibold` |
 | SHAs, commands, paths, logs, metrics | Geist Mono 400 / 500 / 600 | roles `mono`, `monoMedium`, `monoSemibold` |
 
@@ -243,10 +243,10 @@ Default: **no decorative cards**. Use bordered panels only when they group an in
 
 ---
 
-## Stack Notes (Expo / React Native / Tamagui)
+## Stack Notes (Expo / React Native / Uniwind)
 
 - Tokens in `src/lib/theme.ts` — components consume `colors` / `spacing` / `layout`, not raw hex  
-- Prefer Tamagui primitives when adding new shared UI; existing org screens use RN `StyleSheet` — match local file style when editing  
+- New and rebuilt shared UI uses Uniwind classes over the token theme (`global.css`); existing org screens use RN `StyleSheet` and move over gradually — match local file style when editing  
 - Touch targets ≥ 44×44; web hover must not be the only affordance  
 - `accessibilityLabel` / `accessibilityRole` on icon-only controls  
 - Deep links via Expo Router already — preserve URL-addressable org routes  
