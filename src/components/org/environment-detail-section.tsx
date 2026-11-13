@@ -17,6 +17,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type ViewInstance,
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
@@ -1839,7 +1840,7 @@ function EnvironmentDeployChromePanels({
   const { width } = useWindowDimensions()
   const isCompact = width < layout.desktopBreakpoint
   const [previewMenuOpen, setPreviewMenuOpen] = useState(false)
-  const previewBtnRef = useRef<View>(null)
+  const previewBtnRef = useRef<ViewInstance>(null)
   const [previewMenuPosition, setPreviewMenuPosition] = useState({
     top: 56,
     left: 16,

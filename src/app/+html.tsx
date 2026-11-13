@@ -1,4 +1,4 @@
-import { ScrollViewStyleReset } from 'expo-router/html'
+import { ScrollViewStyleReset, useServerDocumentContext } from 'expo-router/html'
 import type { PropsWithChildren } from 'react'
 import { themeCss } from '@/lib/theme-palettes'
 
@@ -10,10 +10,15 @@ import { themeCss } from '@/lib/theme-palettes'
  * that applies a saved Light / Dark choice before the first paint, so the page
  * never flashes the wrong theme. A second file, `public/stale-bundle-recover.js`,
  * reloads the page once if a built script fails to load after a web update.
+ *
+ * Since SDK 58 the router hands the page's own scripts, styles and hydration
+ * flag to the document as React nodes (`useServerDocumentContext`); a root that
+ * does not render `headNodes` and `bodyNodes` exports a page with no app script.
  */
 export default function Root({ children }: Readonly<PropsWithChildren>) {
+  const { bodyAttributes, bodyNodes, headNodes, htmlAttributes } = useServerDocumentContext()
   return (
-    <html lang="en">
+    <html lang="en" {...htmlAttributes}>
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
@@ -22,8 +27,12 @@ export default function Root({ children }: Readonly<PropsWithChildren>) {
         <style id="tp-theme" dangerouslySetInnerHTML={{ __html: themeCss() }} />
         <script src="/theme-boot.js" />
         <script src="/stale-bundle-recover.js" />
+        {headNodes}
       </head>
-      <body>{children}</body>
+      <body {...bodyAttributes}>
+        {children}
+        {bodyNodes}
+      </body>
     </html>
   )
 }

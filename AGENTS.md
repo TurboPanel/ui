@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
+Expo web UI for TurboPanel. Read the exact versioned docs at https://docs.expo.dev/versions/v58.0.0/ before writing any code.
 This is a short root. Nested `AGENTS.md` files hold the rules for the directory they sit in; the nearest one to the file you edit wins. Long runbooks live in `docs/`.
 
 ## Project Metadata and Public Naming
