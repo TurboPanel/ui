@@ -4,14 +4,13 @@
 
 An organization owner can turn on "ask people to confirm it is them before permanent actions" (Manage Organization → Security, `ReauthSettingsSection`). `fetchWithStepUp` (`src/lib/step-up.ts`) wraps every request in `instance-api.ts`: a `403 reauth_required` opens the single app-wide `ReauthSheet` (mounted in `AppProviders`; password, or the authenticator code for people who use one), then the original request is sent once more. Do not add a new `fetch(controlPlaneUrl(...))` to `instance-api.ts` without going through `fetchWithStepUp`, or that action will show a bare 403 instead of the prompt. Logic, copy and the broker are in `src/lib/step-up.ts` (covered); the sheet is chrome.
 
-
 ## Command Pipeline UI
 
 Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab. Commands follow a create-then-poll pattern: the UI enqueues via a mutation hook, receives a `commandId`, then polls with `useCommandsBatch` from `src/lib/queries/commands.ts` (`COMMAND_POLL_MS`, `isTerminalCommandStatus`) — a single React Query with `refetchInterval` while any tracked command is non-terminal. Each tick is **one** `POST /commands/status` request for every tracked id (via `fetchCommandStatuses`), not one `GET` per command; results are re-aligned to entry order so index-based consumers stay correct, and unreadable ids simply drop out. `useCommandRecordsBatch` is the per-id variant (one `fetchCommand` per entry, full `CommandRecord`) kept for the server-detail Control tab, which renders the ping latency breakdown. No hand-rolled `setInterval` per page or per server.
 
 **Failure text.** A failed command's error is a block of daemon output with the cause printed last. The control plane derives `errorLine` (on `CommandRecord`, `CommandStatusRecord` and `DeploymentHistoryRecord`; absent on an older control plane) and screens show that one line through `commandErrorLine` in `src/lib/command-error.ts` (it falls back to the last non-empty line of the text). The deploy history detail keeps the whole text one tap away (`commandErrorDetail`, "Show full error"). The failure shows in deploy history, the organization Activity list, the server Control tab, the environment deploy status and the project delete flow.
 
-**Deploy progress.** The batched `POST /commands/status` record (and `GET …/commands/:id`) carries `progress: CommandProgress | null`, the daemon's step plan and current step (optional; absent on an older control plane). `DeployProgressRail` (`src/components/org/project/deploy-progress-rail.tsx`) and the environment status chip read it from the poll's records via `commandStatusById`, **not** from the Overview's `TrackedCommand` meta: that meta only changes on a status or error change, so step updates would be dropped. The poll also drops a command the tick it turns terminal, so `useDeployLogProgress` holds the last plan per command id and, once terminal, reads the full record once (`useCommandRecordsBatch`; `GET …/commands/:id` carries the finalised plan) so the end state stays above the outcome banner until the log is closed. Derivations (step count, gerund labels, first-time caption, `mm:ss`) live in `src/lib/deploy-progress.ts` and count every step in the list, steps already on the server included (total = list length; position = the step's place in the list, from `stepCounts`, used by the header, rail counter, failure and stopped titles and spoken labels). The Environments tab has no command poll of its own, so it asks for status only for the commands of deploys still in flight (`inFlightDeployEntries`). Activity rows show `step` / `totalSteps` / `stepLabel` from `activity-query`.
+**Deploy progress.** The batched `POST /commands/status` record (and `GET …/commands/:id`) carries `progress: CommandProgress | null`, the daemon's step plan and current step (optional; absent on an older control plane). `DeployProgressRail` (`src/components/org/project/deploy-progress-rail.tsx`) and the environment status chip read it from the poll's records via `commandStatusById`, **not** from the Overview's `TrackedCommand` meta: that meta only changes on a status or error change, so step updates would be dropped. The poll also drops a command the tick it turns terminal, so `useDeployLogProgress` holds the last plan per command id and, once terminal, reads the full record once (`useCommandRecordsBatch`; `GET …/commands/:id` carries the finalised plan) so the end state is still readable when the deploy ends (the running-deploy card itself shows only on the Deployments tab while the deploy runs; after that the finished deploy is the newest history row). Derivations (step count, gerund labels, first-time caption, `mm:ss`) live in `src/lib/deploy-progress.ts` and count every step in the list, steps already on the server included (total = list length; position = the step's place in the list, from `stepCounts`, used by the header, rail counter, failure and stopped titles and spoken labels). The Environments tab has no command poll of its own, so it asks for status only for the commands of deploys still in flight (`inFlightDeployEntries`). Activity rows show `step` / `totalSteps` / `stepLabel` from `activity-query`.
 
 **Who pushed.** `DeploymentTriggerRecord.pushedBy` (activity and deployment history `trigger`) is the pusher's git login, optional because an older control plane omits it and `null` when the push named nobody. `gitPushLabel` (`src/lib/activity.ts`) is the one place that words a push: `octocat (Push to main)` with a login, else `Push to main` / `Git push`; the Activity list and the Overview deploy list both use it. The Activity Started By cell puts `GitNavIcon` beside the label only when `activityPushedBy` returns a login.
 
@@ -68,13 +67,13 @@ and "no transcript retained" stay distinguishable.
   rendered by `LogViewer` (`src/components/logs/log-viewer.tsx`): steps from
   each line's `phase`, step states from the plan (`CommandProgress`), closed by
   default with the failed (or first) step open, search across steps, Live.
-  Its model is pure in `src/lib/log-viewer.ts`. History rows and the Overview
-  progress card's **Open full log** link there.
+  Its model is pure in `src/lib/log-viewer.ts`. History rows link there; a running
+  deploy's progress card shows only on the Deployments tab.
   A service page (Services › service) has a **Runtime log** section with the
   same viewer, ungrouped, over `useContainerLogTail` (last 200 lines, never
   stored, Live off until switched on, off when the app goes to the background).
 - The older flat viewer, `src/components/org/logs/log-transcript-view.tsx`, still
-  renders the Overview progress card's output, the managed **Apply
+  renders the managed **Apply
   transcript**, the managed **Engine logs** tail, and the per-container live
   tail on the environment containers panel. Do not fork either per surface; see
   `design-system/turbopanel/pages/deploy-logs.md`. Both are a fixed-height
@@ -117,4 +116,3 @@ and when a tracked deploy command reaches a terminal status.
 - Hostname/reboot gated by `useCan(…, 'organization:manage')` as a display hint; disabled when `!server.connected`.
 - The hostname field is labelled **Change the server's own name (Linux hostname)** with a hint that it is not the DNS name clients use: it renames the Linux hostname only. The DNS name clients dial lives in the Network tab's **Addresses clients use** card.
 - Reboot uses two-step confirm. Do not add per-server background polling loops — O(1) shared batch query only.
-
