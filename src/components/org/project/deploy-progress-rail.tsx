@@ -14,7 +14,6 @@ import { StepRail } from '@/components/ui/v4/step-rail'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import {
-  counterDigits,
   elapsedSeconds,
   CHECKING_WITH_SERVER_LABEL,
   CHECKING_WITH_SERVER_TEXT,
@@ -23,8 +22,10 @@ import {
   healthStepNote,
   isCheckingWithServer,
   formatElapsed,
+  progressCounterText,
   progressSummary,
   stepAccessibilityLabel,
+  stepCountText,
   stepTitle,
   stepsOf,
   type ProgressSummary,
@@ -131,15 +132,9 @@ function Caret({ reduceMotion }: Readonly<{ reduceMotion: boolean }>) {
   return <Animated.View style={[s.caret, caretStyle]} />
 }
 
-/** `Step 03 / 07`; before the first step runs the position is a dash, never 00. */
-function counterText(summary: ProgressSummary): string {
-  const position = summary.phase === 'waiting' ? '--' : counterDigits(summary.step)
-  return `Step ${position} / ${counterDigits(summary.total)}`
-}
-
 function counterSpoken(summary: ProgressSummary): string {
   if (summary.phase === 'waiting') return `Getting Ready, ${summary.total} steps`
-  return `Step ${summary.step} of ${summary.total}`
+  return stepCountText(summary.step, summary.total)
 }
 
 function counterStyle(s: Sheet, phase: ProgressSummary['phase']): TextStyle[] {
@@ -201,7 +196,7 @@ export function DeployProgressRail({
       <View style={s.head}>
         <View style={s.headRow}>
           <Text style={counterStyle(s, summary.phase)} accessibilityLabel={counterSpoken(summary)}>
-            {counterText(summary)}
+            {progressCounterText(summary)}
           </Text>
           <Text style={s.title} numberOfLines={2} accessibilityLiveRegion="polite">
             {summary.title}

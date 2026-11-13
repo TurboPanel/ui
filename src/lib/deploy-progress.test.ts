@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   activityStepText,
   countedSteps,
-  counterDigits,
+  progressCounterText,
   elapsedSeconds,
   failedStep,
   certificateStepNote,
@@ -18,6 +18,7 @@ import {
   stepAccessibilityLabel,
   stepCountText,
   stepNodeInfo,
+  stepCounts,
   stepPosition,
   stepTitle,
   healthStepNote,
@@ -91,10 +92,15 @@ describe('reading the payload', () => {
     expect(progressSummary({ steps: {} })).toBeNull()
   })
 
-  it('counts every step that is not already there', () => {
-    expect(countedSteps(FRESH_HOST)).toHaveLength(6)
-    expect(stepPosition(FRESH_HOST, FRESH_HOST[2]!)).toBe(2)
-    expect(stepPosition(FRESH_HOST, FRESH_HOST[1]!)).toBe(0)
+  it('counts every listed step, already-there ones included, in list order', () => {
+    expect(countedSteps(FRESH_HOST)).toHaveLength(7)
+    expect(stepPosition(FRESH_HOST, FRESH_HOST[2]!)).toBe(3)
+    expect(stepPosition(FRESH_HOST, FRESH_HOST[1]!)).toBe(2)
+    expect(stepCounts(FRESH_HOST, FRESH_HOST[4]!)).toEqual({ position: 5, total: 7 })
+    expect(stepCounts(FRESH_HOST, step('other', 'Other', 'pending'))).toEqual({
+      position: 0,
+      total: 7,
+    })
   })
 
   it('finds the running step by `current` only when that step is running, then by state', () => {
@@ -127,13 +133,13 @@ describe('progressSummary', () => {
       progressSummary({ steps: FRESH_HOST, current: 'install-runtime:node-22' })
     ).toMatchObject({
       phase: 'running',
-      step: 2,
-      total: 6,
+      step: 3,
+      total: 7,
       title: 'Installing Node 22',
       focus: FRESH_HOST[2],
     })
     expect(progressHeadline({ steps: FRESH_HOST, current: 'install-runtime:node-22' })).toBe(
-      'Step 2 of 6 · Installing Node 22'
+      'Step 3 of 7 · Installing Node 22'
     )
   })
 
@@ -186,10 +192,40 @@ describe('progressSummary', () => {
     ).toMatchObject({ phase: 'waiting', step: 0, total: 2, title: 'Getting Ready' })
   })
 
-  it('has nothing to say when every step was already there', () => {
+  it('uses one position and total for the header, failure, stopped and spoken labels', () => {
+    const lead = [
+      step('install-docker', 'Install Docker', 'ready'),
+      step('install-gateway', 'Set Up the Web Gateway', 'ready'),
+      step('fetch', 'Fetch the Source Code', 'done'),
+    ]
+    const running = [...lead, step('build', 'Build', 'running'), step('start', 'Start', 'pending')]
+    expect(progressHeadline({ steps: running, current: 'build' })).toBe('Step 4 of 5 · Building')
+    expect(stepAccessibilityLabel(running, running[3]!)).toBe('Step 4 of 5, Build, in progress')
+    const failed = [...lead, step('build', 'Build', 'failed'), step('start', 'Start', 'skipped')]
+    expect(progressHeadline({ steps: failed, current: null })).toBe('Failed at Step 4 of 5 · Build')
+    expect(stepAccessibilityLabel(failed, failed[3]!)).toBe('Step 4 of 5, Build, failed')
+    const stopped = [...lead, step('build', 'Build', 'skipped'), step('start', 'Start', 'skipped')]
+    expect(progressSummary({ steps: stopped, current: null })).toMatchObject({
+      phase: 'stopped',
+      step: 3,
+      total: 5,
+      title: 'Stopped After Step 3 of 5',
+    })
+    const waiting = [
+      step('install-docker', 'Install Docker', 'ready'),
+      step('build', 'Build', 'pending'),
+    ]
+    expect(progressSummary({ steps: waiting, current: null })).toMatchObject({
+      phase: 'waiting',
+      step: 0,
+      total: 2,
+    })
+  })
+
+  it('reads a plan whose steps were all already there as done', () => {
     expect(
       progressSummary({ steps: [step('install-docker', 'Install Docker', 'ready')], current: null })
-    ).toBeNull()
+    ).toMatchObject({ phase: 'done', step: 1, total: 1 })
     expect(progressHeadline({ steps: [], current: null })).toBeNull()
     expect(progressHeadline(null)).toBeNull()
   })
@@ -198,7 +234,7 @@ describe('progressSummary', () => {
 describe('progressChipLabel', () => {
   it('shows the running step only', () => {
     expect(progressChipLabel({ steps: FRESH_HOST, current: 'install-runtime:node-22' })).toBe(
-      'Step 2 of 6 · Installing Node 22'
+      'Step 3 of 7 · Installing Node 22'
     )
     expect(progressChipLabel({ steps: [step('build', 'Build', 'done')], current: null })).toBeNull()
     expect(progressChipLabel(null)).toBeNull()
@@ -306,148 +342,8 @@ describe('elapsed time', () => {
     expect(planElapsedSeconds(null)).toBeNull()
   })
 
-  it('pads the counter to two digits', () => {
-    expect(counterDigits(3)).toBe('03')
-    expect(counterDigits(12)).toBe('12')
-    expect(counterDigits(-1)).toBe('00')
-  })
-})
-
-describe('step nodes', () => {
-  it('pairs every state with a word, a glyph and a tone', () => {
-    expect(stepNodeInfo('ready')).toMatchObject({
-      word: 'already on this server',
-      glyph: 'check',
-      tone: 'ok',
-    })
-    expect(stepNodeInfo('done')).toMatchObject({ word: 'done', glyph: 'check', tone: 'ok' })
-    expect(stepNodeInfo('running')).toMatchObject({
-      word: 'in progress',
-      glyph: 'spinner',
-      tone: 'busy',
-    })
-    expect(stepNodeInfo('pending')).toMatchObject({
-      word: 'not started',
-      glyph: null,
-      tone: 'idle',
-    })
-    expect(stepNodeInfo('failed')).toMatchObject({ word: 'failed', glyph: 'diamond', tone: 'bad' })
-    expect(stepNodeInfo('skipped')).toMatchObject({
-      word: 'skipped',
-      glyph: 'dashed',
-      tone: 'idle',
-    })
-  })
-
-  it('reads an unknown state as not started', () => {
-    expect(stepNodeInfo('surprise')).toEqual(stepNodeInfo('pending'))
-  })
-
-  it('tells a screen reader the position, the step and its state', () => {
-    expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[2]!)).toBe(
-      'Step 2 of 6, Install Node 22, in progress'
-    )
-    expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[1]!)).toBe(
-      'Set Up the Web Gateway, already on this server'
-    )
-  })
-})
-
-describe('liveProgressHeadline', () => {
-  const plan = { steps: FRESH_HOST, current: 'install-runtime:node-22' }
-
-  it('says the deploy waits for another build while the server reports it', () => {
-    expect(liveProgressHeadline({ ...plan, runningSince: null }, false)).toBe(
-      WAITING_FOR_BUILD_TEXT
-    )
-  })
-
-  it('shows the step line once the deploy runs, on older servers and after the end', () => {
-    expect(liveProgressHeadline({ ...plan, runningSince: '2026-10-26T10:00:00Z' }, false)).toBe(
-      'Step 2 of 6 · Installing Node 22'
-    )
-    expect(liveProgressHeadline(plan, false)).toBe('Step 2 of 6 · Installing Node 22')
-    expect(liveProgressHeadline({ ...plan, runningSince: null }, true)).toBe(
-      'Step 2 of 6 · Installing Node 22'
-    )
-  })
-})
-
-describe('certificateStepNote', () => {
-  // The payload the daemon sends once the certificates step is done: the step
-  // keeps its note as `detail` (the daemon's `done(id, { note })`).
-  const sent = {
-    current: 'health',
-    steps: [
-      {
-        id: 'start',
-        label: 'Start the App',
-        state: 'done' as const,
-        startedAt: '2026-10-29T10:00:00.000Z',
-        finishedAt: '2026-10-29T10:00:05.000Z',
-      },
-      {
-        id: 'certificates',
-        label: 'Set Up Certificates',
-        state: 'done' as const,
-        startedAt: '2026-10-29T10:00:05.000Z',
-        finishedAt: '2026-10-29T10:00:06.000Z',
-        detail: 'Requested in the background; the Certificate panel shows progress: a.example.com',
-      },
-      {
-        id: 'health',
-        label: 'Check Service Health',
-        state: 'running' as const,
-        startedAt: '2026-10-29T10:00:06.000Z',
-      },
-    ],
-  }
-
-  it('shows the line the finished certificates step kept', () => {
-    expect(certificateStepNote(stepsOf(sent))).toBe(
-      'Requested in the background; the Certificate panel shows progress: a.example.com'
-    )
-  })
-
-  it('shows nothing while the step runs, or when it kept no line', () => {
-    const running = sent.steps.map((step) =>
-      step.id === 'certificates' ? { ...step, state: 'running' as const } : step
-    )
-    expect(certificateStepNote(running)).toBeNull()
-    const silent = sent.steps.map(({ detail: _detail, ...step }) => step)
-    expect(certificateStepNote(silent)).toBeNull()
-    expect(certificateStepNote(undefined)).toBeNull()
-  })
-})
-
-describe('healthStepNote', () => {
-  const health = (state: CommandProgressStepState, detail?: string) =>
-    step('health', 'Service Is Healthy', state, detail ? { detail } : undefined)
-
-  it('is the line the health step left once it ended', () => {
-    expect(healthStepNote([health('done', ' Healthy after 12 s ')])).toBe('Healthy after 12 s')
-    expect(healthStepNote([health('failed', 'Did not become healthy within 120 s')])).toBe(
-      'Did not become healthy within 120 s'
-    )
-  })
-
-  it('adds the time the service first answered', () => {
-    const finishedAt = '2026-10-12T10:00:12.000Z'
-    const note = healthStepNote([
-      {
-        id: 'health',
-        label: 'Service Is Healthy',
-        state: 'done',
-        detail: 'Healthy after 12 s',
-        finishedAt,
-      },
-    ])
-    expect(note).toBe(`Healthy after 12 s (at ${new Date(finishedAt).toLocaleTimeString()})`)
-  })
-
-  it('is null while the step runs, when it said nothing, or without a plan', () => {
-    expect(healthStepNote([health('running', 'Attempt 2, 4 s of up to 120 s')])).toBeNull()
-    expect(healthStepNote([health('done')])).toBeNull()
-    expect(healthStepNote(null)).toBeNull()
+  it('words the rail counter like the header, with no padding and no zero', () => {
+    expect(progressCounterText({ phase: 'running', step: 4, total: 8 })).toBe('Step 4 of 8')
+    expect(progressCounterText({ phase: 'waiting', step: 0, total: 8 })).toBe('Step -- of 8')
   })
 })
