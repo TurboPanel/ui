@@ -1,12 +1,12 @@
 import type { CommandProgressStep } from '@/lib/instance-api'
-import { stepRailInfo, type StepRailInfo } from '@/lib/step-rail'
+import { stepCountWords, stepRailInfo, type StepRailInfo } from '@/lib/step-rail'
 
 /**
  * Words and numbers derived from a deploy's step plan (`CommandProgress`),
  * shared by the progress rail, the environment status line and the activity
  * table so every surface counts the same way the control plane does:
- * the total is every step that is not `ready`, the position is the steps
- * `done` plus one while a step is `running`.
+ * the total is every listed step and the position is the step's place in the
+ * list (steps already on the server count as done).
  *
  * The payload comes off the wire, so every reader tolerates a missing or
  * malformed `steps` list rather than taking the Overview down with it.
@@ -30,13 +30,6 @@ export function stepsOf(progress: ProgressLike | null | undefined): CommandProgr
   )
 }
 
-/** Steps that count towards "Step N of M": everything the server has to do. */
-export function countedSteps(
-  steps: readonly CommandProgressStep[] | null | undefined
-): CommandProgressStep[] {
-  return stepsOf({ steps }).filter((step) => step.state !== 'ready')
-}
-
 /**
  * The running step: the one `current` names when it is in fact running, else
  * the first step in the `running` state, else null.
@@ -58,12 +51,26 @@ export function failedStep(
   return stepsOf({ steps }).find((step) => step.state === 'failed') ?? null
 }
 
-/** One-based position of a step among the counted ones; 0 when it is `ready`. */
+/**
+ * The one place that numbers a step: its one-based position in the plan's
+ * list and the length of that list. The header, the rail counter, the failure
+ * and stopped titles and the spoken labels all read it, so they cannot
+ * disagree. A step not in the list has position 0.
+ */
+export function stepCounts(
+  steps: readonly CommandProgressStep[] | null | undefined,
+  step: CommandProgressStep
+): { position: number; total: number } {
+  const list = stepsOf({ steps })
+  return { position: list.indexOf(step) + 1, total: list.length }
+}
+
+/** One-based position of a step in the plan's list. */
 export function stepPosition(
   steps: readonly CommandProgressStep[] | null | undefined,
   step: CommandProgressStep
 ): number {
-  return countedSteps(steps).indexOf(step) + 1
+  return stepCounts(steps, step).position
 }
 
 /**
@@ -119,7 +126,7 @@ export function gerundLabel(label: string): string {
 
 /** "Step 3 of 7 · Installing Docker"; the label is optional. */
 export function stepCountText(step: number, totalSteps: number, label?: string | null): string {
-  const count = `Step ${step} of ${totalSteps}`
+  const count = stepCountWords(step, totalSteps)
   return label ? `${count} · ${label}` : count
 }
 
@@ -162,9 +169,9 @@ export type ProgressPhase = 'waiting' | 'running' | 'done' | 'failed' | 'stopped
 
 export type ProgressSummary = Readonly<{
   phase: ProgressPhase
-  /** Position for the counter: steps done, plus one while a step runs. */
+  /** Position for the counter: the running step's place in the list; steps done (or already there) once it stops. */
   step: number
-  /** Steps the server has to do (not `ready`). */
+  /** Every step in the list. */
   total: number
   /** The step name line: "Installing Docker", "All 7 Steps Done · 03:12", "Failed at Step 4 of 7 · Build". */
   title: string
@@ -178,15 +185,14 @@ export type ProgressSummary = Readonly<{
  */
 export function progressSummary(progress: ProgressLike | null | undefined): ProgressSummary | null {
   const steps = stepsOf(progress)
-  const counted = countedSteps(steps)
-  const total = counted.length
+  const total = steps.length
   if (total === 0) return null
-  const done = counted.filter((step) => step.state === 'done').length
+  const done = steps.filter((step) => step.state === 'done' || step.state === 'ready').length
   const running = runningStep(progress)
   if (running) {
     return {
       phase: 'running',
-      step: stepPosition(steps, running),
+      step: stepCounts(steps, running).position,
       total,
       title: gerundLabel(running.label),
       focus: running,
@@ -194,12 +200,12 @@ export function progressSummary(progress: ProgressLike | null | undefined): Prog
   }
   const failed = failedStep(steps)
   if (failed) {
-    const at = stepPosition(steps, failed)
+    const at = stepCounts(steps, failed).position
     return {
       phase: 'failed',
       step: at,
       total,
-      title: `Failed at Step ${at} of ${total} · ${stepTitle(failed.label)}`,
+      title: `Failed at ${stepCountText(at, total, stepTitle(failed.label))}`,
       focus: failed,
     }
   }
@@ -214,16 +220,21 @@ export function progressSummary(progress: ProgressLike | null | undefined): Prog
       focus: null,
     }
   }
-  if (counted.some((step) => step.state === 'skipped')) {
+  const firstSkipped = steps.findIndex((step) => step.state === 'skipped')
+  if (firstSkipped >= 0) {
+    // The steps before the first skipped one are the ones that ran (or were already there).
     return {
       phase: 'stopped',
-      step: done,
+      step: firstSkipped,
       total,
-      title: `Stopped After Step ${done} of ${total}`,
+      title:
+        firstSkipped === 0
+          ? 'Stopped Before the First Step'
+          : `Stopped After ${stepCountText(firstSkipped, total)}`,
       focus: null,
     }
   }
-  return { phase: 'waiting', step: 0, total, title: 'Getting Ready', focus: counted[0] ?? null }
+  return { phase: 'waiting', step: 0, total, title: 'Getting Ready', focus: steps[0] ?? null }
 }
 
 /** The line a single-line surface shows: "Step 3 of 7 · Installing Docker". Null until a step is counted. */
@@ -347,21 +358,24 @@ export function stepNodeInfo(state: string): StepNodeInfo {
   return stepRailInfo(state)
 }
 
-/**
- * What a screen reader hears for one node: "Step 3 of 7, Install Docker, in
- * progress"; a step already on the server has no position.
- */
+/** What a screen reader hears for one node: "Step 3 of 7, Install Docker, in progress". */
 export function stepAccessibilityLabel(
   steps: readonly CommandProgressStep[] | null | undefined,
   step: CommandProgressStep
 ): string {
   const info = stepNodeInfo(step.state)
-  const position = stepPosition(steps, step)
+  const { position, total } = stepCounts(steps, step)
   if (position === 0) return `${stepTitle(step.label)}, ${info.word}`
-  return `Step ${position} of ${countedSteps(steps).length}, ${stepTitle(step.label)}, ${info.word}`
+  return `${stepCountText(position, total)}, ${stepTitle(step.label)}, ${info.word}`
 }
 
-/** `03` for the mono counter: two digits, more when the plan is that long. */
-export function counterDigits(value: number): string {
-  return String(Math.max(0, value)).padStart(2, '0')
+/**
+ * The rail's counter, worded like the header: "Step 4 of 8". Before the first
+ * step runs the position is a dash, never 0.
+ */
+export function progressCounterText(
+  summary: Pick<ProgressSummary, 'phase' | 'step' | 'total'>
+): string {
+  if (summary.phase === 'waiting') return `Step -- of ${summary.total}`
+  return stepCountText(summary.step, summary.total)
 }

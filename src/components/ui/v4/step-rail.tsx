@@ -16,6 +16,7 @@ import { StatusGlyph } from '@/components/ui/v4/status-glyph'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import {
+  stepCountWords,
   stepRailComplete,
   stepRailFocus,
   stepRailInfo,
@@ -509,7 +510,7 @@ function CurrentLine({ steps }: Readonly<{ steps: readonly StepRailItem[] }>) {
   return (
     <View style={s.currentRow}>
       <Text style={s.currentCount}>
-        {complete ? 'Done' : `Step ${focus.index + 1} / ${steps.length}`}
+        {complete ? 'Done' : stepCountWords(focus.index + 1, steps.length)}
       </Text>
       <Text style={labelStyle(s, focus.step.state)} numberOfLines={1}>
         {stepRailLabel(focus.step)}
