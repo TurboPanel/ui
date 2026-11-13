@@ -211,6 +211,24 @@ function FieldNotes({
   )
 }
 
+/**
+ * True when a field must stay out of the save payload: a masked secret the
+ * user has not edited (keeps the stored one), or an Encryption choice equal to
+ * what was loaded (also covers an older control plane without the setting).
+ */
+function isUnchangedField(
+  key: FullKey,
+  current: string,
+  loadedValue: string | null,
+  touched: boolean
+): boolean {
+  if (isSecretKey(key)) return loadedValue === '***' && !touched
+  if (key === ENCRYPTION_KEY) {
+    return smtpEncryptionValue(current) === smtpEncryptionValue(loadedValue)
+  }
+  return false
+}
+
 export function EmailSettingsSection() {
   const emailQuery = useEmailSettings()
   const saveMutation = useSaveEmailSettings()
@@ -319,29 +337,11 @@ export function EmailSettingsSection() {
       const src = sources[key]
       if (src === 'env') continue
 
-      const isSecret = isSecretKey(key)
       const loadedEntry = loaded[key]
       const current = draft[key] ?? ''
 
-      if (isSecret) {
-        const wasMasked = loadedEntry.value === '***'
-        const touched = secretTouched[key]
-        if (wasMasked && !touched) {
-          // Do not send — preserves existing secret.
-          continue
-        }
-        // If user cleared it (or set to something), send null for empty to clear, else the value.
-        payload[key] = current.trim() === '' ? null : current
-        continue
-      }
-
-      if (
-        key === ENCRYPTION_KEY &&
-        smtpEncryptionValue(current) === smtpEncryptionValue(loadedEntry.value)
-      ) {
-        // Unchanged (or an older control plane that has no such setting): send nothing.
-        continue
-      }
+      // Unchanged secrets and an unchanged Encryption choice are not sent.
+      if (isUnchangedField(key, current, loadedEntry.value, secretTouched[key])) continue
 
       // Non-secret: empty means clear (null), otherwise the trimmed value.
       payload[key] = current.trim() === '' ? null : current
