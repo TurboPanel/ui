@@ -238,8 +238,8 @@ function useEnvironmentActionHandlers(
   const { orgId, projectId, selectedEnvironment } = useProjectContext()
   const environmentId = selectedEnvironment?.id ?? ''
   return {
-    'preview-merged': () => model.openComposeInspect('merged'),
-    'preview-prepared': () => model.openComposeInspect('prepared'),
+    'preview-merged': () => model.openComposeInspect('compose'),
+    'preview-prepared': () => model.openComposeInspect('summary'),
     cacheless: () => model.openDeployConfirm('cacheless'),
     stop: () => ignorePromise(model.handleStop()),
     refresh: () => {
@@ -1063,7 +1063,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
 
   const openDeployConfirm = (confirm: DeployConfirmMode) => {
     setActionError(null)
-    setPreviewOpen({ purpose: 'confirm', mode: 'prepared', confirm })
+    setPreviewOpen({ purpose: 'confirm', mode: 'summary', confirm })
   }
 
   const runDeployFromPreview = async () => {
@@ -1401,7 +1401,7 @@ export function EnvironmentLifecycleNotices({
         environmentCompose={selectedEnvironment.options?.compose}
         deploying={deployConfirmBusy}
         purpose={previewOpen?.purpose ?? 'inspect'}
-        initialMode={previewOpen?.mode ?? 'merged'}
+        initialMode={previewOpen?.mode ?? 'compose'}
         confirmLabel={
           previewOpen?.purpose === 'confirm' && previewOpen.confirm
             ? deployModeLabel(previewOpen.confirm)

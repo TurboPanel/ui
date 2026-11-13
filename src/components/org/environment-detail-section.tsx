@@ -1868,7 +1868,7 @@ function EnvironmentDeployChromePanels({
 
       <Section
         title="Deploy"
-        note="Preview compose, then deploy this environment to its selected server"
+        note="Preview what will run, then deploy this environment to its selected server"
       >
         <View style={styles.deployActions}>
           <View ref={previewBtnRef} collapsable={false} style={styles.splitGroup}>
@@ -1882,7 +1882,7 @@ function EnvironmentDeployChromePanels({
               disabled={deploying}
               onPress={onPreviewMerged}
               accessibilityRole="button"
-              accessibilityLabel="Preview merged compose"
+              accessibilityLabel="Preview Compose"
             >
               <Text style={panelStyles.toolbarBtnTextSecondary}>Preview</Text>
             </Pressable>
@@ -1952,12 +1952,11 @@ function EnvironmentDeployChromePanels({
                 onPreviewMerged()
               }}
               accessibilityRole="menuitem"
-              accessibilityLabel="Preview merged compose"
+              accessibilityLabel="Preview Compose"
             >
-              <Text style={styles.menuItemTitle}>Merged compose</Text>
+              <Text style={styles.menuItemTitle}>Preview Compose</Text>
               <Text style={styles.menuItemSub}>
-                Project base combined with this environment’s overrides, including TurboPanel’s own
-                settings
+                The compose as written, with this environment’s changes
               </Text>
             </Pressable>
             <Pressable
@@ -1971,11 +1970,11 @@ function EnvironmentDeployChromePanels({
                 onPreviewPrepared()
               }}
               accessibilityRole="menuitem"
-              accessibilityLabel="Preview prepared compose"
+              accessibilityLabel="Preview Deploy Summary"
             >
-              <Text style={styles.menuItemTitle}>Prepared compose</Text>
+              <Text style={styles.menuItemTitle}>Preview Deploy Summary</Text>
               <Text style={styles.menuItemSub}>
-                Deploy-ready document after variables, naming, and site split
+                What will run where, its variables and settings
               </Text>
             </Pressable>
           </View>
@@ -2498,7 +2497,7 @@ function EnvironmentDetailChromeExtras({
           environmentCompose={environment.options?.compose}
           deploying={deployPending}
           purpose={previewOpen?.purpose ?? 'inspect'}
-          initialMode={previewOpen?.mode ?? 'merged'}
+          initialMode={previewOpen?.mode ?? 'compose'}
           confirmLabel="Deploy"
           onCancel={onCancelPreview}
           onConfirm={
@@ -2890,7 +2889,7 @@ export function EnvironmentDetailBody({
 
   const openDeployConfirm = useCallback(() => {
     setError(null)
-    setPreviewOpen({ purpose: 'confirm', mode: 'prepared' })
+    setPreviewOpen({ purpose: 'confirm', mode: 'summary' })
   }, [])
 
   /**
@@ -3132,8 +3131,8 @@ export function EnvironmentDetailBody({
           deployBlocked={deployBlocked}
           deploying={deploying}
           deployStatus={deployStatus}
-          onPreviewMerged={() => openComposeInspect('merged')}
-          onPreviewPrepared={() => openComposeInspect('prepared')}
+          onPreviewMerged={() => openComposeInspect('compose')}
+          onPreviewPrepared={() => openComposeInspect('summary')}
           onDeploy={openDeployConfirm}
           onSaveCompose={async (compose) => {
             await saveCompose(compose)

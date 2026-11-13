@@ -9126,6 +9126,26 @@ export type DeployPreviewNativeAppVariable = {
   reason?: NativeAppVariableReason
 }
 
+/**
+ * One variable of one service by the name a person set it under (never the
+ * service-prefixed `.env` key). `value` is `null` for a secret.
+ */
+export type DeployPreviewServiceVariable = {
+  name: string
+  source: string
+  isSecret: boolean
+  value: string | null
+  forBuild: boolean
+  forRuntime: boolean
+  /** `true` when a source build never receives it, because the host refuses its name. */
+  droppedFromBuild?: true
+}
+
+export type DeployPreviewServiceVariables = {
+  composeServiceName: string
+  variables: DeployPreviewServiceVariable[]
+}
+
 /** Every environment variable one Node app's process gets (or is refused). */
 export type DeployPreviewNativeAppVariables = {
   composeServiceName: string
@@ -9163,6 +9183,8 @@ export type DeployPreviewResponse = {
   secretPlan?: DeployPreviewSecretPlanEntry[]
   /** Environment variables each Node app (native service) would get; secrets masked. */
   nativeAppVariables?: DeployPreviewNativeAppVariables[]
+  /** Each service's variables by the names a person set, split by build and runtime use. Absent on an older control plane. */
+  serviceVariables?: DeployPreviewServiceVariables[]
 }
 
 /**
