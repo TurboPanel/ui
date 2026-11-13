@@ -4,7 +4,6 @@
 
 An organization owner can turn on "ask people to confirm it is them before permanent actions" (Manage Organization → Security, `ReauthSettingsSection`). `fetchWithStepUp` (`src/lib/step-up.ts`) wraps every request in `instance-api.ts`: a `403 reauth_required` opens the single app-wide `ReauthSheet` (mounted in `AppProviders`; password, or the authenticator code for people who use one), then the original request is sent once more. Do not add a new `fetch(controlPlaneUrl(...))` to `instance-api.ts` without going through `fetchWithStepUp`, or that action will show a bare 403 instead of the prompt. Logic, copy and the broker are in `src/lib/step-up.ts` (covered); the sheet is chrome.
 
-
 ## Command Pipeline UI
 
 Per-server command actions use `src/components/org/server-commands-panel.tsx` on the server detail **Control** tab. Commands follow a create-then-poll pattern: the UI enqueues via a mutation hook, receives a `commandId`, then polls with `useCommandsBatch` from `src/lib/queries/commands.ts` (`COMMAND_POLL_MS`, `isTerminalCommandStatus`) — a single React Query with `refetchInterval` while any tracked command is non-terminal. Each tick is **one** `POST /commands/status` request for every tracked id (via `fetchCommandStatuses`), not one `GET` per command; results are re-aligned to entry order so index-based consumers stay correct, and unreadable ids simply drop out. `useCommandRecordsBatch` is the per-id variant (one `fetchCommand` per entry, full `CommandRecord`) kept for the server-detail Control tab, which renders the ping latency breakdown. No hand-rolled `setInterval` per page or per server.
@@ -117,4 +116,3 @@ and when a tracked deploy command reaches a terminal status.
 - Hostname/reboot gated by `useCan(…, 'organization:manage')` as a display hint; disabled when `!server.connected`.
 - The hostname field is labelled **Change the server's own name (Linux hostname)** with a hint that it is not the DNS name clients use: it renames the Linux hostname only. The DNS name clients dial lives in the Network tab's **Addresses clients use** card.
 - Reboot uses two-step confirm. Do not add per-server background polling loops — O(1) shared batch query only.
-

@@ -4,6 +4,7 @@
 > (command transcript) surface.
 
 **Surfaces:**
+
 - Project → environment **Deployments** → a deployment — the deploy's own **log
   page** (`/environments/:environmentId/deployments/:deploymentId`,
   `src/components/logs/deployment-log-screen.tsx`). This is where a build and
@@ -68,19 +69,19 @@ Do not fork either per surface; add a prop instead.
 `theme.ts` + `org-panel-styles.ts` only — the log tokens that already exist and
 were reserved for exactly this:
 
-| Role | Token | Notes |
-|------|-------|-------|
-| stdout line | `colors.stdout` | Default body colour for transcript text |
-| stderr line | `colors.errorText` | Never `colors.error` (too hot at 12px on a dark log surface) |
-| phase header | `colors.command` | Phase name; the rule above it is `borderArea` |
-| timestamp / seq | `colors.log` → `colors.textFaint` | Muted, never the same weight as the message |
-| truncation banner | `orgPanelStyles.calloutWarning` | Existing warning callout, not a new banner |
-| controls | `SegmentedControl` + `Button` (`sm`) | Same visual weight as the managed log controls |
+| Role              | Token                                | Notes                                                        |
+| ----------------- | ------------------------------------ | ------------------------------------------------------------ |
+| stdout line       | `colors.stdout`                      | Default body colour for transcript text                      |
+| stderr line       | `colors.errorText`                   | Never `colors.error` (too hot at 12px on a dark log surface) |
+| phase header      | `colors.command`                     | Phase name; the rule above it is `borderArea`                |
+| timestamp / seq   | `colors.log` → `colors.textFaint`    | Muted, never the same weight as the message                  |
+| truncation banner | `orgPanelStyles.calloutWarning`      | Existing warning callout, not a new banner                   |
+| controls          | `SegmentedControl` + `Button` (`sm`) | Same visual weight as the managed log controls               |
 
 Stderr is **never** signalled by colour alone — the row carries a monospace
 `stderr` marker chip, matching the console-wide "no colour-only status" rule.
 
-**The stream is not the verdict.** Docker writes *all* progress to stderr —
+**The stream is not the verdict.** Docker writes _all_ progress to stderr —
 stdout is reserved for command results — so `stream === 'stderr'` alone would
 paint an entire successful image pull red. A row is an error only when it came
 from stderr **and** is not a recognised Compose/BuildKit progress line
@@ -182,15 +183,15 @@ bottom of the screen on the web) with 48 pt buttons:
 
 ## State matrix
 
-| State | Meaning | Render |
-|-------|---------|--------|
-| `idle` | Nothing enqueued / no command id yet | `EmptyState` — "No transcript yet." |
-| `waiting` | Command queued, `exists: false` — daemon has not uploaded a first chunk | `LoadingState` "Waiting for output…" |
-| `streaming` | Live, chunks arriving, not sealed | Lines + follow toggle + live chip |
-| `sealed` | Command terminal, transcript final | Lines, follow off, Copy / Download enabled |
-| `truncated` | Retained-size cap hit | `calloutWarning` above the lines, then the retained lines |
+| State         | Meaning                                                                 | Render                                                          |
+| ------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `idle`        | Nothing enqueued / no command id yet                                    | `EmptyState` — "No transcript yet."                             |
+| `waiting`     | Command queued, `exists: false` — daemon has not uploaded a first chunk | `LoadingState` "Waiting for output…"                            |
+| `streaming`   | Live, chunks arriving, not sealed                                       | Lines + follow toggle + live chip                               |
+| `sealed`      | Command terminal, transcript final                                      | Lines, follow off, Copy / Download enabled                      |
+| `truncated`   | Retained-size cap hit                                                   | `calloutWarning` above the lines, then the retained lines       |
 | `unavailable` | No execution-log store configured, or transcript expired past retention | `EmptyState` panel — "Transcript unavailable." + retention hint |
-| `forbidden` | Session cannot read this command | `EmptyState` panel — permission copy, no retry button |
+| `forbidden`   | Session cannot read this command                                        | `EmptyState` panel — permission copy, no retry button           |
 
 `waiting` and `unavailable` are distinct on purpose: the control plane returns
 `exists: false` for "not started" and never 404s a poll loop, so the viewer must
