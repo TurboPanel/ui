@@ -142,12 +142,12 @@ export function environmentActionItems(
 ): readonly EnvironmentActionItem[] {
   const busyReason = input.busy ? BUSY_REASON : null
   const items: EnvironmentActionItem[] = [
-    item('preview-merged', 'Preview merged compose', {
+    item('preview-merged', 'Preview Compose', {
       hint: 'The Base combined with this environment’s changes',
       disabledReason: busyReason,
     }),
-    item('preview-prepared', 'Preview prepared compose', {
-      hint: 'Deploy-ready document after variables, naming and site split',
+    item('preview-prepared', 'Preview Deploy Summary', {
+      hint: 'Which servers each service runs on and how it is reached',
       disabledReason: busyReason,
     }),
   ]

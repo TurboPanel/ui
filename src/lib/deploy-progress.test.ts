@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { stepRailFocus } from '@/lib/step-rail'
 import {
   activityStepText,
-  countedSteps,
-  counterDigits,
+  progressCounterText,
   elapsedSeconds,
   failedStep,
   certificateStepNote,
@@ -18,6 +18,7 @@ import {
   stepAccessibilityLabel,
   stepCountText,
   stepNodeInfo,
+  stepCounts,
   stepPosition,
   stepTitle,
   healthStepNote,
@@ -84,17 +85,22 @@ describe('reading the payload', () => {
     expect(
       stepsOf({ steps: [null, 4, { label: 'no id' }, step('build', 'Build', 'pending')] })
     ).toEqual([step('build', 'Build', 'pending')])
-    expect(countedSteps(undefined)).toEqual([])
+    expect(stepCounts(undefined, step('x', 'X', 'pending'))).toEqual({ position: 0, total: 0 })
     expect(runningStep({ steps: 7 as unknown as [], current: 'x' })).toBeNull()
     expect(failedStep(null)).toBeNull()
     expect(firstTimeSetupCaption(undefined)).toBeNull()
     expect(progressSummary({ steps: {} })).toBeNull()
   })
 
-  it('counts every step that is not already there', () => {
-    expect(countedSteps(FRESH_HOST)).toHaveLength(6)
-    expect(stepPosition(FRESH_HOST, FRESH_HOST[2]!)).toBe(2)
-    expect(stepPosition(FRESH_HOST, FRESH_HOST[1]!)).toBe(0)
+  it('counts every listed step, already-there ones included, in list order', () => {
+    expect(stepCounts(FRESH_HOST, FRESH_HOST[0]!).total).toBe(7)
+    expect(stepPosition(FRESH_HOST, FRESH_HOST[2]!)).toBe(3)
+    expect(stepPosition(FRESH_HOST, FRESH_HOST[1]!)).toBe(2)
+    expect(stepCounts(FRESH_HOST, FRESH_HOST[4]!)).toEqual({ position: 5, total: 7 })
+    expect(stepCounts(FRESH_HOST, step('other', 'Other', 'pending'))).toEqual({
+      position: 0,
+      total: 7,
+    })
   })
 
   it('finds the running step by `current` only when that step is running, then by state', () => {
@@ -127,13 +133,13 @@ describe('progressSummary', () => {
       progressSummary({ steps: FRESH_HOST, current: 'install-runtime:node-22' })
     ).toMatchObject({
       phase: 'running',
-      step: 2,
-      total: 6,
+      step: 3,
+      total: 7,
       title: 'Installing Node 22',
       focus: FRESH_HOST[2],
     })
     expect(progressHeadline({ steps: FRESH_HOST, current: 'install-runtime:node-22' })).toBe(
-      'Step 2 of 6 · Installing Node 22'
+      'Step 3 of 7 · Installing Node 22'
     )
   })
 
@@ -186,10 +192,78 @@ describe('progressSummary', () => {
     ).toMatchObject({ phase: 'waiting', step: 0, total: 2, title: 'Getting Ready' })
   })
 
-  it('has nothing to say when every step was already there', () => {
+  it('uses one position and total for the header, failure, stopped and spoken labels', () => {
+    const lead = [
+      step('install-docker', 'Install Docker', 'ready'),
+      step('install-gateway', 'Set Up the Web Gateway', 'ready'),
+      step('fetch', 'Fetch the Source Code', 'done'),
+    ]
+    const running = [...lead, step('build', 'Build', 'running'), step('start', 'Start', 'pending')]
+    expect(progressHeadline({ steps: running, current: 'build' })).toBe('Step 4 of 5 · Building')
+    expect(stepAccessibilityLabel(running, running[3]!)).toBe('Step 4 of 5, Build, in progress')
+    const failed = [...lead, step('build', 'Build', 'failed'), step('start', 'Start', 'skipped')]
+    expect(progressHeadline({ steps: failed, current: null })).toBe('Failed at Step 4 of 5 · Build')
+    expect(stepAccessibilityLabel(failed, failed[3]!)).toBe('Step 4 of 5, Build, failed')
+    const stopped = [...lead, step('build', 'Build', 'skipped'), step('start', 'Start', 'skipped')]
+    expect(progressSummary({ steps: stopped, current: null })).toMatchObject({
+      phase: 'stopped',
+      step: 3,
+      total: 5,
+      title: 'Stopped After Step 3 of 5',
+    })
+    const waiting = [
+      step('install-docker', 'Install Docker', 'ready'),
+      step('build', 'Build', 'pending'),
+    ]
+    expect(progressSummary({ steps: waiting, current: null })).toMatchObject({
+      phase: 'waiting',
+      step: 0,
+      total: 2,
+    })
+  })
+
+  it('keeps the stopped wording consistent and counts a skipped step before a done one', () => {
+    expect(progressSummary({ steps: [step('a', 'A', 'skipped')], current: null })?.title).toBe(
+      'Stopped Before the First Step'
+    )
+    const mixed = [
+      step('a', 'A', 'done'),
+      step('b', 'B', 'skipped'),
+      step('c', 'C', 'done'),
+      step('d', 'D', 'skipped'),
+    ]
+    expect(progressSummary({ steps: mixed, current: null })).toMatchObject({
+      phase: 'stopped',
+      step: 1,
+      total: 4,
+      title: 'Stopped After Step 1 of 4',
+    })
+  })
+
+  it('picks the same step for the phone short form as for the header', () => {
+    const summary = progressSummary({ steps: FRESH_HOST, current: null })
+    const focus = stepRailFocus(FRESH_HOST.map((entry) => ({ state: entry.state })))
+    expect(focus?.index).toBe(summary!.step - 1)
+  })
+
+  it('keeps the position as the list index while the list grows between polls', () => {
+    const first = [step('a', 'A', 'done'), step('b', 'B', 'running'), step('c', 'C', 'pending')]
+    expect(progressHeadline({ steps: first, current: 'b' })).toBe('Step 2 of 3 · B')
+    const grown = [
+      step('a', 'A', 'done'),
+      step('b', 'B', 'running'),
+      step('c', 'C', 'pending'),
+      step('d', 'D', 'pending'),
+      step('e', 'E', 'pending'),
+    ]
+    expect(progressHeadline({ steps: grown, current: 'b' })).toBe('Step 2 of 5 · B')
+    expect(stepAccessibilityLabel(grown, grown[1]!)).toBe('Step 2 of 5, B, in progress')
+  })
+
+  it('reads a plan whose steps were all already there as done', () => {
     expect(
       progressSummary({ steps: [step('install-docker', 'Install Docker', 'ready')], current: null })
-    ).toBeNull()
+    ).toMatchObject({ phase: 'done', step: 1, total: 1 })
     expect(progressHeadline({ steps: [], current: null })).toBeNull()
     expect(progressHeadline(null)).toBeNull()
   })
@@ -198,7 +272,7 @@ describe('progressSummary', () => {
 describe('progressChipLabel', () => {
   it('shows the running step only', () => {
     expect(progressChipLabel({ steps: FRESH_HOST, current: 'install-runtime:node-22' })).toBe(
-      'Step 2 of 6 · Installing Node 22'
+      'Step 3 of 7 · Installing Node 22'
     )
     expect(progressChipLabel({ steps: [step('build', 'Build', 'done')], current: null })).toBeNull()
     expect(progressChipLabel(null)).toBeNull()
@@ -306,10 +380,9 @@ describe('elapsed time', () => {
     expect(planElapsedSeconds(null)).toBeNull()
   })
 
-  it('pads the counter to two digits', () => {
-    expect(counterDigits(3)).toBe('03')
-    expect(counterDigits(12)).toBe('12')
-    expect(counterDigits(-1)).toBe('00')
+  it('words the rail counter like the header, with no padding and no zero', () => {
+    expect(progressCounterText({ phase: 'running', step: 4, total: 8 })).toBe('Step 4 of 8')
+    expect(progressCounterText({ phase: 'waiting', step: 0, total: 8 })).toBe('Step -- of 8')
   })
 })
 
@@ -345,10 +418,10 @@ describe('step nodes', () => {
 
   it('tells a screen reader the position, the step and its state', () => {
     expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[2]!)).toBe(
-      'Step 2 of 6, Install Node 22, in progress'
+      'Step 3 of 7, Install Node 22, in progress'
     )
     expect(stepAccessibilityLabel(FRESH_HOST, FRESH_HOST[1]!)).toBe(
-      'Set Up the Web Gateway, already on this server'
+      'Step 2 of 7, Set Up the Web Gateway, already on this server'
     )
   })
 })
@@ -364,11 +437,11 @@ describe('liveProgressHeadline', () => {
 
   it('shows the step line once the deploy runs, on older servers and after the end', () => {
     expect(liveProgressHeadline({ ...plan, runningSince: '2026-10-26T10:00:00Z' }, false)).toBe(
-      'Step 2 of 6 · Installing Node 22'
+      'Step 3 of 7 · Installing Node 22'
     )
-    expect(liveProgressHeadline(plan, false)).toBe('Step 2 of 6 · Installing Node 22')
+    expect(liveProgressHeadline(plan, false)).toBe('Step 3 of 7 · Installing Node 22')
     expect(liveProgressHeadline({ ...plan, runningSince: null }, true)).toBe(
-      'Step 2 of 6 · Installing Node 22'
+      'Step 3 of 7 · Installing Node 22'
     )
   })
 })

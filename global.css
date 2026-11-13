@@ -1,0 +1,108 @@
+/*
+ * Class styling (Uniwind). The colour block is generated from
+ * `src/lib/theme-palettes.ts` (`uniwindThemeCss()`); a test keeps it equal.
+ * Never edit it by hand and never add a colour here: change the palette.
+ *
+ * No base reset is imported: the web page already has its reset, and the
+ * framework's would restyle screens that are not converted yet.
+ */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'uniwind';
+
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-bg: var(--tp-bg, #0b1220);
+  --color-sidebar: var(--tp-sidebar, #0e1627);
+  --color-surface: var(--tp-surface, #121b2e);
+  --color-surface-2: var(--tp-surface-2, #17223a);
+  --color-surface-3: var(--tp-surface-3, #1e2b47);
+  --color-field: var(--tp-field, #0f1828);
+  --color-hover: var(--tp-hover, rgba(168,181,204,.07));
+  --color-press: var(--tp-press, rgba(168,181,204,.12));
+  --color-sep: var(--tp-sep, rgba(168,181,204,.14));
+  --color-sep-strong: var(--tp-sep-strong, rgba(168,181,204,.24));
+  --color-field-border: var(--tp-field-border, #5b6b8a);
+  --color-text: var(--tp-text, #e8eef7);
+  --color-text-2: var(--tp-text-2, #c9d4e5);
+  --color-text-3: var(--tp-text-3, #9fb0cb);
+  --color-brand: var(--tp-brand, #3366cc);
+  --color-brand-ink: var(--tp-brand-ink, #ffffff);
+  --color-brand-2: var(--tp-brand-2, #3dd68c);
+  --color-accent: var(--tp-accent, #3366cc);
+  --color-accent-ink: var(--tp-accent-ink, #ffffff);
+  --color-accent-soft: var(--tp-accent-soft, rgba(51,102,204,.20));
+  --color-link: var(--tp-link, #86a8ff);
+  --color-ok: var(--tp-ok, #3dd68c);
+  --color-ok-soft: var(--tp-ok-soft, rgba(61,214,140,.15));
+  --color-busy: var(--tp-busy, #b49dff);
+  --color-busy-soft: var(--tp-busy-soft, rgba(180,157,255,.15));
+  --color-warn: var(--tp-warn, #f2b84b);
+  --color-warn-soft: var(--tp-warn-soft, rgba(242,184,75,.15));
+  --color-bad: var(--tp-bad, #ff7a7a);
+  --color-bad-soft: var(--tp-bad-soft, rgba(255,122,122,.15));
+  --color-idle: var(--tp-idle, #94a0b6);
+  --color-idle-soft: var(--tp-idle-soft, rgba(148,160,182,.15));
+  --color-base: var(--tp-base, #7fa4ff);
+  --color-base-soft: var(--tp-base-soft, rgba(127,164,255,.16));
+  --color-ok-line: var(--tp-ok-line, rgba(61,214,140,.30));
+  --color-busy-line: var(--tp-busy-line, rgba(180,157,255,.30));
+  --color-warn-line: var(--tp-warn-line, rgba(242,184,75,.35));
+  --color-bad-line: var(--tp-bad-line, rgba(255,122,122,.35));
+  --color-base-line: var(--tp-base-line, rgba(127,164,255,.45));
+  --color-rail-https: var(--tp-rail-https, #86a8ff);
+  --color-rail-internal: var(--tp-rail-internal, #9fb0cb);
+  --color-rail-data: var(--tp-rail-data, #2fc4b2);
+  --color-knob: var(--tp-knob, #ffffff);
+  --color-log-bg: var(--tp-log-bg, #070c16);
+  --color-log-fg: var(--tp-log-fg, #d5deec);
+  --color-log-dim: var(--tp-log-dim, #7d8aa3);
+  --color-log-err: var(--tp-log-err, #ff8a8a);
+  --color-log-ok: var(--tp-log-ok, #6fe3a8);
+  --color-log-hl: var(--tp-log-hl, rgba(255,138,138,.12));
+  --color-logo-bars: var(--tp-logo-bars, #3dd68c);
+  --color-logo-tee: var(--tp-logo-tee, #3366cc);
+  --color-scrim: var(--tp-scrim, rgba(11,18,32,.72));
+  --color-glass-fill: var(--tp-glass-fill, rgba(18,27,46,.74));
+  --color-glass-fill-strong: var(--tp-glass-fill-strong, rgba(14,22,39,.86));
+  --color-glass-fill-soft: var(--tp-glass-fill-soft, rgba(23,34,58,.58));
+  --color-glass-border: var(--tp-glass-border, rgba(168,181,204,.18));
+  --color-glass-border-bright: var(--tp-glass-border-bright, rgba(168,181,204,.30));
+  --color-glass-specular: var(--tp-glass-specular, rgba(255,255,255,.08));
+  --color-menu-fill: var(--tp-menu-fill, #0e1526);
+  --color-bg-panel: var(--tp-bg-panel, #121b2e);
+  --color-bg-area: var(--tp-bg-area, #121b2e);
+  --color-bg-area-header: var(--tp-bg-area-header, #17223a);
+  --color-bg-input: var(--tp-bg-input, #0f1828);
+  --color-bg-secondary: var(--tp-bg-secondary, #1e2b47);
+  --color-bg-inset: var(--tp-bg-inset, #0f1828);
+  --color-bg-sidebar: var(--tp-bg-sidebar, #0e1627);
+  --color-bg-active: var(--tp-bg-active, rgba(51,102,204,.20));
+  --color-bg-active-blue: var(--tp-bg-active-blue, rgba(51,102,204,.20));
+  --color-border: var(--tp-border, rgba(168,181,204,.24));
+  --color-border-subtle: var(--tp-border-subtle, rgba(168,181,204,.14));
+  --color-border-muted: var(--tp-border-muted, rgba(168,181,204,.24));
+  --color-border-chip: var(--tp-border-chip, rgba(168,181,204,.24));
+  --color-border-area: var(--tp-border-area, rgba(168,181,204,.14));
+  --color-text-title: var(--tp-text-title, #e8eef7);
+  --color-text-body: var(--tp-text-body, #c9d4e5);
+  --color-text-muted: var(--tp-text-muted, #9fb0cb);
+  --color-text-dim: var(--tp-text-dim, #9fb0cb);
+  --color-text-faint: var(--tp-text-faint, #9fb0cb);
+  --color-text-label: var(--tp-text-label, #9fb0cb);
+  --color-text-chip: var(--tp-text-chip, #c9d4e5);
+  --color-green: var(--tp-green, #3dd68c);
+  --color-blue: var(--tp-blue, #3366cc);
+  --color-error: var(--tp-error, #ff7a7a);
+  --color-error-text: var(--tp-error-text, #ff7a7a);
+  --color-error-soft: var(--tp-error-soft, #ff7a7a);
+  --color-pending: var(--tp-pending, #f2b84b);
+  --color-command: var(--tp-command, #86a8ff);
+  --color-stdout: var(--tp-stdout, #c9d4e5);
+  --color-log: var(--tp-log, #94a0b6);
+  --color-button-text: var(--tp-button-text, #ffffff);
+  --color-button-text-on-blue: var(--tp-button-text-on-blue, #ffffff);
+  --color-overlay: var(--tp-overlay, rgba(11,18,32,.72));
+}

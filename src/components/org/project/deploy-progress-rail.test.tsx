@@ -130,12 +130,12 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
   })
 
   it.each([
-    ['Set Up the Web Gateway, already on this server', 'path', 'ok', 'okLine'],
-    ['Step 1 of 5, Install Docker, done', 'path', 'ok', 'ok'],
-    ['Step 2 of 5, Install Node 22, in progress', 'path', 'busy', 'busyLine'],
-    ['Step 3 of 5, Fetch the Source Code, not started', null, 'sepStrong', null],
-    ['Step 4 of 5, Build, failed', 'path', 'bad', 'bad'],
-    ['Step 5 of 5, Start the App, skipped', 'circle', 'sep', null],
+    ['Step 1 of 6, Set Up the Web Gateway, already on this server', 'path', 'ok', 'okLine'],
+    ['Step 2 of 6, Install Docker, done', 'path', 'ok', 'ok'],
+    ['Step 3 of 6, Install Node 22, in progress', 'path', 'busy', 'busyLine'],
+    ['Step 4 of 6, Fetch the Source Code, not started', null, 'sepStrong', null],
+    ['Step 5 of 6, Build, failed', 'path', 'bad', 'bad'],
+    ['Step 6 of 6, Start the App, skipped', 'circle', 'sep', null],
   ] as const)(
     'reads %s to a screen reader, with its glyph, node tone and segment fill',
     (name, shape, border, fill) => {
@@ -163,7 +163,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     expect(styleOf(track).width).toBe('100%')
     const segments = screen.getAllByRole('listitem')
     expect(segments).toHaveLength(6)
-    expect(segments[1]?.getAttribute('aria-label')).toBe('Step 1 of 5, Install Docker, done')
+    expect(segments[1]?.getAttribute('aria-label')).toBe('Step 2 of 6, Install Docker, done')
     for (const segment of segments) expect(segment.parentElement).toBe(track)
     for (const segment of segments.slice(0, -1)) expect(styleOf(segment).flex).toBe(1)
     const last = segments.at(-1) as HTMLElement
@@ -174,13 +174,13 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
 
   it('shows the counter in mono small caps, the step name in the body face and the task in mono with a caret', () => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
-    const counter = screen.getByText('Step 02 / 05')
+    const counter = screen.getByText('Step 3 of 6')
     expect(styleOf(counter).fontFamily).toBe(fontFamily('monoSemibold', scenario.os === 'web'))
     expect(styleOf(counter).textTransform).toBe('uppercase')
     expect(styleOf(counter).letterSpacing).toBe(0.5)
     expect(styleOf(counter).fontVariant).toEqual(['tabular-nums'])
     expect(styleOf(counter).color).toBe(token(scenario, 'busy'))
-    expect(counter.getAttribute('aria-label')).toBe('Step 2 of 5')
+    expect(counter.getAttribute('aria-label')).toBe('Step 3 of 6')
     const title = screen.getByText('Installing Node 22')
     expect(styleOf(title).fontFamily).toBe(fontFamily('bodyMedium', scenario.os === 'web'))
     const detail = screen.getByText('Unpack the archive')
@@ -235,7 +235,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     const fills = animated(reduced.container).fills
     expect(fills.length).toBeGreaterThan(0)
     for (const fill of fills) expect(styleOf(fill).width).toBe('100%')
-    const runningFill = animated(screen.getByLabelText('Step 2 of 5, Install Node 22, in progress'))
+    const runningFill = animated(screen.getByLabelText('Step 3 of 6, Install Node 22, in progress'))
       .fills[0]
     expect(styleOf(runningFill).backgroundColor).toBe(token(scenario, 'busy'))
     const caret = screen.getByText('Unpack the archive').nextElementSibling as HTMLElement
@@ -279,7 +279,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
         ])}
       />
     )
-    const counter = screen.getByText('Step -- / 02')
+    const counter = screen.getByText('Step -- of 2')
     expect(counter.getAttribute('aria-label')).toBe('Getting Ready, 2 steps')
     expect(screen.getByText('Getting Ready')).toBeTruthy()
     expect(screen.queryByText(/00 \//)).toBeNull()
@@ -301,7 +301,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
       />
     )
     expect(screen.getByText('All 2 Steps Done · 03:12')).toBeTruthy()
-    expect(styleOf(screen.getByText('Step 02 / 02')).color).toBe(token(scenario, 'ok'))
+    expect(styleOf(screen.getByText('Step 2 of 2')).color).toBe(token(scenario, 'ok'))
     for (const fill of animated(container).fills)
       expect(styleOf(fill).backgroundColor).toBe(token(scenario, 'ok'))
     const last = screen.getByRole('list').lastElementChild as HTMLElement
@@ -320,7 +320,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
       />
     )
     expect(screen.getByText('Failed at Step 2 of 3 · Build')).toBeTruthy()
-    expect(styleOf(screen.getByText('Step 02 / 03')).color).toBe(token(scenario, 'bad'))
+    expect(styleOf(screen.getByText('Step 2 of 3')).color).toBe(token(scenario, 'bad'))
     const failed = screen.getByLabelText('Step 2 of 3, Build, failed')
     expect(styleOf(nodeOf(failed)).borderColor).toBe(token(scenario, 'bad'))
     expect(styleOf(animated(failed).fills[0]).backgroundColor).toBe(token(scenario, 'bad'))

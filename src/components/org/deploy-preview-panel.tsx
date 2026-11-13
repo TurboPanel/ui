@@ -13,10 +13,7 @@ import {
   type DeployPreviewServer,
 } from '@/lib/instance-api'
 import { colors, spacing } from '@/lib/theme'
-import {
-  nativeAppVariableLine,
-  preparedPerServerCompose,
-} from '@/lib/deploy-preview-display'
+import { nativeAppVariableLine, preparedPerServerCompose } from '@/lib/deploy-preview-display'
 import { userErrorMessage } from '@/lib/user-error'
 
 function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): string {
@@ -42,10 +39,7 @@ export function PreviewWarnings({
   return (
     <View style={panelStyles.calloutWarning}>
       {warnings.map((warning) => (
-        <Text
-          key={`${warning.code}:${warning.message}`}
-          style={panelStyles.calloutWarningText}
-        >
+        <Text key={`${warning.code}:${warning.message}`} style={panelStyles.calloutWarningText}>
           {formatWarningLine(warning)}
         </Text>
       ))}
@@ -61,20 +55,16 @@ function composeFileRoleLabel(role: ComposeFileRole): string {
 }
 
 function runtimeComposeFileFromFiles(
-  files: readonly DeployPreviewComposeFile[] | undefined,
+  files: readonly DeployPreviewComposeFile[] | undefined
 ): DeployPreviewComposeFile | undefined {
   return files?.find((file) => file.role === 'runtime')
 }
 
-function runtimeComposeFile(
-  preview: DeployPreviewResponse,
-): DeployPreviewComposeFile | undefined {
+function runtimeComposeFile(preview: DeployPreviewResponse): DeployPreviewComposeFile | undefined {
   return runtimeComposeFileFromFiles(preview.composeFiles)
 }
 
-function ComposeLayerSection({
-  file,
-}: Readonly<{ file: DeployPreviewComposeFile }>) {
+function ComposeLayerSection({ file }: Readonly<{ file: DeployPreviewComposeFile }>) {
   return (
     <View style={styles.layerSection}>
       <View style={styles.layerHeader}>
@@ -88,9 +78,7 @@ function ComposeLayerSection({
   )
 }
 
-function ServerComposeSection({
-  server,
-}: Readonly<{ server: DeployPreviewServer }>) {
+function ServerComposeSection({ server }: Readonly<{ server: DeployPreviewServer }>) {
   const services = [...(server.services ?? [])].sort((a, b) => a.localeCompare(b))
   const serviceLine = services.join(', ')
   const title = server.name?.trim() || server.serverId
@@ -104,21 +92,16 @@ function ServerComposeSection({
           <Text style={styles.roleBadgeText}>Server</Text>
         </View>
       </View>
-      {serviceLine.length > 0 ? (
-        <Text style={panelStyles.muted}>{serviceLine}</Text>
-      ) : null}
-      {runtimeFile ? (
-        <ComposeLayerSection file={runtimeFile} />
-      ) : null}
+      {serviceLine.length > 0 ? <Text style={panelStyles.muted}>{serviceLine}</Text> : null}
+      {runtimeFile ? <ComposeLayerSection file={runtimeFile} /> : null}
     </View>
   )
 }
 
 function secretPlanLine(entry: DeployPreviewSecretPlanEntry): string {
-  const flags = [
-    entry.forRuntime ? 'runtime' : null,
-    entry.forBuild ? 'build' : null,
-  ].filter((flag): flag is string => flag !== null)
+  const flags = [entry.forRuntime ? 'runtime' : null, entry.forBuild ? 'build' : null].filter(
+    (flag): flag is string => flag !== null
+  )
   const flagSuffix = flags.length > 0 ? ` (${flags.join(', ')})` : ''
   return `${entry.composeServiceName} ${entry.key} → /run/secrets/${entry.target}${flagSuffix}`
 }
@@ -140,27 +123,23 @@ function previewSourceLine(entry: DeployPreviewSource): string {
   return `${entry.composeServiceName} ← ${repo}@${entry.ref}${where}${commitNote} → release ${entry.releaseId}`
 }
 
-function PreparedComposeSnapshot({
-  preview,
-}: Readonly<{ preview: DeployPreviewResponse }>) {
+function PreparedComposeSnapshot({ preview }: Readonly<{ preview: DeployPreviewResponse }>) {
   const servers = preparedPerServerCompose(preview.servers)
   const runtimeFile = servers.length > 0 ? undefined : runtimeComposeFile(preview)
   const envFile = preview.envFile?.trim() ?? ''
   const secretPlan = preview.secretPlan ?? []
   const sources = preview.sources ?? []
   const nativeApps = (preview.nativeAppVariables ?? []).filter(
-    (app) => (app.variables?.length ?? 0) > 0,
+    (app) => (app.variables?.length ?? 0) > 0
   )
 
   return (
     <View style={styles.layersList}>
       <Text style={panelStyles.muted}>
-        Compiled runtime compose the daemon writes as compose.yaml. Non-secrets
-        interpolate from .env; secrets are file mounts under /run/secrets/.
+        Compiled runtime compose the daemon writes as compose.yaml. Non-secrets interpolate from
+        .env; secrets are file mounts under /run/secrets/.
       </Text>
-      {runtimeFile ? (
-        <ComposeLayerSection file={runtimeFile} />
-      ) : null}
+      {runtimeFile ? <ComposeLayerSection file={runtimeFile} /> : null}
       {envFile.length > 0 ? (
         <View style={styles.layerSection}>
           <View style={styles.layerHeader}>
@@ -169,6 +148,10 @@ function PreparedComposeSnapshot({
               <Text style={styles.roleBadgeText}>Non-secret</Text>
             </View>
           </View>
+          <Text style={panelStyles.muted}>
+            The compose file reads each service&apos;s values under a service-prefixed name, such as
+            website__NODE_OPTIONS.
+          </Text>
           <ReadOnlyYamlBlock value={envFile} />
         </View>
       ) : null}
@@ -199,10 +182,7 @@ function PreparedComposeSnapshot({
             </View>
           </View>
           {(app.variables ?? []).map((entry) => (
-            <Text
-              key={`${entry.name}:${entry.source}`}
-              style={panelStyles.muted}
-            >
+            <Text key={`${entry.name}:${entry.source}`} style={panelStyles.muted}>
               {nativeAppVariableLine(entry)}
             </Text>
           ))}
@@ -217,10 +197,7 @@ function PreparedComposeSnapshot({
             </View>
           </View>
           {sources.map((entry) => (
-            <Text
-              key={`${entry.composeServiceName}:${entry.releaseId}`}
-              style={panelStyles.muted}
-            >
+            <Text key={`${entry.composeServiceName}:${entry.releaseId}`} style={panelStyles.muted}>
               {previewSourceLine(entry)}
             </Text>
           ))}
@@ -244,9 +221,7 @@ export function DeployPreviewBody({
 }>) {
   return (
     <View style={panelStyles.expandedSection}>
-      {loading && !preview ? (
-        <LoadingState label="Loading deploy preview…" />
-      ) : null}
+      {loading && !preview ? <LoadingState label="Loading deploy preview…" /> : null}
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
 
       {preview ? (
@@ -256,9 +231,7 @@ export function DeployPreviewBody({
         </>
       ) : null}
 
-      {!loading && !error && !preview ? (
-        <EmptyState title="No preview loaded yet." />
-      ) : null}
+      {!loading && !error && !preview ? <EmptyState title="No preview loaded yet." /> : null}
     </View>
   )
 }
@@ -266,7 +239,7 @@ export function DeployPreviewBody({
 function preparedPreviewError(
   open: boolean,
   canManage: boolean,
-  queryError: unknown,
+  queryError: unknown
 ): string | null {
   if (!open) return null
   if (!canManage) {
@@ -293,7 +266,7 @@ export function usePreparedComposePreview(
   orgId: string,
   environmentId: string | null,
   canManage: boolean,
-  enabled: boolean,
+  enabled: boolean
 ): {
   loading: boolean
   error: string | null

@@ -995,6 +995,8 @@ export type OrgServerRecord = {
   /** Effective Via header on site responses (server → org → off). */
   sendViaHeader: boolean
   sendViaHeaderSource: HostDefaultsSource | null
+  /** This server's own build limits; `null` parts are not set. */
+  buildLimits?: { cores: number | null; memoryBytes: number | null; swap: boolean | null }
   /** Datacenter memberships (IP pins); a server may belong to many. */
   datacenters: ServerDatacenterRef[]
 }
@@ -1234,6 +1236,8 @@ export async function updateServer(
       hideWebServerNames?: boolean | null
       /** `null` follows the organization setting. */
       sendViaHeader?: boolean | null
+      /** Replaces this server's build limits; `{}` clears both. */
+      buildLimits?: { cores?: number | null; memoryBytes?: number | null; swap?: boolean | null }
       hosting?: { enabled: boolean }
     }
     /** Location override; `null` resets every field to the detected value. */
@@ -1742,6 +1746,28 @@ export async function saveOrgHostDefaults(
   return await apiFetch(`${CLIENT_API}/organizations/${orgId}/host-defaults`, {
     method: 'PUT',
     body: JSON.stringify(patch),
+  })
+}
+
+/** The most cores and memory one build of the organization may use; `null` is not set. */
+export type OrgBuildLimits = {
+  cores: number | null
+  memoryBytes: number | null
+  /** Allow swap for builds; `null` is not set (off). */
+  swap: boolean | null
+}
+
+export async function fetchOrgBuildLimits(orgId: string): Promise<OrgBuildLimits> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/build-limits`)
+}
+
+export async function saveOrgBuildLimits(
+  orgId: string,
+  limits: OrgBuildLimits
+): Promise<OrgBuildLimits & { ok: true }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/build-limits`, {
+    method: 'PUT',
+    body: JSON.stringify(limits),
   })
 }
 
@@ -4022,6 +4048,12 @@ export type ServiceOptions = {
   instances?: number
   build?: {
     disableCache?: boolean
+    /** Most CPU cores one build of this service may use (1 to 999). */
+    cores?: number
+    /** Most memory one build of this service may use, in bytes (1 GiB to 1 TiB). */
+    memoryBytes?: number
+    /** Allow swap for a build of this service; absent follows the server, then the organization (off). */
+    swap?: boolean
   }
   operations?: {
     stopGracePeriodSeconds?: number
@@ -9126,6 +9158,26 @@ export type DeployPreviewNativeAppVariable = {
   reason?: NativeAppVariableReason
 }
 
+/**
+ * One variable of one service by the name a person set it under (never the
+ * service-prefixed `.env` key). `value` is `null` for a secret.
+ */
+export type DeployPreviewServiceVariable = {
+  name: string
+  source: string
+  isSecret: boolean
+  value: string | null
+  forBuild: boolean
+  forRuntime: boolean
+  /** `true` when a source build never receives it, because the host refuses its name. */
+  droppedFromBuild?: true
+}
+
+export type DeployPreviewServiceVariables = {
+  composeServiceName: string
+  variables: DeployPreviewServiceVariable[]
+}
+
 /** Every environment variable one Node app's process gets (or is refused). */
 export type DeployPreviewNativeAppVariables = {
   composeServiceName: string
@@ -9163,6 +9215,8 @@ export type DeployPreviewResponse = {
   secretPlan?: DeployPreviewSecretPlanEntry[]
   /** Environment variables each Node app (native service) would get; secrets masked. */
   nativeAppVariables?: DeployPreviewNativeAppVariables[]
+  /** Each service's variables by the names a person set, split by build and runtime use. Absent on an older control plane. */
+  serviceVariables?: DeployPreviewServiceVariables[]
 }
 
 /**

@@ -109,7 +109,10 @@ const SPEC = {
   logoBars: ['#3dd68c', '#1fa86a'],
   logoTee: ['#3366cc', '#3366cc'],
   shadow: ['0 8px 28px rgba(3,7,15,.40)', '0 8px 24px rgba(15,23,42,.08)'],
-  shadowPop: ['0 1px 0 rgba(168,181,204,.05) inset,0 12px 32px rgba(3,7,15,.55)', '0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.10)'],
+  shadowPop: [
+    '0 1px 0 rgba(168,181,204,.05) inset,0 12px 32px rgba(3,7,15,.55)',
+    '0 1px 2px rgba(15,23,42,.06),0 8px 24px rgba(15,23,42,.10)',
+  ],
   scrim: ['rgba(11,18,32,.72)', 'rgba(245,247,250,.72)'],
   glassFill: ['rgba(18,27,46,.74)', 'rgba(255,255,255,.78)'],
   glassFillStrong: ['rgba(14,22,39,.86)', 'rgba(255,255,255,.90)'],
@@ -213,10 +216,11 @@ export function colorTokens(web: boolean): Palette {
   return Object.fromEntries(entries) as Palette
 }
 
+const APP_FONT_STACK =
+  '-apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+
 function declarations(palette: Palette, scheme: ColorScheme): string {
-  const vars = paletteKeys
-    .map((key) => `${cssVarName(key)}:${palette[key]};`)
-    .join('')
+  const vars = paletteKeys.map((key) => `${cssVarName(key)}:${palette[key]};`).join('')
   return `color-scheme:${scheme};${vars}`
 }
 
@@ -237,5 +241,39 @@ export function themeCss(): string {
     `[data-theme="light"]{${paper}}`,
     `[data-theme="dark"]{${navy}}`,
     'html,body{background-color:var(--tp-bg);}',
+    // The app's default text: text that sets no font of its own (a floating label,
+    // a placeholder) inherits this. A UI provider used to supply it; keeping the same
+    // values keeps every unstyled string looking as before.
+    `#root{font-family:${APP_FONT_STACK};font-weight:400;line-height:23px;}`,
+  ].join('\n')
+}
+
+/** Tokens that are colours; the shadow strings are not, and stay out of the class theme. */
+const colorKeys = paletteKeys.filter(
+  (key) => !/^(shadow|shadowPop|glassShadow|sideShadow)$/.test(key)
+)
+
+/**
+ * The `@theme` block of `global.css`: one class colour per palette token
+ * (`bg-surface-2`, `text-text-3`, `border-sep`), each pointing at the same
+ * `--tp-*` variable the web stylesheet defines, Navy as the fallback. On the
+ * phone, where no stylesheet defines the variables, the fallback is the value.
+ * `inline` makes each utility carry the `var(--tp-*, ...)` itself, so an element
+ * (or a `data-theme` subtree) that re-points `--tp-*` changes the class colours;
+ * without it the value would be fixed once at `:root`.
+ * `--color-*: initial` drops the framework's own colour scale so there is no
+ * second set of colours. A test keeps `global.css` equal to this output.
+ */
+export function uniwindThemeCss(): string {
+  const lines = colorKeys.map((key) => {
+    const name = cssVarName(key).slice('--tp-'.length)
+    return `  --color-${name}: var(${cssVarName(key)}, ${navyPalette[key]});`
+  })
+  return [
+    '@theme inline {',
+    '  --color-*: initial;',
+    '  --color-transparent: transparent;',
+    ...lines,
+    '}',
   ].join('\n')
 }

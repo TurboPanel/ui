@@ -6,9 +6,6 @@ node_modules/
 # Node/pnpm-only — never commit Deno lockfiles
 deno.lock
 
-# Tamagui generated component cache (regenerate locally during builds)
-.tamagui/
-
 # Expo
 .expo/
 dist/
