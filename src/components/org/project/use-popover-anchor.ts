@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, useWindowDimensions, type View, type ViewInstance } from 'react-native'
+import { StyleSheet, useWindowDimensions, type ViewInstance } from 'react-native'
 import { colors } from '@/lib/theme'
 
 /** Where a popover opens before its trigger is measured. */
