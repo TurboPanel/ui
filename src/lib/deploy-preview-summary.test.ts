@@ -202,7 +202,7 @@ describe('buildDeploySummary', () => {
     expect(serviceVariables[0].building.find((v) => v.name === 'PATH')?.notPassedToBuild).toBe(true)
     expect(
       serviceVariables[0].building.find((v) => v.name === 'BUILD_ONLY')?.notPassedToBuild
-    ).toBe(undefined)
+    ).toBeUndefined()
     expect(serviceVariables[0].running.map((v) => v.name)).toEqual(['NODE_OPTIONS', 'RUN_ONLY'])
     expect(JSON.stringify(serviceVariables)).not.toContain('leaked')
     expect(JSON.stringify(serviceVariables)).not.toContain('web__')
