@@ -1,5 +1,5 @@
 import type { CommandProgressStep } from '@/lib/instance-api'
-import { stepRailInfo, type StepRailInfo } from '@/lib/step-rail'
+import { stepCountWords, stepRailInfo, type StepRailInfo } from '@/lib/step-rail'
 
 /**
  * Words and numbers derived from a deploy's step plan (`CommandProgress`),
@@ -28,13 +28,6 @@ export function stepsOf(progress: ProgressLike | null | undefined): CommandProgr
       step !== null &&
       typeof (step as CommandProgressStep).id === 'string'
   )
-}
-
-/** The steps that count towards "Step N of M": every step the plan lists, in list order. */
-export function countedSteps(
-  steps: readonly CommandProgressStep[] | null | undefined
-): CommandProgressStep[] {
-  return stepsOf({ steps })
 }
 
 /**
@@ -68,7 +61,7 @@ export function stepCounts(
   steps: readonly CommandProgressStep[] | null | undefined,
   step: CommandProgressStep
 ): { position: number; total: number } {
-  const list = countedSteps(steps)
+  const list = stepsOf({ steps })
   return { position: list.indexOf(step) + 1, total: list.length }
 }
 
@@ -133,7 +126,7 @@ export function gerundLabel(label: string): string {
 
 /** "Step 3 of 7 · Installing Docker"; the label is optional. */
 export function stepCountText(step: number, totalSteps: number, label?: string | null): string {
-  const count = `Step ${step} of ${totalSteps}`
+  const count = stepCountWords(step, totalSteps)
   return label ? `${count} · ${label}` : count
 }
 
@@ -192,10 +185,9 @@ export type ProgressSummary = Readonly<{
  */
 export function progressSummary(progress: ProgressLike | null | undefined): ProgressSummary | null {
   const steps = stepsOf(progress)
-  const counted = countedSteps(steps)
-  const total = counted.length
+  const total = steps.length
   if (total === 0) return null
-  const done = counted.filter((step) => step.state === 'done' || step.state === 'ready').length
+  const done = steps.filter((step) => step.state === 'done' || step.state === 'ready').length
   const running = runningStep(progress)
   if (running) {
     return {
@@ -228,7 +220,7 @@ export function progressSummary(progress: ProgressLike | null | undefined): Prog
       focus: null,
     }
   }
-  const firstSkipped = counted.findIndex((step) => step.state === 'skipped')
+  const firstSkipped = steps.findIndex((step) => step.state === 'skipped')
   if (firstSkipped >= 0) {
     // The steps before the first skipped one are the ones that ran (or were already there).
     return {
@@ -242,7 +234,7 @@ export function progressSummary(progress: ProgressLike | null | undefined): Prog
       focus: null,
     }
   }
-  return { phase: 'waiting', step: 0, total, title: 'Getting Ready', focus: counted[0] ?? null }
+  return { phase: 'waiting', step: 0, total, title: 'Getting Ready', focus: steps[0] ?? null }
 }
 
 /** The line a single-line surface shows: "Step 3 of 7 · Installing Docker". Null until a step is counted. */
