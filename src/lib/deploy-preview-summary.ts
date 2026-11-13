@@ -41,6 +41,8 @@ export type DeploySummaryUserVariable = Readonly<{
   name: string
   value: string | null
   secret: boolean
+  /** Used while building, but the build never receives it (the host refuses its name). */
+  notPassedToBuild?: true
 }>
 
 /** A service's own variables, split by when they are used (one can be in both). */
@@ -176,13 +178,19 @@ function userVariable(entry: DeployPreviewServiceVariable): DeploySummaryUserVar
   }
 }
 
+function buildVariable(entry: DeployPreviewServiceVariable): DeploySummaryUserVariable {
+  return entry.droppedFromBuild
+    ? { ...userVariable(entry), notPassedToBuild: true }
+    : userVariable(entry)
+}
+
 function serviceVariableGroups(
   preview: DeployPreviewResponse | null
 ): DeploySummaryServiceVariables[] {
   return (preview?.serviceVariables ?? [])
     .map((group) => ({
       service: group.composeServiceName,
-      building: group.variables.filter((v) => v.forBuild).map(userVariable),
+      building: group.variables.filter((v) => v.forBuild).map(buildVariable),
       running: group.variables.filter((v) => v.forRuntime).map(userVariable),
     }))
     .filter((group) => group.building.length > 0 || group.running.length > 0)

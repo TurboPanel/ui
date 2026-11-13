@@ -171,6 +171,15 @@ describe('buildDeploySummary', () => {
                 forRuntime: false,
               },
               {
+                name: 'PATH',
+                source: 'project',
+                isSecret: false,
+                value: '/x',
+                forBuild: true,
+                forRuntime: false,
+                droppedFromBuild: true,
+              },
+              {
                 name: 'RUN_ONLY',
                 source: 'project',
                 isSecret: false,
@@ -188,7 +197,12 @@ describe('buildDeploySummary', () => {
       'NODE_OPTIONS',
       'BUILD_ONLY',
       'NPM_AUTH',
+      'PATH',
     ])
+    expect(serviceVariables[0].building.find((v) => v.name === 'PATH')?.notPassedToBuild).toBe(true)
+    expect(
+      serviceVariables[0].building.find((v) => v.name === 'BUILD_ONLY')?.notPassedToBuild
+    ).toBe(undefined)
     expect(serviceVariables[0].running.map((v) => v.name)).toEqual(['NODE_OPTIONS', 'RUN_ONLY'])
     expect(JSON.stringify(serviceVariables)).not.toContain('leaked')
     expect(JSON.stringify(serviceVariables)).not.toContain('web__')

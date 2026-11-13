@@ -9137,6 +9137,8 @@ export type DeployPreviewServiceVariable = {
   value: string | null
   forBuild: boolean
   forRuntime: boolean
+  /** `true` when a source build never receives it, because the host refuses its name. */
+  droppedFromBuild?: true
 }
 
 export type DeployPreviewServiceVariables = {

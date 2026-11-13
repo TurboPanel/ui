@@ -46,8 +46,9 @@ function VariableGroup({ group }: Readonly<{ group: DeploySummaryVariableGroup }
 }
 
 function userVariableLine(variable: DeploySummaryUserVariable): string {
-  if (variable.secret || variable.value === null) return `${variable.name} = hidden (secret)`
-  return `${variable.name} = ${variable.value}`
+  const shown = variable.secret || variable.value === null ? 'hidden (secret)' : variable.value
+  const note = variable.notPassedToBuild ? ' (not passed to the build)' : ''
+  return `${variable.name} = ${shown}${note}`
 }
 
 function UserVariableList({
