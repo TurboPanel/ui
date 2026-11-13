@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, useWindowDimensions, type View } from 'react-native'
+import { StyleSheet, useWindowDimensions, type View, type ViewInstance } from 'react-native'
 import { colors } from '@/lib/theme'
 
 /** Where a popover opens before its trigger is measured. */
@@ -14,7 +14,7 @@ const DEFAULT_ANCHOR = { top: 56, left: 16 }
 export function usePopoverAnchor(open: boolean, compact: boolean, menuWidth: number) {
   const { width } = useWindowDimensions()
   const [anchor, setAnchor] = useState(DEFAULT_ANCHOR)
-  const ref = useRef<View | null>(null)
+  const ref = useRef<ViewInstance | null>(null)
 
   useEffect(() => {
     if (!open || compact) return

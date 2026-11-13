@@ -10,6 +10,7 @@ import {
   TextInput,
   useWindowDimensions,
   View,
+  type ViewInstance,
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { SearchIcon } from '@/components/icons/nav-icons'
@@ -279,7 +280,7 @@ export function Select({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [anchor, setAnchor] = useState({ top: 56, left: 16, width: 280 })
-  const triggerRef = useRef<View | null>(null)
+  const triggerRef = useRef<ViewInstance | null>(null)
 
   const trigger = resolveSelectTriggerLabel(
     options,

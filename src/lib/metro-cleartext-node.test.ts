@@ -5,6 +5,8 @@ import {
   withDevelopmentClientNativeNetwork,
 } from '@/lib/metro-cleartext-node.mjs'
 
+const CLEARTEXT_PLUGIN = ['expo-build-properties', { android: { usesCleartextTraffic: true } }]
+
 function withUnsetEasEnv(run: () => void) {
   const previousProfile = process.env.EAS_BUILD_PROFILE
   const previousBuild = process.env.EAS_BUILD
@@ -106,12 +108,12 @@ describe('withDevelopmentClientNativeNetwork', () => {
       bundleIdentifier: string
       infoPlist: { ITSAppUsesNonExemptEncryption: boolean; NSAppTransportSecurity: unknown }
     }
-    const android = next.android as { package: string; usesCleartextTraffic: boolean }
+    const android = next.android as { package: string }
     expect(ios.bundleIdentifier).toBe('app.turbopanel')
     expect(ios.infoPlist.ITSAppUsesNonExemptEncryption).toBe(false)
     expect(ios.infoPlist.NSAppTransportSecurity).toEqual(metroCleartextAts())
     expect(android.package).toBe('app.turbopanel')
-    expect(android.usesCleartextTraffic).toBe(true)
+    expect(next.plugins).toContainEqual(CLEARTEXT_PLUGIN)
   })
 
   it('creates ios and android objects when they were missing', () => {
@@ -121,9 +123,8 @@ describe('withDevelopmentClientNativeNetwork', () => {
     )
     expect(next.slug).toBe('ui')
     const ios = next.ios as { infoPlist: { NSAppTransportSecurity: unknown } }
-    const android = next.android as { usesCleartextTraffic: boolean }
     expect(ios.infoPlist.NSAppTransportSecurity).toEqual(metroCleartextAts())
-    expect(android.usesCleartextTraffic).toBe(true)
+    expect(next.plugins).toContainEqual(CLEARTEXT_PLUGIN)
   })
 
   it('ignores non-object ios, android, and infoPlist values', () => {
@@ -141,18 +142,16 @@ describe('withDevelopmentClientNativeNetwork', () => {
     )
     const ios = fromBadIos.ios as { infoPlist: { NSAppTransportSecurity: unknown } }
     const stringIos = fromStringIos.ios as { infoPlist: { NSAppTransportSecurity: unknown } }
-    const android = fromBadPlist.android as { usesCleartextTraffic: boolean }
     expect(ios.infoPlist.NSAppTransportSecurity).toEqual(metroCleartextAts())
     expect(stringIos.infoPlist.NSAppTransportSecurity).toEqual(metroCleartextAts())
-    expect(android.usesCleartextTraffic).toBe(true)
+    expect(fromBadPlist.plugins).toContainEqual(CLEARTEXT_PLUGIN)
     expect(fromBadIos.extra).toEqual({ a: 1 })
   })
 
   it('defaults to process.env when no map is passed', () => {
     withUnsetEasEnv(() => {
       const next = withDevelopmentClientNativeNetwork({ slug: 'ui' })
-      const android = next.android as { usesCleartextTraffic: boolean }
-      expect(android.usesCleartextTraffic).toBe(true)
+      expect(next.plugins).toContainEqual(CLEARTEXT_PLUGIN)
     })
   })
 })

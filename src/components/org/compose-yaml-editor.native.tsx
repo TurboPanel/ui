@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react'
-import { StyleSheet, Text, TextInput, View } from 'react-native'
+import { StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native'
 import type { ComposeLintIssue } from '@/lib/compose'
 import { splitYamlLineHighlight } from '@/lib/compose/yaml-highlight'
 import { colors, spacing } from '@/lib/theme'
@@ -132,7 +132,7 @@ export const ComposeYamlEditor = forwardRef<ComposeYamlEditorHandle, ComposeYaml
     },
     ref,
   ) {
-    const inputRef = useRef<TextInput>(null)
+    const inputRef = useRef<TextInputInstance>(null)
     const selectionRef = useRef<TextSelection>({ start: 0, end: 0 })
 
     useImperativeHandle(

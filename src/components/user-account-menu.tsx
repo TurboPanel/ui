@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
   type StyleProp,
   type ViewStyle,
+  type ViewInstance,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useQueryClient } from '@tanstack/react-query'
@@ -270,7 +271,7 @@ export function UserAccountMenuSegment({ email, onSignOut }: UserAccountMenuSegm
   const header = headerLayoutFor(width, isNative)
   const isCompact = width < layout.desktopBreakpoint
   const [open, setOpen] = useState(false)
-  const buttonRef = useRef<View>(null)
+  const buttonRef = useRef<ViewInstance>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
   const router = useRouter()
   const queryClient = useQueryClient()

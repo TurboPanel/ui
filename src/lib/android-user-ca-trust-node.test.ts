@@ -125,11 +125,14 @@ describe('withAndroidUserCaTrust', () => {
       })
     ) as typeof expoBase & {
       plugins: unknown[]
-      android?: { package: string; usesCleartextTraffic?: boolean }
+      android?: { package: string }
     }
     expect(shipped.plugins).toContain(androidUserCaTrustPlugin)
     expect(shipped.plugins).toContain('expo-router')
-    expect(shipped.android?.usesCleartextTraffic).toBeUndefined()
+    expect(shipped.plugins).not.toContainEqual([
+      'expo-build-properties',
+      { android: { usesCleartextTraffic: true } },
+    ])
     trustAnchors(networkSecurityConfigXml(false))
 
     const development = withAndroidUserCaTrust(
@@ -138,10 +141,13 @@ describe('withAndroidUserCaTrust', () => {
       })
     ) as typeof expoBase & {
       plugins: unknown[]
-      android: { package: string; usesCleartextTraffic: boolean }
+      android: { package: string }
     }
     expect(development.plugins).toContain(androidUserCaTrustPlugin)
-    expect(development.android.usesCleartextTraffic).toBe(true)
+    expect(development.plugins).toContainEqual([
+      'expo-build-properties',
+      { android: { usesCleartextTraffic: true } },
+    ])
     trustAnchors(networkSecurityConfigXml(true))
   })
 })

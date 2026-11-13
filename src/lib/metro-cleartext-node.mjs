@@ -17,6 +17,8 @@
  * @typedef {Readonly<Record<string, string | undefined>>} EnvMap
  */
 
+const BUILD_PROPERTIES_PLUGIN = 'expo-build-properties'
+
 /**
  * @param {EnvMap} [env]
  */
@@ -70,6 +72,7 @@ export function withDevelopmentClientNativeNetwork(expo, env = process.env) {
   const ios = isPlainObject(expo.ios) ? expo.ios : {}
   const android = isPlainObject(expo.android) ? expo.android : {}
   const infoPlist = isPlainObject(ios.infoPlist) ? ios.infoPlist : {}
+  const plugins = Array.isArray(expo.plugins) ? expo.plugins : []
   return {
     ...expo,
     ios: {
@@ -79,9 +82,9 @@ export function withDevelopmentClientNativeNetwork(expo, env = process.env) {
         NSAppTransportSecurity: metroCleartextAts(),
       },
     },
-    android: {
-      ...android,
-      usesCleartextTraffic: true,
-    },
+    android,
+    // Expo's config schema no longer accepts `android.usesCleartextTraffic`
+    // (SDK 58); the build-properties plugin sets it on the Android project.
+    plugins: [...plugins, [BUILD_PROPERTIES_PLUGIN, { android: { usesCleartextTraffic: true } }]],
   }
 }

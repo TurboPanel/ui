@@ -8,6 +8,7 @@ import {
   View,
   type TextInputProps,
   type TextStyle,
+  type ViewInstance,
 } from 'react-native'
 import { useReducedMotion } from 'react-native-reanimated'
 import { EyeIcon, EyeSlashIcon } from '@/components/auth/auth-eye-icons'
@@ -66,7 +67,7 @@ type FocusHost = {
 }
 
 function useWebFieldFocus(setFocused: (next: boolean) => void) {
-  const ref = useRef<View>(null)
+  const ref = useRef<ViewInstance>(null)
   useEffect(() => {
     if (Platform.OS !== 'web') return
     const node = ref.current as unknown as FocusHost | null

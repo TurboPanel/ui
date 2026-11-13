@@ -9,7 +9,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewInstance } from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useRouter, type Href } from 'expo-router'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
@@ -259,7 +259,7 @@ function EnvironmentActionsMenu({ model }: Readonly<{ model: OverviewEnvironment
   const { width } = useWindowDimensions()
   const isCompact = width < layout.desktopBreakpoint
   const [menuOpen, setMenuOpen] = useState(false)
-  const buttonRef = useRef<View>(null)
+  const buttonRef = useRef<ViewInstance>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
   const remove = useOverviewEnvironmentDelete(() => ignorePromise(model.handleStop()))
   const handlers = useEnvironmentActionHandlers(model, remove.arm)

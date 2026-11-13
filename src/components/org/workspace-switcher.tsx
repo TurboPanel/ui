@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   View,
+  type TextInputInstance,
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { PlatformBadge } from '@/components/org/platform-badge'
@@ -170,7 +171,7 @@ export function WorkspaceSwitcher({
   const { workspaces, scope, isLoading, setScopeId } = useWorkspaceScope()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const searchRef = useRef<TextInput>(null)
+  const searchRef = useRef<TextInputInstance>(null)
 
   const users = useMemo(() => userWorkspaces(workspaces), [workspaces])
   const platformWorkspace = useMemo(
