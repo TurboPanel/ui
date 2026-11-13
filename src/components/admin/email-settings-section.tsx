@@ -9,12 +9,18 @@ import {
   LoadingState,
   SectionPanel,
   SegmentedControl,
+  Select,
 } from '@/components/ui'
 import type { EmailSettingSource, EmailSettingsResponse } from '@/lib/instance-api'
 import {
   effectiveEmailProvider,
   emailDeliveryNotice,
   emailProviderSegmentValue,
+  SMTP_ENCRYPTION_HELP,
+  SMTP_ENCRYPTION_NONE_WARNING,
+  SMTP_ENCRYPTION_OPTIONS,
+  smtpEncryptionLabel,
+  smtpEncryptionValue,
 } from '@/lib/email-settings-view'
 import { useEmailSettings, useSaveEmailSettings } from '@/lib/queries/admin'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
@@ -44,11 +50,14 @@ function LockIcon() {
   )
 }
 
+const ENCRYPTION_KEY = 'TURBOPANEL_SYSTEM_EMAIL__SMTP_SECURITY'
+
 const FULL_KEYS = [
   'TURBOPANEL_SYSTEM_EMAIL__PROVIDER',
   'TURBOPANEL_SYSTEM_EMAIL__FROM',
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_HOST',
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_PORT',
+  'TURBOPANEL_SYSTEM_EMAIL__SMTP_SECURITY',
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_USER',
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_PASS',
   'TURBOPANEL_SYSTEM_EMAIL__MAILGUN_API_KEY',
@@ -68,6 +77,7 @@ const LABELS: Record<FullKey, string> = {
   TURBOPANEL_SYSTEM_EMAIL__FROM: 'From address',
   TURBOPANEL_SYSTEM_EMAIL__SMTP_HOST: 'SMTP host',
   TURBOPANEL_SYSTEM_EMAIL__SMTP_PORT: 'SMTP port',
+  TURBOPANEL_SYSTEM_EMAIL__SMTP_SECURITY: 'Encryption',
   TURBOPANEL_SYSTEM_EMAIL__SMTP_USER: 'SMTP user',
   TURBOPANEL_SYSTEM_EMAIL__SMTP_PASS: 'SMTP password',
   TURBOPANEL_SYSTEM_EMAIL__MAILGUN_API_KEY: 'Mailgun API key',
@@ -80,6 +90,7 @@ const PLACEHOLDERS: Record<FullKey, string> = {
   TURBOPANEL_SYSTEM_EMAIL__FROM: 'noreply@example.com',
   TURBOPANEL_SYSTEM_EMAIL__SMTP_HOST: 'smtp.example.com',
   TURBOPANEL_SYSTEM_EMAIL__SMTP_PORT: '587',
+  TURBOPANEL_SYSTEM_EMAIL__SMTP_SECURITY: 'auto',
   TURBOPANEL_SYSTEM_EMAIL__SMTP_USER: 'user@example.com',
   TURBOPANEL_SYSTEM_EMAIL__SMTP_PASS: '',
   TURBOPANEL_SYSTEM_EMAIL__MAILGUN_API_KEY: '',
@@ -113,6 +124,7 @@ const PROVIDER_SEGMENT_OPTIONS = PROVIDER_OPTIONS.map((value) => ({
 const SMTP_KEYS: FullKey[] = [
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_HOST',
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_PORT',
+  'TURBOPANEL_SYSTEM_EMAIL__SMTP_SECURITY',
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_USER',
   'TURBOPANEL_SYSTEM_EMAIL__SMTP_PASS',
 ]
@@ -149,6 +161,7 @@ function SourceBadge({ source }: Readonly<{ source: EmailSettingSource }>) {
 /** What a locked (environment-controlled) field shows: secrets masked, the provider by its friendly name. */
 function lockedDisplayText(key: FullKey, value: string): string {
   if (isSecretKey(key)) return '••••••••'
+  if (key === ENCRYPTION_KEY) return smtpEncryptionLabel(value)
   const displayValue =
     key === 'TURBOPANEL_SYSTEM_EMAIL__PROVIDER' ? (PROVIDER_DISPLAY_LABELS[value] ?? value) : value
   return displayValue || ''
@@ -289,6 +302,14 @@ export function EmailSettingsSection() {
         continue
       }
 
+      if (
+        key === ENCRYPTION_KEY &&
+        smtpEncryptionValue(current) === smtpEncryptionValue(loadedEntry.value)
+      ) {
+        // Unchanged (or an older control plane that has no such setting): send nothing.
+        continue
+      }
+
       // Non-secret: empty means clear (null), otherwise the trimmed value.
       payload[key] = current.trim() === '' ? null : current
     }
@@ -340,6 +361,17 @@ export function EmailSettingsSection() {
           accessibilityLabel="Email provider"
         />
       )
+    } else if (key === ENCRYPTION_KEY && !isEnv) {
+      fieldControl = (
+        <Select
+          value={smtpEncryptionValue(value)}
+          options={SMTP_ENCRYPTION_OPTIONS}
+          placeholder="Auto"
+          disabled={saveMutation.isPending}
+          accessibilityLabel="SMTP encryption"
+          onChange={(next) => onChange(key, next ?? 'auto')}
+        />
+      )
     } else if (isEnv) {
       fieldControl = (
         <View style={[styles.input, styles.inputDisabled, styles.lockRow]}>
@@ -382,7 +414,19 @@ export function EmailSettingsSection() {
           </Text>
         ) : null}
 
-        {isDefault ? <Text style={styles.helpMuted}>Using default value.</Text> : null}
+        {key === ENCRYPTION_KEY ? <Text style={styles.help}>{SMTP_ENCRYPTION_HELP}</Text> : null}
+
+        {key === ENCRYPTION_KEY && smtpEncryptionValue(value) === 'none' ? (
+          <InlineNotice
+            tone="warning"
+            title="Unencrypted Email"
+            body={SMTP_ENCRYPTION_NONE_WARNING}
+          />
+        ) : null}
+
+        {isDefault && key !== ENCRYPTION_KEY ? (
+          <Text style={styles.helpMuted}>Using default value.</Text>
+        ) : null}
       </View>
     )
   }
