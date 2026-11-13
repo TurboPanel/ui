@@ -258,6 +258,9 @@ const colorKeys = paletteKeys.filter(
  * (`bg-surface-2`, `text-text-3`, `border-sep`), each pointing at the same
  * `--tp-*` variable the web stylesheet defines, Navy as the fallback. On the
  * phone, where no stylesheet defines the variables, the fallback is the value.
+ * `inline` makes each utility carry the `var(--tp-*, ...)` itself, so an element
+ * (or a `data-theme` subtree) that re-points `--tp-*` changes the class colours;
+ * without it the value would be fixed once at `:root`.
  * `--color-*: initial` drops the framework's own colour scale so there is no
  * second set of colours. A test keeps `global.css` equal to this output.
  */
@@ -267,7 +270,7 @@ export function uniwindThemeCss(): string {
     return `  --color-${name}: var(${cssVarName(key)}, ${navyPalette[key]});`
   })
   return [
-    '@theme {',
+    '@theme inline {',
     '  --color-*: initial;',
     '  --color-transparent: transparent;',
     ...lines,

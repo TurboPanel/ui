@@ -11,7 +11,7 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import 'uniwind';
 
-@theme {
+@theme inline {
   --color-*: initial;
   --color-transparent: transparent;
   --color-bg: var(--tp-bg, #0b1220);

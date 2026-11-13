@@ -63,7 +63,7 @@ Source of truth: the v4 spec tokens in `src/lib/theme-palettes.ts` (two palettes
 
 | Role | Font | Where it is set |
 |------|-------|-------|
-| Page titles (800 italic, 28px, -0.5 tracking), section titles (700) | Plus Jakarta Sans | `src/lib/v4/typography.ts` roles `displayItalic`, `display` (the v4 primitives use them; unconverted screens still use Inter) |
+| Page titles (800 italic, 28px, -0.5 tracking), section titles (700) | Plus Jakarta Sans | `src/lib/v4/typography.ts` roles `displayItalic`, `display` (the v4 primitives use them; unconverted screens set the same role fonts through `StyleSheet`; text with no font set gets the system font) |
 | UI / body | Geist Sans 400 / 500 / 600 | roles `body`, `bodyMedium`, `bodySemibold` |
 | SHAs, commands, paths, logs, metrics | Geist Mono 400 / 500 / 600 | roles `mono`, `monoMedium`, `monoSemibold` |
 

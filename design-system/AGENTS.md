@@ -101,6 +101,8 @@ These are non-negotiable for the console (detail lives in Master):
 
 ### Styling rule
 
+Class colours are declared `@theme inline` so they follow a `data-theme` subtree (the auth screens pin Navy); keep it `inline`, or a pinned subtree would keep the page's colours.
+
 New and rebuilt UI is styled with Uniwind classes over the token theme; existing `StyleSheet` code moves over gradually. Colours come only from the token classes or `theme.ts`; never hard-code one (see `src/AGENTS.md` for the class rules).
 
 ### Anti-patterns / do-not

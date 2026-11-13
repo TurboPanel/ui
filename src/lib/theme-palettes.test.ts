@@ -261,6 +261,8 @@ describe('uniwindThemeCss', () => {
 
   it('points every colour at the shared variable with the Navy value as fallback', () => {
     const css = uniwindThemeCss()
+    // `inline`: utilities carry the variable, so a `data-theme` subtree re-points them.
+    expect(css.startsWith('@theme inline {')).toBe(true)
     expect(css).toContain('--color-*: initial;')
     expect(css).toContain(`--color-bg: var(--tp-bg, ${navyPalette.bg});`)
     expect(css).toContain(`--color-surface-2: var(--tp-surface-2, ${navyPalette.surface2});`)

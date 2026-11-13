@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:30ec47d2636aebae1ddb56aa4e0671d57a28299bbb2bcc5e6920859adb2e514b
+pnpm-lock.yaml sha256:8d865c5a5e1e4c8b5099478fff9d67736acd88c1b5cce36e72b519599e334f41
 -->
 
 ## Production dependencies
