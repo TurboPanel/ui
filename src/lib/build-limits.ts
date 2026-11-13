@@ -58,9 +58,14 @@ export const NO_BUILD_LIMITS: BuildLimitValues = { cores: null, memoryBytes: nul
 
 const DECIMAL_RE = /^\d{1,4}(\.\d{1,2})?$/
 
+/** A comma decimal ("1,5", on keypads that use one) is read as a point. */
+function normaliseDecimal(raw: string): string {
+  return raw.trim().replace(',', '.')
+}
+
 /** Empty is `null` (not set), a valid number is itself, anything else is `undefined`. */
 export function parseBuildCoresDraft(raw: string): number | null | undefined {
-  const text = raw.trim()
+  const text = normaliseDecimal(raw)
   if (text.length === 0) return null
   if (!DECIMAL_RE.test(text)) return undefined
   const cores = Number(text)
@@ -69,7 +74,7 @@ export function parseBuildCoresDraft(raw: string): number | null | undefined {
 
 /** Empty is `null`, a number of GB (fractions allowed) from 1 to 1024 is bytes, anything else `undefined`. */
 export function parseBuildMemoryDraft(raw: string): number | null | undefined {
-  const text = raw.trim()
+  const text = normaliseDecimal(raw)
   if (text.length === 0) return null
   if (!DECIMAL_RE.test(text)) return undefined
   const gb = Number(text)

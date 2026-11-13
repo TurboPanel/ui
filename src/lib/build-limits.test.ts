@@ -24,6 +24,13 @@ describe('build limit drafts', () => {
     }
   })
 
+  it('reads a comma decimal as a point', () => {
+    expect(parseBuildCoresDraft('1,5')).toBe(1.5)
+    expect(parseBuildMemoryDraft('2,5')).toBe(2.5 * GIB)
+    expect(parseBuildCoresDraft('1,5,5')).toBeUndefined()
+    expect(parseBuildCoresDraft('1,')).toBeUndefined()
+  })
+
   it('reads memory in GB into bytes, 1 to 1024', () => {
     expect(parseBuildMemoryDraft('')).toBeNull()
     expect(parseBuildMemoryDraft('2')).toBe(2 * GIB)

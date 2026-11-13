@@ -11,13 +11,14 @@ import { userErrorMessage } from '@/lib/user-error'
 /** Organization limit for one build on any server; a server or service can set a smaller one. */
 export function ServerBuildLimitsSettingsSection({ orgId }: Readonly<{ orgId: string }>) {
   const queryClient = useQueryClient()
-  const canManage = useCan('organization', orgId, 'organization:manage')
+  // The route is owner-only (`organization:own`), like the compose settings.
+  const canOwn = useCan('organization', orgId, 'organization:own')
   const [error, setError] = useState<string | null>(null)
   const key = queryKeys.org(orgId).settings.buildLimits
   const query = useQuery({
     queryKey: key,
     queryFn: () => fetchOrgBuildLimits(orgId),
-    enabled: canManage && orgId.length > 0,
+    enabled: canOwn && orgId.length > 0,
   })
   const mutation = useApiMutation({
     mutationFn: (limits: OrgBuildLimits) => saveOrgBuildLimits(orgId, limits),
@@ -32,12 +33,16 @@ export function ServerBuildLimitsSettingsSection({ orgId }: Readonly<{ orgId: st
     onError: (err) => setError(userErrorMessage(err, 'Failed to save build limits')),
   })
 
-  if (!canManage) return null
   return (
     <SectionPanel
       title="Build Limits"
-      hint="Organization limit for any one build · a server or service can set a smaller one"
+      hint="Owner-only · organization limit for any one build · a server or service can set a smaller one"
     >
+      {canOwn ? null : (
+        <Text style={panelStyles.muted}>
+          Only an owner can change the organization's build limits.
+        </Text>
+      )}
       {query.isError && !error ? (
         <Text style={panelStyles.error}>
           {userErrorMessage(query.error, 'Failed to load build limits')}
@@ -46,8 +51,8 @@ export function ServerBuildLimitsSettingsSection({ orgId }: Readonly<{ orgId: st
       <BuildLimitsEditor
         scopeLabel="Organization"
         value={query.data}
-        canManage={canManage}
-        pending={mutation.isPending || !query.data}
+        canManage={canOwn}
+        pending={mutation.isPending || (canOwn && !query.data)}
         error={error}
         onSave={(values) => mutation.mutate(values)}
       />
