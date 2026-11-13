@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Platform, StyleSheet, Text, View } from 'react-native'
+import { Platform, StyleSheet, Text, View, type ViewInstance } from 'react-native'
 import { Button, type ButtonSize } from '@/components/ui/button'
 import { listenForDismiss } from '@/lib/dismiss-listener'
 import { colors, spacing } from '@/lib/theme'
@@ -64,7 +64,7 @@ export function ConfirmButton({
   const [confirmed, setConfirmed] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const armedAt = useRef(0)
-  const armedRow = useRef<View>(null)
+  const armedRow = useRef<ViewInstance>(null)
   // The armed button's width: the confirm button keeps it, so a second press
   // anywhere on the spot of the first one lands on Confirm even when its label
   // is shorter.

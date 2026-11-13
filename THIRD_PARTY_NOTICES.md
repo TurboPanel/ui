@@ -7,16 +7,10 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94c6e30f
+pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b8014015d1
 -->
 
 ## Production dependencies
-
-### @adobe/css-tools@4.5.0
-
-- License: MIT
-- Copyright: TJ Holowaychuk
-- Homepage: https://github.com/adobe/css-tools#readme
 
 ### @babel/code-frame@7.29.7
 
@@ -493,11 +487,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Copyright: Marijn Haverbeke
 
-### @egjs/hammerjs@2.0.17
-
-- License: MIT
-- Homepage: http://naver.github.io/egjs
-
 ### @esbuild/linux-x64@0.28.1
 
 - License: MIT
@@ -527,153 +516,164 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Expo Team
 - Homepage: https://github.com/expo/google-fonts/tree/master/font-packages/plus-jakarta-sans#readme
 
-### @expo/cli@57.0.16
+### @expo/cli@58.1.20
 
 - License: MIT
 - Copyright: Expo
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/cli
 
-### @expo/code-signing-certificates@0.0.6
+### @expo/code-signing-certificates@0.0.7
 
 - License: MIT
 - Copyright: Expo
 - Homepage: https://github.com/expo/code-signing-certificates/tree/main#readme
 
-### @expo/config@57.0.8
+### @expo/config@58.0.12
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/config#readme
 
-### @expo/config-plugins@57.0.8
+### @expo/config-plugins@58.0.13
 
 - License: MIT
 - Homepage: https://docs.expo.dev/guides/config-plugins/
 
-### @expo/config-types@57.0.2
+### @expo/config-types@58.0.3
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/config-types#readme
 
-### @expo/devcert@1.2.1
+### @expo/devcert@1.2.2
 
 - License: MIT
 - Copyright: Dave Wasmer
 - Homepage: https://github.com/expo/devcert#readme
 
-### @expo/devtools@57.0.1
+### @expo/devtools@58.0.2
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/devtools#readme
 
-### @expo/dom-webview@57.0.1
+### @expo/dom-webview@58.0.2
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/dom-webview
 
-### @expo/env@2.4.2
+### @expo/env@2.6.0
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/env#readme
 
-### @expo/expo-modules-macros-plugin@0.6.1
-
-- License: MIT
-- Copyright: 650 Industries, Inc.
-- Homepage: https://github.com/expo/expo-modules-macros-plugin
-
-### @expo/fingerprint@0.20.8
+### @expo/fingerprint@0.21.10
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/fingerprint#readme
 
-### @expo/image-utils@0.11.4
+### @expo/image-utils@0.12.7
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/%40expo/image-utils#readme
 
-### @expo/inline-modules@0.1.6
+### @expo/inline-modules@0.2.10
 
 - License: MIT
 - Copyright: Expo
 - Homepage: https://github.com/expo/expo#readme
 
-### @expo/json-file@11.0.1
+### @expo/json-file@11.2.1
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/json-file#readme
 
-### @expo/local-build-cache-provider@57.0.6
+### @expo/local-build-cache-provider@58.0.12
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/local-build-cache-provider#readme
 
-### @expo/log-box@57.0.3
+### @expo/log-box@58.0.15
 
 - License: MIT
 - Copyright: Expo
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/log-box
 
-### @expo/metro@56.0.2
+### @expo/log-box-utils@58.0.2
+
+- License: MIT
+- Copyright: Expo
+- Homepage: https://github.com/expo/expo/tree/main/packages/@expo/log-box-utils
+
+### @expo/metro@58.0.0
 
 - License: MIT
 - Copyright: Expo
 - Homepage: https://github.com/expo/expo-metro#readme
 
-### @expo/metro-config@57.0.8
+### @expo/metro-config@58.0.22
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/metro-config#readme
 
-### @expo/metro-file-map@57.0.1
+### @expo/metro-file-map@58.0.6
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/metro-file-map#readme
 
-### @expo/metro-runtime@57.0.11
+### @expo/metro-runtime@58.0.17
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/metro-runtime
 
-### @expo/osascript@2.7.1
+### @expo/modules-macros-linux-x64@0.33.0
+
+- License: MIT
+- Copyright: 650 Industries, Inc.
+- Homepage: https://github.com/expo/expo-modules-macros
+
+### @expo/osascript@2.8.1
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/osascript#readme
 
-### @expo/package-manager@1.13.1
+### @expo/package-manager@1.14.2
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/package-manager#readme
 
-### @expo/plist@0.8.1
+### @expo/platforms@58.0.1
+
+- License: MIT
+- Homepage: https://github.com/expo/expo/tree/main/packages/@expo/platforms#readme
+
+### @expo/plist@0.10.2
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/plist#readme
 
-### @expo/prebuild-config@57.0.12
+### @expo/prebuild-config@58.0.20
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/prebuild-config#readme
 
-### @expo/require-utils@57.0.4
+### @expo/require-utils@58.0.6
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/require-utils#readme
 
-### @expo/router-server@57.0.6
+### @expo/router-server@58.0.22
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/routing/introduction/
 
-### @expo/schema-utils@57.0.2
+### @expo/schema-utils@58.0.3
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/@expo/schema-utils#readme
 
-### @expo/sdk-runtime-versions@1.0.0
+### @expo/sdk-runtime-versions@1.0.1
 
 - License: MIT
 - Copyright: Expo
@@ -690,21 +690,21 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Joran Dirk Greef
 - Homepage: https://github.com/expo/sudo-prompt
 
-### @expo/ui@57.0.11
+### @expo/ui@58.0.28
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/ui/
 
-### @expo/ws-tunnel@2.0.0
+### @expo/ws-tunnel@2.0.1
 
 - License: MIT
 
-### @expo/xcpretty@4.4.4
+### @expo/xcpretty@4.4.7
 
-- License: BSD-3-Clause
-- Copyright: Evan Bacon
-- Homepage: https://github.com/expo/expo-cli
+- License: MIT
+- Copyright: Expo
+- Homepage: https://github.com/expo/expo
 
 ### @floating-ui/core@1.7.5
 
@@ -832,6 +832,17 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/nodelib/nodelib/tree/master#readme
 
+### @noxcturnal/noxcturnal-linux-x64-gnu@0.1.12
+
+- License: MIT
+- Homepage: https://github.com/expo/noxcturnal#readme
+
+### @oxc-project/types@0.154.0
+
+- License: MIT
+- Copyright: Boshen and oxc contributors
+- Homepage: https://oxc.rs
+
 ### @pkgr/core@0.1.2
 
 - License: MIT
@@ -858,37 +869,12 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://radix-ui.com/primitives
 
-### @radix-ui/react-dialog@1.1.15
-
-- License: MIT
-- Homepage: https://radix-ui.com/primitives
-
 ### @radix-ui/react-direction@1.1.1
 
 - License: MIT
 - Homepage: https://radix-ui.com/primitives
 
-### @radix-ui/react-dismissable-layer@1.1.11
-
-- License: MIT
-- Homepage: https://radix-ui.com/primitives
-
-### @radix-ui/react-focus-guards@1.1.3
-
-- License: MIT
-- Homepage: https://radix-ui.com/primitives
-
-### @radix-ui/react-focus-scope@1.1.7
-
-- License: MIT
-- Homepage: https://radix-ui.com/primitives
-
 ### @radix-ui/react-id@1.1.1
-
-- License: MIT
-- Homepage: https://radix-ui.com/primitives
-
-### @radix-ui/react-portal@1.1.9
 
 - License: MIT
 - Homepage: https://radix-ui.com/primitives
@@ -938,11 +924,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://radix-ui.com/primitives
 
-### @radix-ui/react-use-escape-keydown@1.1.1
-
-- License: MIT
-- Homepage: https://radix-ui.com/primitives
-
 ### @radix-ui/react-use-layout-effect@1.1.1
 
 - License: MIT
@@ -954,62 +935,62 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Mike Nedosekin
 - Homepage: https://github.com/react-native-masked-view/masked-view#readme
 
-### @react-native/assets-registry@0.86.2
+### @react-native/asset-utils@0.88.1
 
 - License: MIT
-- Homepage: https://github.com/react/react-native/tree/HEAD/packages/assets#readme
+- Homepage: https://github.com/react/react-native/tree/HEAD/packages/asset-utils#readme
 
-### @react-native/babel-plugin-codegen@0.86.2
+### @react-native/babel-plugin-codegen@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/babel-plugin-codegen#readme
 
-### @react-native/babel-preset@0.86.2
+### @react-native/babel-preset@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native#readme
 
-### @react-native/codegen@0.86.2
+### @react-native/codegen@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/react-native-codegen#readme
 
-### @react-native/community-cli-plugin@0.86.2
+### @react-native/community-cli-plugin@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/community-cli-plugin#readme
 
-### @react-native/debugger-frontend@0.86.2
+### @react-native/debugger-frontend@0.88.1
 
 - License: BSD-3-Clause
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/debugger-frontend#readme
 
-### @react-native/debugger-shell@0.86.2
+### @react-native/debugger-shell@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/debugger-shell#readme
 
-### @react-native/dev-middleware@0.86.2
+### @react-native/dev-middleware@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/dev-middleware#readme
 
-### @react-native/gradle-plugin@0.86.2
+### @react-native/gradle-plugin@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/gradle-plugin#readme
 
-### @react-native/js-polyfills@0.86.2
+### @react-native/js-polyfills@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/polyfills#readme
 
-### @react-native/metro-babel-transformer@0.86.2
+### @react-native/metro-babel-transformer@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native#readme
 
-### @react-native/metro-config@0.86.2
+### @react-native/metro-config@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/metro-config#readme
@@ -1024,12 +1005,12 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/normalize-color#readme
 
-### @react-native/normalize-colors@0.86.2
+### @react-native/normalize-colors@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/normalize-color#readme
 
-### @react-native/virtualized-lists@0.86.2
+### @react-native/virtualized-lists@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/virtualized-lists#readme
@@ -1543,34 +1524,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: tannerlinsley
 - Homepage: https://tanstack.com/query
 
-### @testing-library/dom@10.4.1
-
-- License: MIT
-- Copyright: Kent C. Dodds
-- Homepage: https://github.com/testing-library/dom-testing-library#readme
-
-### @testing-library/jest-dom@6.9.1
-
-- License: MIT
-- Copyright: Ernesto Garcia
-- Homepage: https://github.com/testing-library/jest-dom#readme
-
-### @testing-library/user-event@14.6.1
-
-- License: MIT
-- Copyright: Giorgio Polvara
-- Homepage: https://github.com/testing-library/user-event#readme
-
-### @types/aria-query@5.0.4
-
-- License: MIT
-- Homepage: https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/aria-query
-
-### @types/hammerjs@2.0.46
-
-- License: MIT
-- Homepage: https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/hammerjs
-
 ### @types/istanbul-lib-coverage@2.0.6
 
 - License: MIT
@@ -1596,7 +1549,7 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node
 
-### @types/react@19.2.16
+### @types/react@19.3.0
 
 - License: MIT
 - Homepage: https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/react
@@ -1655,11 +1608,11 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/xtermjs/xterm.js#readme
 
-### abort-controller@3.0.0
+### 2g@1.0.1
 
 - License: MIT
-- Copyright: Toru Nagashima
-- Homepage: https://github.com/mysticatea/abort-controller#readme
+- Copyright: Phil Pluckthun
+- Homepage: https://github.com/kitten/2g#readme
 
 ### accepts@1.3.8
 
@@ -1682,10 +1635,10 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Nathan Rajlich
 - Homepage: https://github.com/TooTallNate/proxy-agents#readme
 
-### agent-cli-detector@0.1.4
+### agent-cli-detector@0.1.7
 
 - License: MIT
-- Homepage: https://github.com/davidmokos/detect-agent#readme
+- Homepage: https://github.com/expo/agent-cli-detector#readme
 
 ### ajv@8.20.0
 
@@ -1746,24 +1699,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: Python-2.0
 - Homepage: https://github.com/nodeca/argparse#readme
 
-### aria-hidden@1.2.6
-
-- License: MIT
-- Copyright: Anton Korzunov
-- Homepage: https://github.com/theKashey/aria-hidden#readme
-
-### aria-query@5.3.0
-
-- License: Apache-2.0
-- Copyright: Jesse Beach
-- Homepage: https://github.com/A11yance/aria-query#readme
-
-### aria-query@5.3.2
-
-- License: Apache-2.0
-- Copyright: Jesse Beach
-- Homepage: https://github.com/A11yance/aria-query#readme
-
 ### asap@2.0.6
 
 - License: MIT
@@ -1801,16 +1736,11 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/facebook/react#readme
 
-### babel-plugin-react-native-web@0.21.2
+### babel-plugin-react-native-web@0.21.4
 
 - License: MIT
 - Copyright: Nicolas Gallagher
 - Homepage: https://github.com/necolas/react-native-web#readme
-
-### babel-plugin-syntax-hermes-parser@0.36.0
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
 
 ### babel-plugin-syntax-hermes-parser@0.36.1
 
@@ -1822,7 +1752,7 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/facebook/flow#readme
 
-### babel-preset-expo@57.0.7
+### babel-preset-expo@58.0.25
 
 - License: MIT
 - Copyright: Expo
@@ -1940,22 +1870,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Copyright: Bryan Mishkin
 - Homepage: https://github.com/bmish/check-dependency-version-consistency#readme
-
-### chrome-launcher@0.15.2
-
-- License: Apache-2.0
-- Copyright: The Chromium Authors
-
-### chromium-edge-launcher@0.3.0
-
-- License: Apache-2.0
-- Copyright: Cezar Augusto
-
-### ci-info@2.0.0
-
-- License: MIT
-- Copyright: Thomas Watson Steen
-- Homepage: https://github.com/watson/ci-info
 
 ### ci-info@3.9.0
 
@@ -2139,12 +2053,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Felix Böhm
 - Homepage: https://github.com/fb55/css-what#readme
 
-### css.escape@1.5.1
-
-- License: MIT
-- Copyright: Mathias Bynens
-- Homepage: https://mths.be/cssescape
-
 ### csstype@3.2.3
 
 - License: MIT
@@ -2169,34 +2077,23 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Josh Junon
 - Homepage: https://github.com/debug-js/debug#readme
 
-### decode-uri-component@0.5.1
-
-- License: MIT
-- Copyright: Sam Verschueren
-- Homepage: https://github.com/SamVerschueren/decode-uri-component#readme
-
-### deepmerge@4.3.1
-
-- License: MIT
-- Homepage: https://github.com/TehShrike/deepmerge
-
 ### defaults@1.0.4
 
 - License: MIT
 - Copyright: Elijah Insua
 - Homepage: https://github.com/sindresorhus/node-defaults#readme
 
+### define-lazy-prop@2.0.0
+
+- License: MIT
+- Copyright: Sindre Sorhus
+- Homepage: https://github.com/sindresorhus/define-lazy-prop#readme
+
 ### depd@2.0.0
 
 - License: MIT
 - Copyright: Douglas Christopher Wilson
 - Homepage: https://github.com/dougwilson/nodejs-depd#readme
-
-### dequal@2.0.3
-
-- License: MIT
-- Copyright: Luke Edwards
-- Homepage: https://github.com/lukeed/dequal#readme
 
 ### destroy@1.2.0
 
@@ -2210,12 +2107,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Lovell Fuller
 - Homepage: https://github.com/lovell/detect-libc#readme
 
-### detect-node-es@1.1.0
-
-- License: MIT
-- Copyright: Ilya Kantor
-- Homepage: https://github.com/thekashey/detect-node
-
 ### dir-glob@3.0.1
 
 - License: MIT
@@ -2227,16 +2118,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Copyright: Phil Pluckthun
 - Homepage: https://github.com/kitten/dnssd-advertise#readme
-
-### dom-accessibility-api@0.5.16
-
-- License: MIT
-- Homepage: https://github.com/eps1lon/dom-accessibility-api#readme
-
-### dom-accessibility-api@0.6.3
-
-- License: MIT
-- Homepage: https://github.com/eps1lon/dom-accessibility-api#readme
 
 ### dom-serializer@2.0.0
 
@@ -2344,197 +2225,197 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/escape-string-regexp#readme
 
-### escape-string-regexp@4.0.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/escape-string-regexp#readme
-
 ### etag@1.8.1
 
 - License: MIT
 - Homepage: https://github.com/jshttp/etag#readme
 
-### event-target-shim@5.0.1
-
-- License: MIT
-- Copyright: Toru Nagashima
-- Homepage: https://github.com/mysticatea/event-target-shim
-
-### expo@57.0.14
+### expo@58.0.25
 
 - License: MIT
 - Copyright: Expo
 - Homepage: https://github.com/expo/expo/tree/main/packages/expo
 
-### expo-asset@57.0.12
+### expo-asset@58.0.21
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/asset/
 
-### expo-clipboard@57.0.1
+### expo-clipboard@58.0.4
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/clipboard
 
-### expo-constants@57.0.12
+### expo-constants@58.0.16
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/constants/
 
-### expo-dev-client@57.0.13
+### expo-dev-client@58.0.20
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/dev-client/
 
-### expo-dev-launcher@57.0.13
+### expo-dev-launcher@58.0.20
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev
 
-### expo-dev-menu@57.0.13
+### expo-dev-menu@58.0.13
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev
 
-### expo-dev-menu-interface@57.0.0
+### expo-dev-menu-interface@58.0.2
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev
 
-### expo-device@57.0.1
+### expo-device@58.0.5
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/device/
 
-### expo-file-system@57.0.4
+### expo-file-system@58.0.13
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/filesystem/
 
-### expo-font@57.0.1
+### expo-font@58.0.12
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/font/
 
-### expo-glass-effect@57.0.1
+### expo-glass-effect@58.0.5
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/glass-effect/
 
-### expo-image@57.0.3
+### expo-image@58.0.18
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/image/
 
-### expo-json-utils@57.0.1
+### expo-json-utils@58.0.1
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev
 
-### expo-keep-awake@57.0.1
+### expo-keep-awake@58.0.4
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/keep-awake/
 
-### expo-linear-gradient@57.0.1
+### expo-linear-gradient@58.0.4
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/linear-gradient/
 
-### expo-linking@57.0.6
+### expo-linking@58.0.17
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/linking
 
-### expo-manifests@57.0.1
+### expo-manifests@58.0.1
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/manifests/
 
-### expo-modules-autolinking@57.0.10
+### expo-modules-autolinking@58.1.0
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://github.com/expo/expo/tree/main/packages/expo-modules-autolinking#readme
 
-### expo-modules-core@57.0.11
+### expo-modules-cli@0.5.0
+
+- License: MIT
+- Copyright: 650 Industries, Inc.
+- Homepage: https://github.com/expo/expo/tree/main/packages/expo-modules-cli#readme
+
+### expo-modules-core@58.1.0
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://github.com/expo/expo/tree/main/packages/expo-modules-core
 
-### expo-modules-jsi@57.0.4
+### expo-modules-jsi@58.0.23
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://github.com/expo/expo/tree/main/packages/expo-modules-jsi
 
-### expo-router@57.0.14
+### expo-modules-macros@0.33.0
+
+- License: MIT
+- Copyright: 650 Industries, Inc.
+- Homepage: https://github.com/expo/expo-modules-macros
+
+### expo-router@58.0.31
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/routing/introduction/
 
-### expo-secure-store@57.0.1
+### expo-secure-store@58.0.3
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/securestore/
 
-### expo-server@57.0.3
+### expo-server@58.1.0
 
 - License: MIT
 - Homepage: https://github.com/expo/expo/tree/main/packages/expo-server#readme
 
-### expo-splash-screen@57.0.7
+### expo-splash-screen@58.0.14
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/splash-screen/
 
-### expo-status-bar@57.0.1
+### expo-status-bar@58.0.5
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/status-bar/
 
-### expo-symbols@57.0.2
+### expo-symbols@58.0.5
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/symbols/
 
-### expo-system-ui@57.0.2
+### expo-system-ui@58.0.7
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/system-ui
 
-### expo-updates-interface@57.0.1
+### expo-updates-interface@58.0.1
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev
 
-### expo-web-browser@57.0.2
+### expo-web-browser@58.0.8
 
 - License: MIT
 - Copyright: 650 Industries, Inc.
@@ -2609,12 +2490,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Jon Schlinkert
 - Homepage: https://github.com/jonschlinkert/fill-range
 
-### filter-obj@1.1.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/filter-obj#readme
-
 ### finalhandler@1.1.2
 
 - License: MIT
@@ -2649,11 +2524,29 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/facebook/flow#readme
 
-### fontfaceobserver@2.3.0
+### flow-estree@0.327.0
 
-- License: BSD-2-Clause
-- Copyright: Bram Stein
-- Homepage: https://fontfaceobserver.com/
+- License: MIT
+- Copyright: Flow Team
+- Homepage: https://flow.org
+
+### flow-estree@0.331.0
+
+- License: MIT
+- Copyright: Flow Team
+- Homepage: https://flow.org
+
+### flow-parser@0.327.0
+
+- License: MIT
+- Copyright: Flow Team
+- Homepage: https://flow.org
+
+### flow-parser@0.331.0
+
+- License: MIT
+- Copyright: Flow Team
+- Homepage: https://flow.org
 
 ### framer-motion@12.40.0
 
@@ -2690,29 +2583,11 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Stefan Penner
 - Homepage: https://github.com/stefanpenner/get-caller-file#readme
 
-### get-nonce@1.0.1
-
-- License: MIT
-- Copyright: Anton Korzunov
-- Homepage: https://github.com/theKashey/get-nonce
-
-### getenv@2.0.0
-
-- License: MIT
-- Copyright: Christoph Tavan
-- Homepage: https://github.com/ctavan/node-getenv
-
 ### gifted-charts-core@0.1.81
 
 - License: MIT
 - Copyright: Abhinandan Kushwaha
 - Homepage: https://github.com/Abhinandan-Kushwaha/gifted-charts-core#readme
-
-### glob@13.0.6
-
-- License: BlueOak-1.0.0
-- Copyright: Isaac Z. Schlueter
-- Homepage: https://github.com/isaacs/node-glob#readme
 
 ### glob-parent@5.1.2
 
@@ -2749,17 +2624,7 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Jordan Harband
 - Homepage: https://github.com/inspect-js/hasOwn#readme
 
-### hermes-compiler@250829098.0.16
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
-
-### hermes-estree@0.35.0
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
-
-### hermes-estree@0.36.0
+### hermes-compiler@260318099.0.5
 
 - License: MIT
 - Homepage: https://github.com/facebook/hermes#readme
@@ -2769,26 +2634,10 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/facebook/hermes#readme
 
-### hermes-parser@0.35.0
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
-
-### hermes-parser@0.36.0
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
-
 ### hermes-parser@0.36.1
 
 - License: MIT
 - Homepage: https://github.com/facebook/hermes#readme
-
-### hoist-non-react-statics@3.3.2
-
-- License: BSD-3-Clause
-- Copyright: Michael Ridgway
-- Homepage: https://github.com/mridgway/hoist-non-react-statics#readme
 
 ### hosted-git-info@7.0.2
 
@@ -2819,12 +2668,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Copyright: kael
 - Homepage: https://github.com/kaelzhang/node-ignore#readme
-
-### indent-string@4.0.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/indent-string#readme
 
 ### inherits@2.0.4
 
@@ -3006,10 +2849,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/leven#readme
 
-### lighthouse-logger@1.4.2
-
-- License: Apache-2.0
-
 ### lightningcss@1.32.0
 
 - License: MPL-2.0
@@ -3062,23 +2901,11 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Isaac Z. Schlueter
 - Homepage: https://github.com/isaacs/node-lru-cache#readme
 
-### lru-cache@11.5.1
-
-- License: BlueOak-1.0.0
-- Copyright: Isaac Z. Schlueter
-- Homepage: https://github.com/isaacs/node-lru-cache#readme
-
 ### lru-cache@5.1.1
 
 - License: ISC
 - Copyright: Isaac Z. Schlueter
 - Homepage: https://github.com/isaacs/node-lru-cache#readme
-
-### lz-string@1.5.0
-
-- License: MIT
-- Copyright: pieroxy
-- Homepage: http://pieroxy.net/blog/pages/lz-string/index.html
 
 ### make-dir@3.1.0
 
@@ -3091,12 +2918,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: BSD-3-Clause
 - Copyright: Naitik Shah
 - Homepage: https://github.com/daaku/nodejs-makeerror#readme
-
-### marky@1.3.0
-
-- License: Apache-2.0
-- Copyright: Nolan Lawson
-- Homepage: https://github.com/nolanlawson/marky#readme
 
 ### mdn-data@2.0.14
 
@@ -3127,72 +2948,72 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/teambition/merge2
 
-### metro@0.84.5
+### metro@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-babel-transformer@0.84.5
+### metro-babel-transformer@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-cache@0.84.5
+### metro-cache@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-cache-key@0.84.5
+### metro-cache-key@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-config@0.84.5
+### metro-config@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-core@0.84.5
+### metro-core@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-file-map@0.84.5
+### metro-file-map@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-minify-terser@0.84.5
+### metro-minify-terser@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-resolver@0.84.5
+### metro-resolver@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-runtime@0.84.5
+### metro-runtime@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-source-map@0.84.5
+### metro-source-map@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-symbolicate@0.84.5
+### metro-symbolicate@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-transform-plugins@0.84.5
+### metro-transform-plugins@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-transform-worker@0.84.5
+### metro-transform-worker@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
@@ -3235,28 +3056,11 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/mimic-fn#readme
 
-### min-indent@1.0.1
-
-- License: MIT
-- Copyright: James Kyle
-- Homepage: https://github.com/thejameskyle/min-indent#readme
-
-### minimatch@10.2.5
+### minimatch@10.2.6
 
 - License: BlueOak-1.0.0
 - Copyright: Isaac Z. Schlueter
 - Homepage: https://github.com/isaacs/minimatch#readme
-
-### minipass@7.1.3
-
-- License: BlueOak-1.0.0
-- Copyright: Isaac Z. Schlueter
-- Homepage: https://github.com/isaacs/minipass#readme
-
-### mkdirp@1.0.4
-
-- License: MIT
-- Homepage: https://github.com/isaacs/node-mkdirp#readme
 
 ### motion@12.40.0
 
@@ -3337,6 +3141,11 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Sergey Rubanov
 - Homepage: https://github.com/chicoxyzzy/node-releases#readme
 
+### noxcturnal@0.1.12
+
+- License: MIT
+- Homepage: https://github.com/expo/noxcturnal#readme
+
 ### npm-package-arg@11.0.3
 
 - License: ISC
@@ -3355,7 +3164,7 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Andres Suarez
 - Homepage: https://github.com/zertosh/nullthrows#readme
 
-### ob1@0.84.5
+### ob1@0.87.1
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
@@ -3388,7 +3197,7 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/onetime#readme
 
-### open@7.4.2
+### open@8.4.2
 
 - License: MIT
 - Copyright: Sindre Sorhus
@@ -3447,12 +3256,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Javier Blanco
 - Homepage: https://github.com/jbgutierrez/path-parse#readme
 
-### path-scurry@2.0.2
-
-- License: BlueOak-1.0.0
-- Copyright: Isaac Z. Schlueter
-- Homepage: https://github.com/isaacs/path-scurry#readme
-
 ### path-type@4.0.0
 
 - License: MIT
@@ -3506,12 +3309,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Bogdan Chadkin
 - Homepage: https://github.com/TrySound/postcss-value-parser
 
-### pretty-format@27.5.1
-
-- License: MIT
-- Copyright: James Kyle
-- Homepage: https://github.com/jestjs/jest#readme
-
 ### pretty-format@29.7.0
 
 - License: MIT
@@ -3548,12 +3345,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Terkel Gjervig
 - Homepage: https://github.com/terkelg/prompts#readme
 
-### query-string@7.1.3
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/query-string#readme
-
 ### queue-microtask@1.2.3
 
 - License: MIT
@@ -3572,7 +3363,7 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: TJ Holowaychuk
 - Homepage: https://github.com/jshttp/range-parser#readme
 
-### react@19.2.3
+### react@19.3.0
 
 - License: MIT
 - Homepage: https://react.dev/
@@ -3582,7 +3373,7 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/facebook/react#readme
 
-### react-dom@19.2.3
+### react-dom@19.3.0
 
 - License: MIT
 - Homepage: https://react.dev/
@@ -3598,16 +3389,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/software-mansion/react-freeze#readme
 
-### react-is@16.13.1
-
-- License: MIT
-- Homepage: https://react.dev/
-
-### react-is@17.0.2
-
-- License: MIT
-- Homepage: https://react.dev/
-
 ### react-is@18.3.1
 
 - License: MIT
@@ -3618,17 +3399,17 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://react.dev/
 
-### react-native@0.86.2
+### react-native@0.88.1
 
 - License: MIT
 - Homepage: https://reactnative.dev/
 
-### react-native-drawer-layout@4.2.4
+### react-native-drawer-layout@4.2.12
 
 - License: MIT
 - Homepage: https://reactnavigation.org/docs/drawer-layout/
 
-### react-native-gesture-handler@2.32.0
+### react-native-gesture-handler@3.3.0
 
 - License: MIT
 - Copyright: Krzysztof Magiera
@@ -3646,36 +3427,36 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Mathieu Acthernoene
 - Homepage: https://github.com/zoontek/react-native-edge-to-edge
 
-### react-native-reanimated@4.5.1
+### react-native-reanimated@4.7.1
 
 - License: MIT
 - Copyright: Krzysztof Magiera
 - Homepage: https://docs.swmansion.com/react-native-reanimated
 
-### react-native-safe-area-context@5.7.0
+### react-native-safe-area-context@5.11.1
 
 - License: MIT
 - Copyright: Janic Duplessis
 - Homepage: https://github.com/AppAndFlow/react-native-safe-area-context#readme
 
-### react-native-screens@4.26.2
+### react-native-screens@4.30.1
 
 - License: MIT
 - Copyright: Krzysztof Magiera
 - Homepage: https://github.com/software-mansion/react-native-screens#readme
 
-### react-native-svg@15.15.4
+### react-native-svg@15.16.0
 
 - License: MIT
-- Homepage: https://github.com/react-native-community/react-native-svg
+- Homepage: https://github.com/software-mansion/react-native-svg
 
-### react-native-web@0.21.2
+### react-native-web@0.21.4
 
 - License: MIT
 - Copyright: Nicolas Gallagher
 - Homepage: https://github.com/necolas/react-native-web#readme
 
-### react-native-worklets@0.10.1
+### react-native-worklets@0.13.0
 
 - License: MIT
 - Homepage: https://docs.swmansion.com/react-native-worklets
@@ -3684,30 +3465,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 
 - License: MIT
 - Homepage: https://reactjs.org/
-
-### react-remove-scroll@2.7.2
-
-- License: MIT
-- Copyright: Anton Korzunov
-- Homepage: https://github.com/theKashey/react-remove-scroll#readme
-
-### react-remove-scroll-bar@2.3.8
-
-- License: MIT
-- Copyright: Anton Korzunov
-- Homepage: https://github.com/theKashey/react-remove-scroll-bar#readme
-
-### react-style-singleton@2.2.3
-
-- License: MIT
-- Copyright: Anton Korzunov
-- Homepage: https://github.com/theKashey/react-style-singleton#readme
-
-### redent@3.0.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/redent#readme
 
 ### regenerate@1.4.2
 
@@ -3811,7 +3568,7 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Isaac Z. Schlueter
 - Homepage: https://github.com/isaacs/sax-js#readme
 
-### scheduler@0.27.0
+### scheduler@0.28.0
 
 - License: MIT
 - Homepage: https://react.dev/
@@ -3874,12 +3631,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Copyright: Fernando Rojo
 - Homepage: https://github.com/nandorojo/typescript-sf-symbols#readme
-
-### shallowequal@1.1.0
-
-- License: MIT
-- Copyright: Alberto Leal
-- Homepage: https://github.com/dashed/shallowequal#readme
 
 ### shebang-command@2.0.0
 
@@ -3963,12 +3714,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Homepage: https://github.com/evanw/node-source-map-support#readme
 
-### split-on-first@1.1.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/split-on-first#readme
-
 ### stackframe@1.3.4
 
 - License: MIT
@@ -4002,12 +3747,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Sam Day
 - Homepage: https://github.com/samcday/node-stream-buffer#readme
 
-### strict-uri-encode@2.0.0
-
-- License: MIT
-- Copyright: Kevin Mårtensson
-- Homepage: https://github.com/kevva/strict-uri-encode#readme
-
 ### string-width@4.2.3
 
 - License: MIT
@@ -4025,12 +3764,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/chalk/strip-ansi#readme
-
-### strip-indent@3.0.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/strip-indent#readme
 
 ### structured-headers@0.4.1
 
@@ -4240,33 +3973,17 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Andrey Sitnik
 - Homepage: https://github.com/browserslist/update-db#readme
 
-### use-callback-ref@1.3.3
-
-- License: MIT
-- Copyright: theKashey
-
 ### use-latest-callback@0.2.6
 
 - License: MIT
 - Copyright: Satyajit Sahoo
 - Homepage: https://github.com/satya164/use-latest-callback#readme
 
-### use-sidecar@1.1.3
-
-- License: MIT
-- Copyright: theKashey
-- Homepage: https://github.com/theKashey/use-sidecar
-
 ### utils-merge@1.0.1
 
 - License: MIT
 - Copyright: Jared Hanson
 - Homepage: https://github.com/jaredhanson/utils-merge#readme
-
-### uuid@11.1.1
-
-- License: MIT
-- Homepage: https://github.com/uuidjs/uuid#readme
 
 ### validate-npm-package-name@5.0.1
 
@@ -4279,12 +3996,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: MIT
 - Copyright: Douglas Christopher Wilson
 - Homepage: https://github.com/jshttp/vary#readme
-
-### vaul@1.1.2
-
-- License: MIT
-- Copyright: Emil Kowalski
-- Homepage: https://vaul.emilkowal.ski/
 
 ### vlq@1.0.1
 
@@ -4345,11 +4056,11 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Sebastian Mayr
 - Homepage: https://github.com/jsdom/whatwg-url#readme
 
-### whatwg-url-minimum@0.1.2
+### whatwg-url-minimum@0.2.0
 
 - License: MIT
 - Copyright: Phil Pluckthun
-- Homepage: https://github.com/kitten/whatwg-url-minimum#readme
+- Homepage: https://github.com/expo/whatwg-url-minimum#readme
 
 ### which@2.0.2
 
@@ -4375,7 +4086,7 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - Copyright: Einar Otto Stangvik
 - Homepage: https://github.com/websockets/ws
 
-### xcode@3.0.1
+### xcode@4.0.0
 
 - License: Apache-2.0
 - Copyright: Apache Software Foundation
@@ -4427,12 +4138,6 @@ pnpm-lock.yaml sha256:8ecfc4e829a15a6d833395ce3d8416c69308f15f5a5b2cb0ab3fc67e94
 - License: ISC
 - Copyright: Ben Coe
 - Homepage: https://github.com/yargs/yargs-parser#readme
-
-### zod@3.25.76
-
-- License: MIT
-- Copyright: Colin McDonnell
-- Homepage: https://zod.dev
 
 ## Development-only dependencies
 
@@ -4644,11 +4349,22 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: tannerlinsley
 - Homepage: https://tanstack.com/query
 
+### @testing-library/dom@10.4.1
+
+- License: MIT
+- Copyright: Kent C. Dodds
+- Homepage: https://github.com/testing-library/dom-testing-library#readme
+
 ### @testing-library/react@16.3.2
 
 - License: MIT
 - Copyright: Kent C. Dodds
 - Homepage: https://github.com/testing-library/react-testing-library#readme
+
+### @types/aria-query@5.0.4
+
+- License: MIT
+- Homepage: https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/aria-query
 
 ### @types/chai@5.2.3
 
@@ -4792,6 +4508,12 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Copyright: Evgeny Poberezkin
 - Homepage: https://ajv.js.org
+
+### aria-query@5.3.0
+
+- License: Apache-2.0
+- Copyright: Jesse Beach
+- Homepage: https://github.com/A11yance/aria-query#readme
 
 ### array-buffer-byte-length@1.0.2
 
@@ -4965,10 +4687,21 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/define-properties#readme
 
+### dequal@2.0.3
+
+- License: MIT
+- Copyright: Luke Edwards
+- Homepage: https://github.com/lukeed/dequal#readme
+
 ### doctrine@2.1.0
 
 - License: Apache-2.0
 - Homepage: https://github.com/eslint/doctrine
+
+### dom-accessibility-api@0.5.16
+
+- License: MIT
+- Homepage: https://github.com/eps1lon/dom-accessibility-api#readme
 
 ### dunder-proto@1.0.1
 
@@ -5035,13 +4768,19 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/es-to-primitive#readme
 
+### escape-string-regexp@4.0.0
+
+- License: MIT
+- Copyright: Sindre Sorhus
+- Homepage: https://github.com/sindresorhus/escape-string-regexp#readme
+
 ### eslint@9.39.4
 
 - License: MIT
 - Copyright: Nicholas C. Zakas
 - Homepage: https://eslint.org
 
-### eslint-config-expo@57.0.1
+### eslint-config-expo@58.0.4
 
 - License: MIT
 - Copyright: Expo
@@ -5065,7 +4804,7 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Ben Mosher
 - Homepage: https://github.com/import-js/eslint-plugin-import#readme
 
-### eslint-plugin-expo@1.1.0
+### eslint-plugin-expo@1.2.1
 
 - License: MIT
 - Copyright: Expo
@@ -5567,6 +5306,12 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: John-David Dalton
 - Homepage: https://lodash.com/
 
+### lz-string@1.5.0
+
+- License: MIT
+- Copyright: pieroxy
+- Homepage: http://pieroxy.net/blog/pages/lz-string/index.html
+
 ### magic-string@0.30.21
 
 - License: MIT
@@ -5732,6 +5477,12 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: James Long
 - Homepage: https://prettier.io
 
+### pretty-format@27.5.1
+
+- License: MIT
+- Copyright: James Kyle
+- Homepage: https://github.com/jestjs/jest#readme
+
 ### prop-types@15.8.1
 
 - License: MIT
@@ -5742,6 +5493,16 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Copyright: Mathias Bynens
 - Homepage: https://mths.be/punycode
+
+### react-is@16.13.1
+
+- License: MIT
+- Homepage: https://react.dev/
+
+### react-is@17.0.2
+
+- License: MIT
+- Homepage: https://react.dev/
 
 ### reflect.getprototypeof@1.0.10
 
@@ -6089,6 +5850,12 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Copyright: Harminder Virk
 - Homepage: https://github.com/poppinss/youch-core#readme
+
+### zod@3.25.76
+
+- License: MIT
+- Copyright: Colin McDonnell
+- Homepage: https://zod.dev
 
 ### zod-validation-error@4.0.2
 

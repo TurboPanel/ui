@@ -18,15 +18,16 @@ export function usePalette(): Palette {
   return Platform.OS === 'web' ? colors : live
 }
 
-type StyleFactory<T extends StyleSheet.NamedStyles<T>> = (p: Palette) => T
+/** What `StyleSheet.create` accepts (the named-styles type is no longer exported). */
+type NamedStyles = Parameters<typeof StyleSheet.create>[0]
+
+type StyleFactory<T extends NamedStyles> = (p: Palette) => T
 
 /**
  * Turn a style factory into a per-palette cache: the sheet is built once for
  * each palette object, so a re-render does not rebuild it.
  */
-export function themedStyles<T extends StyleSheet.NamedStyles<T>>(
-  factory: StyleFactory<T>,
-): (p: Palette) => T {
+export function themedStyles<T extends NamedStyles>(factory: StyleFactory<T>): (p: Palette) => T {
   const cache = new WeakMap<Palette, T>()
   return (p) => {
     const hit = cache.get(p)

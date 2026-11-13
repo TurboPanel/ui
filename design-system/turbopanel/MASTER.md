@@ -9,7 +9,7 @@
 **Project:** TurboPanel  
 **Generated:** 2026-07-19 (curated from ui-ux-pro-max). Rewritten 2026-10-04 for the v4 "Navy & Tee" redesign.  
 **Category:** Developer Tool / DevOps Control Plane (B2B SaaS)  
-**Stack:** Expo 57 · React Native · Tamagui · Expo Router · React Query · gifted-charts  
+**Stack:** Expo 58 · React Native · Tamagui · Expo Router · React Query · gifted-charts  
 **Design Dials:** Variance 4/10 (Balanced) | Motion 4/10 (Standard) | Density 8/10 (Dense / Dashboard)
 
 ---
