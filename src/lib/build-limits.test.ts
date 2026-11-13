@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   BUILD_CORES_ERROR,
+  BUILD_CORES_HINT,
+  BUILD_MEMORY_HINT,
+  BUILD_SWAP_HINT,
   BUILD_MEMORY_ERROR,
   buildSwapChoice,
   buildSwapValue,
@@ -70,5 +73,12 @@ describe('build limit drafts', () => {
     })
     expect(parseBuildLimitDrafts('x', '4')).toEqual({ ok: false, error: BUILD_CORES_ERROR })
     expect(parseBuildLimitDrafts('2', 'x')).toEqual({ ok: false, error: BUILD_MEMORY_ERROR })
+  })
+
+  it('says that off wins for swap and that defaults are not a ceiling', () => {
+    expect(BUILD_SWAP_HINT).toContain('Off at any level wins')
+    expect(BUILD_SWAP_HINT).toContain('size of its memory limit')
+    expect(BUILD_CORES_HINT).toContain('not a ceiling')
+    expect(BUILD_MEMORY_HINT).toContain('not a ceiling')
   })
 })
