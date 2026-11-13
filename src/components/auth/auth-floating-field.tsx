@@ -56,12 +56,12 @@ type FocusHost = {
   addEventListener: (
     type: string,
     listener: (event: { relatedTarget?: unknown; target?: unknown }) => void,
-    options?: boolean,
+    options?: boolean
   ) => void
   removeEventListener: (
     type: string,
     listener: (event: { relatedTarget?: unknown; target?: unknown }) => void,
-    options?: boolean,
+    options?: boolean
   ) => void
   contains?: (node: unknown) => boolean
 }
@@ -108,9 +108,7 @@ function AuthFloatingLabel({
   reduceMotion,
   withToggle,
 }: AuthFloatingLabelProps) {
-  const [raiseAnim] = useState(
-    () => new Animated.Value(raised ? 1 : 0),
-  )
+  const [raiseAnim] = useState(() => new Animated.Value(raised ? 1 : 0))
 
   useEffect(() => {
     if (Platform.OS === 'web') return
@@ -143,11 +141,15 @@ function AuthFloatingLabel({
     }
     // Native <label htmlFor> so a click on the moving caption focuses the
     // input instead of selecting "Email"/"Password" or blurring on mouseup.
-    return createElement('label', {
-      htmlFor: inputId,
-      'aria-hidden': true,
-      style: webStyle,
-    }, label)
+    return createElement(
+      'label',
+      {
+        htmlFor: inputId,
+        'aria-hidden': true,
+        style: webStyle,
+      },
+      label
+    )
   }
 
   const labelTop = raiseAnim.interpolate({
@@ -212,10 +214,7 @@ export function AuthFloatingField({
   return (
     <View
       ref={fieldRef}
-      style={[
-        authFormStyles.floatingField,
-        focused && { borderColor: accentColor },
-      ]}
+      style={[authFormStyles.floatingField, focused && { borderColor: accentColor }]}
     >
       <AuthFloatingLabel
         label={label}

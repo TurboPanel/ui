@@ -9,7 +9,15 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions, type ViewInstance } from 'react-native'
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type ViewInstance,
+} from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useRouter, type Href } from 'expo-router'
 import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
