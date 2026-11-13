@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f3ef72e
+pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b8014015d1
 -->
 
 ## Production dependencies
@@ -940,25 +940,15 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/asset-utils#readme
 
-### @react-native/babel-plugin-codegen@0.86.2
-
-- License: MIT
-- Homepage: https://github.com/react/react-native/tree/HEAD/packages/babel-plugin-codegen#readme
-
 ### @react-native/babel-plugin-codegen@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/babel-plugin-codegen#readme
 
-### @react-native/babel-preset@0.86.2
+### @react-native/babel-preset@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native#readme
-
-### @react-native/codegen@0.86.2
-
-- License: MIT
-- Homepage: https://github.com/react/react-native/tree/HEAD/packages/react-native-codegen#readme
 
 ### @react-native/codegen@0.88.1
 
@@ -990,22 +980,17 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/gradle-plugin#readme
 
-### @react-native/js-polyfills@0.86.2
-
-- License: MIT
-- Homepage: https://github.com/react/react-native/tree/HEAD/packages/polyfills#readme
-
 ### @react-native/js-polyfills@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/polyfills#readme
 
-### @react-native/metro-babel-transformer@0.86.2
+### @react-native/metro-babel-transformer@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native#readme
 
-### @react-native/metro-config@0.86.2
+### @react-native/metro-config@0.88.1
 
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/metro-config#readme
@@ -1757,11 +1742,6 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - Copyright: Nicolas Gallagher
 - Homepage: https://github.com/necolas/react-native-web#readme
 
-### babel-plugin-syntax-hermes-parser@0.36.0
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
-
 ### babel-plugin-syntax-hermes-parser@0.36.1
 
 - License: MIT
@@ -1890,12 +1870,6 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Copyright: Bryan Mishkin
 - Homepage: https://github.com/bmish/check-dependency-version-consistency#readme
-
-### ci-info@2.0.0
-
-- License: MIT
-- Copyright: Thomas Watson Steen
-- Homepage: https://github.com/watson/ci-info
 
 ### ci-info@3.9.0
 
@@ -2267,12 +2241,6 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Copyright: 650 Industries, Inc.
 - Homepage: https://docs.expo.dev/versions/latest/sdk/asset/
-
-### expo-build-properties@58.0.12
-
-- License: MIT
-- Copyright: 650 Industries, Inc.
-- Homepage: https://docs.expo.dev/versions/latest/sdk/build-properties
 
 ### expo-clipboard@58.0.4
 
@@ -2661,27 +2629,7 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/facebook/hermes#readme
 
-### hermes-estree@0.35.0
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
-
-### hermes-estree@0.36.0
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
-
 ### hermes-estree@0.36.1
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
-
-### hermes-parser@0.35.0
-
-- License: MIT
-- Homepage: https://github.com/facebook/hermes#readme
-
-### hermes-parser@0.36.0
 
 - License: MIT
 - Homepage: https://github.com/facebook/hermes#readme
@@ -3000,17 +2948,7 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/teambition/merge2
 
-### metro@0.84.5
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
 ### metro@0.87.1
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
-### metro-babel-transformer@0.84.5
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
@@ -3020,17 +2958,7 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-cache@0.84.5
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
 ### metro-cache@0.87.1
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
-### metro-cache-key@0.84.5
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
@@ -3040,17 +2968,7 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-config@0.84.5
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
 ### metro-config@0.87.1
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
-### metro-core@0.84.5
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
@@ -3060,17 +2978,7 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-file-map@0.84.5
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
 ### metro-file-map@0.87.1
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
-### metro-minify-terser@0.84.5
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
@@ -3080,17 +2988,7 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-resolver@0.84.5
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
 ### metro-resolver@0.87.1
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
-### metro-runtime@0.84.5
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
@@ -3100,17 +2998,7 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-source-map@0.84.5
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
 ### metro-source-map@0.87.1
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
-### metro-symbolicate@0.84.5
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
@@ -3120,17 +3008,7 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
 
-### metro-transform-plugins@0.84.5
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
 ### metro-transform-plugins@0.87.1
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
-
-### metro-transform-worker@0.84.5
 
 - License: MIT
 - Homepage: https://github.com/react/metro#readme
@@ -3285,11 +3163,6 @@ pnpm-lock.yaml sha256:160487ff7eb6b6d31e7cfeaea2fef88a825af8b43495be388f426f3c0f
 - License: MIT
 - Copyright: Andres Suarez
 - Homepage: https://github.com/zertosh/nullthrows#readme
-
-### ob1@0.84.5
-
-- License: MIT
-- Homepage: https://github.com/react/metro#readme
 
 ### ob1@0.87.1
 
