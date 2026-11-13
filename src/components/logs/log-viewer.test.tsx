@@ -42,6 +42,30 @@ vi.mock('@/components/org/logs/log-transcript-view', () => ({
     createElement('p', null, state === 'waiting' ? 'Waiting for output…' : 'No transcript yet.'),
 }))
 
+// The real picker needs the native modal stack; a plain select keeps the test about the filter.
+vi.mock('@/components/ui/select', () => ({
+  Select: (props: {
+    value: string | null
+    options: readonly { value: string; label: string }[]
+    noneLabel?: string
+    accessibilityLabel: string
+    onChange: (value: string | null) => void
+  }) =>
+    createElement(
+      'select',
+      {
+        'aria-label': props.accessibilityLabel,
+        value: props.value ?? '',
+        onChange: (event: { target: { value: string } }) =>
+          props.onChange(event.target.value === '' ? null : event.target.value),
+      },
+      createElement('option', { value: '' }, props.noneLabel),
+      props.options.map((option) =>
+        createElement('option', { key: option.value, value: option.value }, option.label)
+      )
+    ),
+}))
+
 afterEach(() => {
   cleanup()
   env.width = 1200
@@ -114,6 +138,24 @@ describe('LogViewer', () => {
     })
     expect(shownText()).not.toContain('Compiling 84 files')
     expect(shownText()).toContain('Checking types')
+  })
+
+  it('limits the log to one step from the step picker and back to All Steps', () => {
+    renderViewer()
+    const picker = screen.getByLabelText('Show one step or all steps')
+    act(() => {
+      fireEvent.change(picker, {
+        target: {
+          value: screen.getByRole('option', { name: 'Fetch Source' }).getAttribute('value'),
+        },
+      })
+    })
+    expect(shownText()).toContain('Checked out 1a2b3c4')
+    expect(shownText()).not.toContain('Build failed: exited with code 1')
+    act(() => {
+      fireEvent.change(picker, { target: { value: '' } })
+    })
+    expect(shownText()).toContain('Build failed: exited with code 1')
   })
 
   it('keeps a finished certificates step and its note on a finished deploy', () => {
@@ -191,12 +233,12 @@ describe('LogViewer on a phone', () => {
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Filter' }))
     })
-    expect(screen.getByRole('switch', { name: 'Errors and warnings' })).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Errors Only' })).toBeTruthy()
     act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'More' }))
     })
     expect(screen.getByRole('switch', { name: 'Wrap' })).toBeTruthy()
-    expect(screen.queryByRole('switch', { name: 'Errors and warnings' })).toBeNull()
+    expect(screen.queryByRole('switch', { name: 'Errors Only' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Jump to error' })).toBeTruthy()
   })
 

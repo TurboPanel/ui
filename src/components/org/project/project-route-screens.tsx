@@ -9,6 +9,7 @@ import { useEnvironmentChrome } from '@/components/org/project/environment-shell
 import { EnvironmentSettingsBody } from '@/components/org/project/settings/environment-settings-screen'
 import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
 import { EnvironmentDeploymentHistoryPanel } from '@/components/org/project/environment-deployment-history-panel'
+import { RunningDeploySection } from '@/components/org/project/overview-environments-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import { ProjectEnvironmentsTab } from '@/components/org/project/project-environments-tab'
 import { ProjectOverviewTab } from '@/components/org/project/project-overview-tab'
@@ -159,12 +160,15 @@ export function EnvironmentDeploymentsScreen() {
   if (project && isManagedProject(project)) return <ManagedFocusTab />
   if (!pathEnvironmentId) return null
   return (
-    <EnvironmentDeploymentHistoryPanel
-      orgId={orgId}
-      environmentId={pathEnvironmentId}
-      alwaysOpen
-      canManage={canManage}
-    />
+    <>
+      <RunningDeploySection />
+      <EnvironmentDeploymentHistoryPanel
+        orgId={orgId}
+        environmentId={pathEnvironmentId}
+        alwaysOpen
+        canManage={canManage}
+      />
+    </>
   )
 }
 

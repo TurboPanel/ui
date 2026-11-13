@@ -86,6 +86,9 @@ vi.mock('@/components/org/project/settings/environment-settings-screen', () => (
     <div data-testid="env-settings" data-git={String(showGitSource)} />
   ),
 }))
+vi.mock('@/components/org/project/overview-environments-panel', () => ({
+  RunningDeploySection: () => <div data-testid="running-deploy" />,
+}))
 vi.mock('@/components/org/project/environment-deployment-history-panel', () => ({
   EnvironmentDeploymentHistoryPanel: (props: Props) => (
     <div
@@ -98,7 +101,7 @@ vi.mock('@/components/org/project/environment-deployment-history-panel', () => (
 
 function project(
   kind: ProjectRecord['kind'],
-  metadata: ProjectRecord['metadata'] = null,
+  metadata: ProjectRecord['metadata'] = null
 ): Partial<ProjectRecord> {
   return { id: 'p', kind, metadata }
 }
@@ -328,6 +331,13 @@ describe('environment tabs', () => {
     const history = screen.getByTestId('history')
     expect(history.getAttribute('data-environment')).toBe('e')
     expect(history.getAttribute('data-open')).toBe('true')
+  })
+
+  it('puts the running deploy above the history, on this tab only', () => {
+    render(<EnvironmentDeploymentsScreen />)
+    const running = screen.getByTestId('running-deploy')
+    const history = screen.getByTestId('history')
+    expect(running.compareDocumentPosition(history) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('has no history without an environment, and sends platform and managed projects away', () => {
