@@ -18,6 +18,8 @@ export type StepRailItem = Readonly<{
   state: StepRailState
   /** What a screen reader hears for the step; defaults to `stepRailSpoken`. */
   accessibilityLabel?: string
+  /** How long the step ran or has been running (`01:12`), drawn under its label; absent when unknown. */
+  time?: string | null
   /** The number drawn in a numbered node; null draws none. Defaults to the position. */
   number?: number | null
 }>
