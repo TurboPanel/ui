@@ -86,7 +86,7 @@ function repositoryLabel(cloneUrl: string): string {
   const scp = /^[^@/]+@[^:/]+:(.+)$/.exec(bare)
   if (scp?.[1]) return scp[1]
   try {
-    const path = new URL(bare).pathname.replace(/^\/+|\/+$/g, '')
+    const path = new URL(bare).pathname.split('/').filter(Boolean).join('/')
     return path.length > 0 ? path : bare
   } catch {
     return bare

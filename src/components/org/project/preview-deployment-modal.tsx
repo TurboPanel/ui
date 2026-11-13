@@ -118,6 +118,18 @@ function savedHostingNames(
   return { savedHostnames, tunnelHostnames }
 }
 
+/** Hostnames already saved as hostings (and which ride a tunnel), read only while the Summary is showing. */
+function useSavedHostnames(orgId: string, environmentId: string, enabled: boolean) {
+  const servicesQuery = useServices(orgId, environmentId, { enabled })
+  const services = servicesQuery.data?.services ?? []
+  const { hostingsByService } = useHostingsByServices(
+    orgId,
+    services.map((service) => service.id),
+    { enabled }
+  )
+  return savedHostingNames(services, hostingsByService)
+}
+
 /** The files sent to the server, folded away: for debugging, not for deciding. */
 function TechnicalDetails({
   open,
@@ -277,13 +289,11 @@ export function PreviewDeploymentModal({
     placementServerId
   )
   const mergedYaml = composeDocumentToYaml(mergedDocument)
-  const summaryActive = visible && showDetail && mode === 'summary'
-  const servicesQuery = useServices(orgId, environmentId, { enabled: summaryActive && canManage })
-  const serviceRecords = servicesQuery.data?.services ?? []
-  const serviceIds = serviceRecords.map((service) => service.id)
-  const { hostingsByService } = useHostingsByServices(orgId, serviceIds, {
-    enabled: summaryActive && canManage,
-  })
+  const saved = useSavedHostnames(
+    orgId,
+    environmentId,
+    visible && showDetail && mode === 'summary' && canManage
+  )
 
   const handleClose = () => {
     if (deploying) return
@@ -297,14 +307,11 @@ export function PreviewDeploymentModal({
     environmentLabel,
     placementServerId ? targetServerDisplay : null
   )
-  const placementLabel = placementServerId ? targetServerDisplay : null
-  const { savedHostnames, tunnelHostnames } = savedHostingNames(serviceRecords, hostingsByService)
   const summary = buildDeploySummary({
     document: mergedDocument,
     preview: prepared.preview,
-    placementLabel,
-    savedHostnames,
-    tunnelHostnames,
+    placementLabel: placementServerId ? targetServerDisplay : null,
+    ...saved,
   })
   const activeHint = MODE_OPTIONS.find((option) => option.id === mode)?.hint ?? ''
 
