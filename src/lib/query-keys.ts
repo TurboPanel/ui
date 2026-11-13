@@ -179,6 +179,8 @@ export const queryKeys = {
         phpModes: ['org', orgId, 'php-modes'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
         deployTimeout: ['org', orgId, 'deploy-timeout'] as const,
+        /** The organization's build core and memory limits (`/organizations/:id/build-limits`). */
+        buildLimits: ['org', orgId, 'build-limits'] as const,
         /** New-project form switches (`/organizations/:id/project-settings`). */
         projectSettings: ['org', orgId, 'project-settings'] as const,
         /**
