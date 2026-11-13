@@ -135,31 +135,26 @@ describe('deploy confirm dialog', () => {
     coarsePointer(false)
   })
 
-  it('folds what will run away until asked, and fetches nothing before', () => {
+  it('opens on the Summary with no disclosure step, and asks for the preview at once', () => {
     render(<PreviewDeploymentModal {...base} onCancel={vi.fn()} onConfirm={vi.fn()} />)
-    const disclosure = screen.getByRole('button', { name: 'Show what will run' })
-    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText('summary body')).toBeNull()
-    expect(preparedFetchEnabled()).toBe(false)
-    fireEvent.click(disclosure)
-    expect(
-      screen.getByRole('button', { name: 'Hide what will run' }).getAttribute('aria-expanded')
-    ).toBe('true')
+    expect(screen.queryByRole('button', { name: 'Show what will run' })).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByText('summary body')).toBeTruthy()
     expect(preparedFetchEnabled()).toBe(true)
   })
 
-  it('folds the detail again when the dialog closes', () => {
+  it('keeps the technical details folded again when the dialog closes', () => {
     const { rerender } = render(
       <PreviewDeploymentModal {...base} onCancel={vi.fn()} onConfirm={vi.fn()} />
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Show what will run' }))
+    const label = 'Technical Details (files sent to the server)'
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    expect(screen.getByText('prepared compose')).toBeTruthy()
     rerender(
       <PreviewDeploymentModal {...base} visible={false} onCancel={vi.fn()} onConfirm={vi.fn()} />
     )
     rerender(<PreviewDeploymentModal {...base} onCancel={vi.fn()} onConfirm={vi.fn()} />)
-    expect(screen.getByRole('button', { name: 'Show what will run' })).toBeTruthy()
-    expect(preparedFetchEnabled()).toBe(false)
+    expect(screen.queryByText('prepared compose')).toBeNull()
   })
 
   it('confirms and cancels', () => {
@@ -243,7 +238,6 @@ describe('deploy confirm dialog', () => {
       />
     )
     expect(screen.getByRole('dialog', { name: 'Compose Preview' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Show what will run' })).toBeNull()
     expect(screen.getByText('services: {}')).toBeTruthy()
     expect(screen.getByText('Target server · web-1')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Close preview' }).textContent).toBe('Close')

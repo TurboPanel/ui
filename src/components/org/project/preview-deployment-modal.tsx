@@ -208,17 +208,6 @@ function ModalFooterActions({
   )
 }
 
-/** "Show what will run": the compose, .env and sources behind one disclosure. */
-function WhatWillRunToggle({ open, onToggle }: Readonly<{ open: boolean; onToggle: () => void }>) {
-  return (
-    <TextLink
-      label={open ? 'Hide what will run' : 'Show what will run'}
-      expanded={open}
-      onPress={onToggle}
-    />
-  )
-}
-
 /**
  * Environment-scope compose review. Opens from the header **⋯** menu
  * (inspect) or **Deploy** (confirm). Not used for
@@ -260,16 +249,10 @@ export function PreviewDeploymentModal({
 }>) {
   const isConfirm = purpose === 'confirm'
   const [mode, setMode] = useState<ComposePreviewMode>(initialMode)
-  // Confirm opens on the plain sentence with the detail folded away; the
-  // inspect view is the preview itself. Folded again on close, so the next
-  // open never fetches the prepared preview before it is asked for.
-  const [detailOpened, setDetailOpened] = useState(false)
-  const showDetail = !isConfirm || detailOpened
   const [technicalOpen, setTechnicalOpen] = useState(false)
 
   useEffect(() => {
     if (!visible) {
-      setDetailOpened(false)
       setTechnicalOpen(false)
       return
     }
@@ -280,7 +263,7 @@ export function PreviewDeploymentModal({
     orgId,
     environmentId,
     canManage,
-    visible && showDetail && (mode === 'summary' || technicalOpen)
+    visible && (mode === 'summary' || technicalOpen)
   )
 
   const mergedDocument = composePreviewMergedDocument(
@@ -289,11 +272,7 @@ export function PreviewDeploymentModal({
     placementServerId
   )
   const mergedYaml = composeDocumentToYaml(mergedDocument)
-  const saved = useSavedHostnames(
-    orgId,
-    environmentId,
-    visible && showDetail && mode === 'summary' && canManage
-  )
+  const saved = useSavedHostnames(orgId, environmentId, visible && mode === 'summary' && canManage)
 
   const handleClose = () => {
     if (deploying) return
@@ -341,37 +320,31 @@ export function PreviewDeploymentModal({
         />
       )}
 
-      {isConfirm ? (
-        <WhatWillRunToggle open={showDetail} onToggle={() => setDetailOpened((open) => !open)} />
-      ) : null}
+      <>
+        <ModePicker mode={mode} onSelect={setMode} />
 
-      {showDetail ? (
-        <>
-          <ModePicker mode={mode} onSelect={setMode} />
+        <Text style={panelStyles.muted}>{activeHint}</Text>
 
-          <Text style={panelStyles.muted}>{activeHint}</Text>
-
-          <ScrollView
-            style={styles.previewScroll}
-            contentContainerStyle={styles.previewScrollContent}
-            nestedScrollEnabled
-          >
-            {mode === 'compose' ? (
-              <ReadOnlyYamlBlock value={mergedYaml} maxHeight={360} />
-            ) : (
-              <View style={styles.summaryBody}>
-                <DeploySummaryView summary={summary} warnings={prepared.preview?.warnings} />
-                {prepared.error ? <Text style={panelStyles.error}>{prepared.error}</Text> : null}
-                <TechnicalDetails
-                  open={technicalOpen}
-                  onToggle={() => setTechnicalOpen((open) => !open)}
-                  prepared={prepared}
-                />
-              </View>
-            )}
-          </ScrollView>
-        </>
-      ) : null}
+        <ScrollView
+          style={styles.previewScroll}
+          contentContainerStyle={styles.previewScrollContent}
+          nestedScrollEnabled
+        >
+          {mode === 'compose' ? (
+            <ReadOnlyYamlBlock value={mergedYaml} maxHeight={360} />
+          ) : (
+            <View style={styles.summaryBody}>
+              <DeploySummaryView summary={summary} warnings={prepared.preview?.warnings} />
+              {prepared.error ? <Text style={panelStyles.error}>{prepared.error}</Text> : null}
+              <TechnicalDetails
+                open={technicalOpen}
+                onToggle={() => setTechnicalOpen((open) => !open)}
+                prepared={prepared}
+              />
+            </View>
+          )}
+        </ScrollView>
+      </>
     </ModalSheet>
   )
 }
