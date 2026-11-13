@@ -57,8 +57,8 @@ function resolvePreviewSubtitle(
 ): string {
   if (isConfirm) return confirmSubtitle(environmentLabel, targetServer)
   return environmentLabel
-    ? `Inspect the compose that applies to ${environmentLabel}.`
-    : 'Inspect merged and deploy-ready compose for this environment.'
+    ? `What runs where for ${environmentLabel}, and its compose.`
+    : 'What runs where for this environment, and its compose.'
 }
 
 function TargetServerLine({
@@ -280,7 +280,7 @@ export function PreviewDeploymentModal({
   }
 
   const targetServerDisplay = placementServerLabel?.trim() || placementServerId
-  const title = isConfirm ? confirmTitle(confirmLabel, environmentLabel) : 'Compose Preview'
+  const title = isConfirm ? confirmTitle(confirmLabel, environmentLabel) : 'Deploy Preview'
   const subtitle = resolvePreviewSubtitle(
     isConfirm,
     environmentLabel,
@@ -301,7 +301,7 @@ export function PreviewDeploymentModal({
       title={title}
       description={subtitle}
       maxWidth={720}
-      dismissLabel={isConfirm ? 'Cancel deployment' : 'Close compose preview'}
+      dismissLabel={isConfirm ? 'Cancel deployment' : 'Close deploy preview'}
       footer={
         <ModalFooterActions
           isConfirm={isConfirm}

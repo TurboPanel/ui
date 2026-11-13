@@ -237,7 +237,7 @@ describe('deploy confirm dialog', () => {
         onCancel={vi.fn()}
       />
     )
-    expect(screen.getByRole('dialog', { name: 'Compose Preview' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Deploy Preview' })).toBeTruthy()
     expect(screen.getByText('services: {}')).toBeTruthy()
     expect(screen.getByText('Target server · web-1')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Close preview' }).textContent).toBe('Close')
