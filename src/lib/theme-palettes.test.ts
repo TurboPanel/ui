@@ -246,6 +246,11 @@ describe('css variables', () => {
     expect(css).toContain('[data-theme="dark"]{color-scheme:dark;')
     expect(css).toContain('html,body{background-color:var(--tp-bg);}')
   })
+
+  it('themeCss: unstyled text gets the default system font and line height', () => {
+    expect(themeCss()).toContain('#root{font-family:-apple-system, system-ui,')
+    expect(themeCss()).toContain('line-height:23px;}')
+  })
 })
 
 describe('uniwindThemeCss', () => {

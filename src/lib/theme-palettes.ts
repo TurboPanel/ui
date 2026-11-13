@@ -216,6 +216,9 @@ export function colorTokens(web: boolean): Palette {
   return Object.fromEntries(entries) as Palette
 }
 
+const APP_FONT_STACK =
+  '-apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif'
+
 function declarations(palette: Palette, scheme: ColorScheme): string {
   const vars = paletteKeys.map((key) => `${cssVarName(key)}:${palette[key]};`).join('')
   return `color-scheme:${scheme};${vars}`
@@ -238,6 +241,10 @@ export function themeCss(): string {
     `[data-theme="light"]{${paper}}`,
     `[data-theme="dark"]{${navy}}`,
     'html,body{background-color:var(--tp-bg);}',
+    // The app's default text: text that sets no font of its own (a floating label,
+    // a placeholder) inherits this. A UI provider used to supply it; keeping the same
+    // values keeps every unstyled string looking as before.
+    `#root{font-family:${APP_FONT_STACK};font-weight:400;line-height:23px;}`,
   ].join('\n')
 }
 
