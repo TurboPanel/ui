@@ -169,6 +169,10 @@ function PreparedComposeSnapshot({
               <Text style={styles.roleBadgeText}>Non-secret</Text>
             </View>
           </View>
+          <Text style={panelStyles.muted}>
+            The compose file reads each service&apos;s values under a service-prefixed name, such
+            as website__NODE_OPTIONS.
+          </Text>
           <ReadOnlyYamlBlock value={envFile} />
         </View>
       ) : null}

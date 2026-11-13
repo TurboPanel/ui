@@ -2,16 +2,17 @@ import { useEffect, useState } from 'react'
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { ModalSheet, SegmentedControl, TextLink } from '@/components/ui'
 import { ActionButton } from '@/components/ui/v4'
-import {
-  DeployPreviewBody,
-  usePreparedComposePreview,
-} from '@/components/org/deploy-preview-panel'
+import { DeployPreviewBody, usePreparedComposePreview } from '@/components/org/deploy-preview-panel'
+import { DeploySummaryView } from '@/components/org/deploy-preview-summary-panel'
 import { ReadOnlyYamlBlock } from '@/components/org/readonly-yaml-block'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { composePreviewMergedYaml } from '@/lib/compose'
+import { composeDocumentToYaml, composePreviewMergedDocument } from '@/lib/compose'
+import { buildDeploySummary } from '@/lib/deploy-preview-summary'
+import { useHostingsByServices, useServices } from '@/lib/queries'
+import type { HostingRecord, ServiceRecord } from '@/lib/instance-api'
 import { colors, layout, spacing } from '@/lib/theme'
 
-export type ComposePreviewMode = 'merged' | 'prepared'
+export type ComposePreviewMode = 'summary' | 'compose'
 
 /** Review-only open vs review-and-enqueue (Deploy / Redeploy). */
 export type PreviewDeploymentPurpose = 'inspect' | 'confirm'
@@ -22,14 +23,14 @@ const MODE_OPTIONS: readonly {
   hint: string
 }[] = [
   {
-    id: 'merged',
-    label: 'Merged',
-    hint: "The project's compose with this environment's changes applied, and the server it runs on.",
+    id: 'summary',
+    label: 'Summary',
+    hint: 'Which servers each service runs on, how it is reached, and what TurboPanel sets for it.',
   },
   {
-    id: 'prepared',
-    label: 'Prepared',
-    hint: 'Exactly what the server receives: the compose file, its .env and the sources, after variables and names are filled in.',
+    id: 'compose',
+    label: 'Compose',
+    hint: "The project's compose with this environment's changes applied, including each service's TurboPanel settings.",
   },
 ]
 
@@ -68,11 +69,7 @@ function TargetServerLine({
   targetServerDisplay: string | null
 }>) {
   if (placementServerId && targetServerDisplay) {
-    return (
-      <Text style={styles.targetServer}>
-        Target server · {targetServerDisplay}
-      </Text>
-    )
+    return <Text style={styles.targetServer}>Target server · {targetServerDisplay}</Text>
   }
   return (
     <Text style={styles.targetServer}>
@@ -98,24 +95,54 @@ function ModePicker({
   )
 }
 
-function ComposePreviewBody({
-  mode,
-  mergedYaml,
+function savedHostingNames(
+  services: readonly ServiceRecord[],
+  hostingsByService: Readonly<Record<string, HostingRecord[]>>
+): { savedHostnames: Record<string, string[]>; tunnelHostnames: Set<string> } {
+  const savedHostnames: Record<string, string[]> = {}
+  const tunnelHostnames = new Set<string>()
+  for (const service of services) {
+    const names: string[] = []
+    for (const hosting of hostingsByService[service.id] ?? []) {
+      const raw = hosting.options?.hostnames
+      if (Array.isArray(raw)) {
+        names.push(...raw.filter((name): name is string => typeof name === 'string'))
+      }
+      for (const path of hosting.tunnels ?? []) {
+        names.push(path.hostname)
+        tunnelHostnames.add(path.hostname.trim().toLowerCase())
+      }
+    }
+    savedHostnames[service.composeServiceName] = names
+  }
+  return { savedHostnames, tunnelHostnames }
+}
+
+/** The files sent to the server, folded away: for debugging, not for deciding. */
+function TechnicalDetails({
+  open,
+  onToggle,
   prepared,
 }: Readonly<{
-  mode: ComposePreviewMode
-  mergedYaml: string
+  open: boolean
+  onToggle: () => void
   prepared: ReturnType<typeof usePreparedComposePreview>
 }>) {
-  if (mode === 'merged') {
-    return <ReadOnlyYamlBlock value={mergedYaml} maxHeight={360} />
-  }
   return (
-    <DeployPreviewBody
-      loading={prepared.loading}
-      error={prepared.error}
-      preview={prepared.preview}
-    />
+    <View style={styles.technical}>
+      <TextLink
+        label="Technical Details (files sent to the server)"
+        expanded={open}
+        onPress={onToggle}
+      />
+      {open ? (
+        <DeployPreviewBody
+          loading={prepared.loading}
+          error={prepared.error}
+          preview={prepared.preview}
+        />
+      ) : null}
+    </View>
   )
 }
 
@@ -197,7 +224,7 @@ export function PreviewDeploymentModal({
   environmentCompose,
   deploying = false,
   purpose = 'confirm',
-  initialMode = 'prepared',
+  initialMode = 'summary',
   confirmLabel = 'Deploy',
   onCancel,
   onConfirm,
@@ -226,10 +253,12 @@ export function PreviewDeploymentModal({
   // open never fetches the prepared preview before it is asked for.
   const [detailOpened, setDetailOpened] = useState(false)
   const showDetail = !isConfirm || detailOpened
+  const [technicalOpen, setTechnicalOpen] = useState(false)
 
   useEffect(() => {
     if (!visible) {
       setDetailOpened(false)
+      setTechnicalOpen(false)
       return
     }
     setMode(initialMode)
@@ -239,14 +268,22 @@ export function PreviewDeploymentModal({
     orgId,
     environmentId,
     canManage,
-    visible && showDetail && mode === 'prepared'
+    visible && showDetail && (mode === 'summary' || technicalOpen)
   )
 
-  const mergedYaml = composePreviewMergedYaml(
+  const mergedDocument = composePreviewMergedDocument(
     projectCompose,
     environmentCompose,
-    placementServerId,
+    placementServerId
   )
+  const mergedYaml = composeDocumentToYaml(mergedDocument)
+  const summaryActive = visible && showDetail && mode === 'summary'
+  const servicesQuery = useServices(orgId, environmentId, { enabled: summaryActive && canManage })
+  const serviceRecords = servicesQuery.data?.services ?? []
+  const serviceIds = serviceRecords.map((service) => service.id)
+  const { hostingsByService } = useHostingsByServices(orgId, serviceIds, {
+    enabled: summaryActive && canManage,
+  })
 
   const handleClose = () => {
     if (deploying) return
@@ -260,8 +297,16 @@ export function PreviewDeploymentModal({
     environmentLabel,
     placementServerId ? targetServerDisplay : null
   )
-  const activeHint =
-    MODE_OPTIONS.find((option) => option.id === mode)?.hint ?? ''
+  const placementLabel = placementServerId ? targetServerDisplay : null
+  const { savedHostnames, tunnelHostnames } = savedHostingNames(serviceRecords, hostingsByService)
+  const summary = buildDeploySummary({
+    document: mergedDocument,
+    preview: prepared.preview,
+    placementLabel,
+    savedHostnames,
+    tunnelHostnames,
+  })
+  const activeHint = MODE_OPTIONS.find((option) => option.id === mode)?.hint ?? ''
 
   return (
     <ModalSheet
@@ -304,7 +349,19 @@ export function PreviewDeploymentModal({
             contentContainerStyle={styles.previewScrollContent}
             nestedScrollEnabled
           >
-            <ComposePreviewBody mode={mode} mergedYaml={mergedYaml} prepared={prepared} />
+            {mode === 'compose' ? (
+              <ReadOnlyYamlBlock value={mergedYaml} maxHeight={360} />
+            ) : (
+              <View style={styles.summaryBody}>
+                <DeploySummaryView summary={summary} warnings={prepared.preview?.warnings} />
+                {prepared.error ? <Text style={panelStyles.error}>{prepared.error}</Text> : null}
+                <TechnicalDetails
+                  open={technicalOpen}
+                  onToggle={() => setTechnicalOpen((open) => !open)}
+                  prepared={prepared}
+                />
+              </View>
+            )}
           </ScrollView>
         </>
       ) : null}
@@ -317,6 +374,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 13,
     lineHeight: 18,
+  },
+  summaryBody: {
+    gap: spacing.md,
+  },
+  technical: {
+    gap: spacing.sm,
   },
   previewScroll: {
     flexGrow: 0,

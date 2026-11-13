@@ -1881,7 +1881,7 @@ function EnvironmentDeployChromePanels({
               disabled={deploying}
               onPress={onPreviewMerged}
               accessibilityRole="button"
-              accessibilityLabel="Preview merged compose"
+              accessibilityLabel="Preview compose"
             >
               <Text style={panelStyles.toolbarBtnTextSecondary}>Preview</Text>
             </Pressable>
@@ -1951,7 +1951,7 @@ function EnvironmentDeployChromePanels({
                 onPreviewMerged()
               }}
               accessibilityRole="menuitem"
-              accessibilityLabel="Preview merged compose"
+              accessibilityLabel="Preview compose"
             >
               <Text style={styles.menuItemTitle}>Merged compose</Text>
               <Text style={styles.menuItemSub}>
@@ -1970,7 +1970,7 @@ function EnvironmentDeployChromePanels({
                 onPreviewPrepared()
               }}
               accessibilityRole="menuitem"
-              accessibilityLabel="Preview prepared compose"
+              accessibilityLabel="Preview deploy summary"
             >
               <Text style={styles.menuItemTitle}>Prepared compose</Text>
               <Text style={styles.menuItemSub}>
@@ -2497,7 +2497,7 @@ function EnvironmentDetailChromeExtras({
           environmentCompose={environment.options?.compose}
           deploying={deployPending}
           purpose={previewOpen?.purpose ?? 'inspect'}
-          initialMode={previewOpen?.mode ?? 'merged'}
+          initialMode={previewOpen?.mode ?? 'compose'}
           confirmLabel="Deploy"
           onCancel={onCancelPreview}
           onConfirm={
@@ -2889,7 +2889,7 @@ export function EnvironmentDetailBody({
 
   const openDeployConfirm = useCallback(() => {
     setError(null)
-    setPreviewOpen({ purpose: 'confirm', mode: 'prepared' })
+    setPreviewOpen({ purpose: 'confirm', mode: 'summary' })
   }, [])
 
   /**
@@ -3131,8 +3131,8 @@ export function EnvironmentDetailBody({
           deployBlocked={deployBlocked}
           deploying={deploying}
           deployStatus={deployStatus}
-          onPreviewMerged={() => openComposeInspect('merged')}
-          onPreviewPrepared={() => openComposeInspect('prepared')}
+          onPreviewMerged={() => openComposeInspect('compose')}
+          onPreviewPrepared={() => openComposeInspect('summary')}
           onDeploy={openDeployConfirm}
           onSaveCompose={async (compose) => {
             await saveCompose(compose)
