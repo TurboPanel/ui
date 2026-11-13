@@ -87,6 +87,7 @@ const styles = themedStyles((p) => ({
   checklist: { gap: 4 },
   checkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
   checkGlyph: { width: 10, alignItems: 'center' },
+  stepTime: { ...typeStyle('monoMedium', 'caption'), ...TABULAR, color: p.text3, marginTop: 2 },
   checkWord: { ...typeStyle('body', 'caption'), color: p.text3, marginLeft: 'auto' },
   currentRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, minWidth: 0 },
   currentCount: {
@@ -465,6 +466,9 @@ function LabelRow({ steps }: Readonly<{ steps: readonly StepRailItem[] }>) {
           >
             {stepRailLabel(step)}
           </Text>
+          {step.time ? (
+            <Text style={[s.stepTime, textAlignFor(index, steps.length)]}>{step.time}</Text>
+          ) : null}
         </View>
       ))}
     </View>
@@ -493,7 +497,7 @@ function Checklist({ steps }: Readonly<{ steps: readonly StepRailItem[] }>) {
             <Text style={labelStyle(s, step.state)} numberOfLines={1}>
               {step.label}
             </Text>
-            <Text style={s.checkWord}>{info.word}</Text>
+            <Text style={s.checkWord}>{step.time ? `${step.time} · ${info.word}` : info.word}</Text>
           </View>
         )
       })}
