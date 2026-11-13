@@ -7,7 +7,7 @@ Third-party components remain under their own copyright and license terms and ar
 Third-party OS artwork under `assets/os/` is recorded separately in `assets/os/NOTICE.md` and is not licensed under this repository’s AGPL or the Apple App Store additional permission.
 
 <!-- lockfiles
-pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b8014015d1
+pnpm-lock.yaml sha256:8d865c5a5e1e4c8b5099478fff9d67736acd88c1b5cce36e72b519599e334f41
 -->
 
 ## Production dependencies
@@ -487,11 +487,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Marijn Haverbeke
 
-### @esbuild/linux-x64@0.28.1
-
-- License: MIT
-- Homepage: https://github.com/evanw/esbuild#readme
-
 ### @expo-google-fonts/geist@0.4.2
 
 - License: MIT AND OFL-1.1
@@ -706,36 +701,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Expo
 - Homepage: https://github.com/expo/expo
 
-### @floating-ui/core@1.7.5
-
-- License: MIT
-- Copyright: atomiks
-- Homepage: https://floating-ui.com
-
-### @floating-ui/dom@1.7.6
-
-- License: MIT
-- Copyright: atomiks
-- Homepage: https://floating-ui.com
-
-### @floating-ui/react-dom@2.1.8
-
-- License: MIT
-- Copyright: atomiks
-- Homepage: https://floating-ui.com/docs/react-dom
-
-### @floating-ui/react-native@0.10.9
-
-- License: MIT
-- Copyright: atomiks
-- Homepage: https://floating-ui.com/docs/react-native
-
-### @floating-ui/utils@0.2.11
-
-- License: MIT
-- Copyright: atomiks
-- Homepage: https://floating-ui.com
-
 ### @isaacs/ttlcache@1.4.1
 
 - License: ISC
@@ -817,21 +782,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Marijn Haverbeke
 - Homepage: https://code.haverbeke.berlin/marijn/find-cluster-break
 
-### @nodelib/fs.scandir@2.1.5
-
-- License: MIT
-- Homepage: https://github.com/nodelib/nodelib/tree/master#readme
-
-### @nodelib/fs.stat@2.0.5
-
-- License: MIT
-- Homepage: https://github.com/nodelib/nodelib/tree/master#readme
-
-### @nodelib/fs.walk@1.2.8
-
-- License: MIT
-- Homepage: https://github.com/nodelib/nodelib/tree/master#readme
-
 ### @noxcturnal/noxcturnal-linux-x64-gnu@0.1.12
 
 - License: MIT
@@ -842,12 +792,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Boshen and oxc contributors
 - Homepage: https://oxc.rs
-
-### @pkgr/core@0.1.2
-
-- License: MIT
-- Copyright: JounQin
-- Homepage: https://github.com/un-ts/pkgr/blob/master/packages/core
 
 ### @radix-ui/primitive@1.1.3
 
@@ -995,11 +939,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Homepage: https://github.com/react/react-native/tree/HEAD/packages/metro-config#readme
 
-### @react-native/normalize-color@2.1.0
-
-- License: MIT
-- Homepage: https://github.com/facebook/react-native#readme
-
 ### @react-native/normalize-colors@0.74.89
 
 - License: MIT
@@ -1027,490 +966,20 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: sinclairzx81
 - Homepage: https://github.com/sinclairzx81/typebox-legacy#readme
 
-### @tamagui/accordion@2.2.0
+### @tailwindcss/node@4.3.3
 
 - License: MIT
+- Homepage: https://tailwindcss.com
 
-### @tamagui/adapt@2.2.0
+### @tailwindcss/oxide@4.3.3
 
 - License: MIT
+- Homepage: https://github.com/tailwindlabs/tailwindcss#readme
 
-### @tamagui/alert-dialog@2.2.0
+### @tailwindcss/oxide-linux-x64-gnu@4.3.3
 
 - License: MIT
-
-### @tamagui/animate@2.2.0
-
-- License: MIT
-
-### @tamagui/animate-presence@2.2.0
-
-- License: MIT
-
-### @tamagui/animation-helpers@2.2.0
-
-- License: MIT
-
-### @tamagui/animations-css@2.2.0
-
-- License: MIT
-
-### @tamagui/animations-motion@2.2.0
-
-- License: MIT
-
-### @tamagui/animations-react-native@2.2.0
-
-- License: MIT
-
-### @tamagui/animations-reanimated@2.2.0
-
-- License: MIT
-
-### @tamagui/avatar@2.2.0
-
-- License: MIT
-
-### @tamagui/babel-plugin@2.2.0
-
-- License: MIT
-
-### @tamagui/button@2.2.0
-
-- License: MIT
-
-### @tamagui/card@2.2.0
-
-- License: MIT
-
-### @tamagui/checkbox@2.2.0
-
-- License: MIT
-
-### @tamagui/checkbox-headless@2.2.0
-
-- License: MIT
-
-### @tamagui/cli-color@2.2.0
-
-- License: MIT
-
-### @tamagui/collapsible@2.2.0
-
-- License: MIT
-
-### @tamagui/collection@2.2.0
-
-- License: MIT
-
-### @tamagui/colors@2.2.0
-
-- License: MIT
-
-### @tamagui/compose-refs@2.2.0
-
-- License: MIT
-
-### @tamagui/config@2.2.0
-
-- License: MIT
-
-### @tamagui/config-default@2.2.0
-
-- License: MIT
-
-### @tamagui/constants@2.2.0
-
-- License: MIT
-
-### @tamagui/context-menu@2.2.0
-
-- License: MIT
-
-### @tamagui/core@2.2.0
-
-- License: MIT
-- Copyright: Nate Wienert
-- Homepage: https://github.com/tamagui/tamagui#readme
-
-### @tamagui/create-context@2.2.0
-
-- License: MIT
-
-### @tamagui/create-menu@2.2.0
-
-- License: MIT
-
-### @tamagui/create-theme@2.2.0
-
-- License: MIT
-
-### @tamagui/cubic-bezier-animator@2.2.0
-
-- License: MIT
-
-### @tamagui/dialog@2.2.0
-
-- License: MIT
-
-### @tamagui/dismissable@2.2.0
-
-- License: MIT
-
-### @tamagui/element@2.2.0
-
-- License: MIT
-
-### @tamagui/elements@2.2.0
-
-- License: MIT
-
-### @tamagui/fake-react-native@2.2.0
-
-- License: MIT
-
-### @tamagui/floating@2.2.0
-
-- License: MIT
-
-### @tamagui/focus-guard@2.2.0
-
-- License: MIT
-
-### @tamagui/focus-scope@2.2.0
-
-- License: MIT
-
-### @tamagui/focusable@2.2.0
-
-- License: MIT
-
-### @tamagui/font-inter@2.2.0
-
-- License: MIT
-
-### @tamagui/font-silkscreen@2.2.0
-
-- License: MIT
-
-### @tamagui/font-size@2.2.0
-
-- License: MIT
-
-### @tamagui/form@2.2.0
-
-- License: MIT
-
-### @tamagui/generate-themes@2.2.0
-
-- License: MIT
-
-### @tamagui/get-button-sized@2.2.0
-
-- License: MIT
-
-### @tamagui/get-font-sized@2.2.0
-
-- License: MIT
-
-### @tamagui/get-token@2.2.0
-
-- License: MIT
-
-### @tamagui/group@2.2.0
-
-- License: MIT
-
-### @tamagui/helpers@2.2.0
-
-- License: MIT
-
-### @tamagui/helpers-node@2.2.0
-
-- License: MIT
-
-### @tamagui/helpers-tamagui@2.2.0
-
-- License: MIT
-
-### @tamagui/image@2.2.0
-
-- License: MIT
-
-### @tamagui/input@2.2.0
-
-- License: MIT
-
-### @tamagui/is-equal-shallow@2.2.0
-
-- License: MIT
-
-### @tamagui/label@2.2.0
-
-- License: MIT
-
-### @tamagui/linear-gradient@2.2.0
-
-- License: MIT
-
-### @tamagui/list-item@2.2.0
-
-- License: MIT
-
-### @tamagui/menu@2.2.0
-
-- License: MIT
-
-### @tamagui/native@2.2.0
-
-- License: MIT
-
-### @tamagui/normalize-css-color@2.2.0
-
-- License: MIT
-
-### @tamagui/polyfill-dev@2.2.0
-
-- License: MIT
-
-### @tamagui/popover@2.2.0
-
-- License: MIT
-
-### @tamagui/popper@2.2.0
-
-- License: MIT
-
-### @tamagui/portal@2.2.0
-
-- License: MIT
-
-### @tamagui/progress@2.2.0
-
-- License: MIT
-
-### @tamagui/proxy-worm@2.2.0
-
-- License: MIT
-
-### @tamagui/radio-group@2.2.0
-
-- License: MIT
-
-### @tamagui/radio-headless@2.2.0
-
-- License: MIT
-
-### @tamagui/react-native-media-driver@2.2.0
-
-- License: MIT
-
-### @tamagui/react-native-use-pressable@2.2.0
-
-- License: MIT
-
-### @tamagui/react-native-use-responder-events@2.2.0
-
-- License: MIT
-
-### @tamagui/react-native-web-internals@2.2.0
-
-- License: MIT
-
-### @tamagui/react-native-web-lite@2.2.0
-
-- License: MIT
-- Homepage: https://github.com/tamagui/tamagui#readme
-
-### @tamagui/remove-scroll@2.2.0
-
-- License: MIT
-
-### @tamagui/roving-focus@2.2.0
-
-- License: MIT
-
-### @tamagui/scroll-view@2.2.0
-
-- License: MIT
-
-### @tamagui/select@2.2.0
-
-- License: MIT
-
-### @tamagui/separator@2.2.0
-
-- License: MIT
-
-### @tamagui/shapes@2.2.0
-
-- License: MIT
-
-### @tamagui/sheet@2.2.0
-
-- License: MIT
-
-### @tamagui/shorthands@2.2.0
-
-- License: MIT
-
-### @tamagui/simple-hash@2.2.0
-
-- License: MIT
-
-### @tamagui/sizable-context@2.2.0
-
-- License: MIT
-
-### @tamagui/slider@2.2.0
-
-- License: MIT
-
-### @tamagui/spacer@2.2.0
-
-- License: MIT
-
-### @tamagui/spinner@2.2.0
-
-- License: MIT
-
-### @tamagui/stacks@2.2.0
-
-- License: MIT
-
-### @tamagui/start-transition@2.2.0
-
-- License: MIT
-
-### @tamagui/static@2.2.0
-
-- License: MIT
-
-### @tamagui/static-sync@2.2.0
-
-- License: MIT
-
-### @tamagui/switch@2.2.0
-
-- License: MIT
-
-### @tamagui/switch-headless@2.2.0
-
-- License: MIT
-
-### @tamagui/tabs@2.2.0
-
-- License: MIT
-
-### @tamagui/text@2.2.0
-
-- License: MIT
-
-### @tamagui/theme@2.2.0
-
-- License: MIT
-
-### @tamagui/theme-builder@2.2.0
-
-- License: MIT
-
-### @tamagui/themes@2.2.0
-
-- License: MIT
-
-### @tamagui/timer@2.2.0
-
-- License: MIT
-
-### @tamagui/toast@2.2.0
-
-- License: MIT
-
-### @tamagui/toggle-group@2.2.0
-
-- License: MIT
-
-### @tamagui/tooltip@2.2.0
-
-- License: MIT
-
-### @tamagui/types@2.2.0
-
-- License: MIT
-
-### @tamagui/use-async@2.2.0
-
-- License: MIT
-
-### @tamagui/use-callback-ref@2.2.0
-
-- License: MIT
-
-### @tamagui/use-constant@2.2.0
-
-- License: MIT
-
-### @tamagui/use-controllable-state@2.2.0
-
-- License: MIT
-
-### @tamagui/use-debounce@2.2.0
-
-- License: MIT
-
-### @tamagui/use-did-finish-ssr@2.2.0
-
-- License: MIT
-
-### @tamagui/use-direction@2.2.0
-
-- License: MIT
-
-### @tamagui/use-element-layout@2.2.0
-
-- License: MIT
-
-### @tamagui/use-escape-keydown@2.2.0
-
-- License: MIT
-
-### @tamagui/use-event@2.2.0
-
-- License: MIT
-
-### @tamagui/use-force-update@2.2.0
-
-- License: MIT
-
-### @tamagui/use-keyboard-visible@2.2.0
-
-- License: MIT
-
-### @tamagui/use-presence@2.2.0
-
-- License: MIT
-
-### @tamagui/use-previous@2.2.0
-
-- License: MIT
-
-### @tamagui/use-window-dimensions@2.2.0
-
-- License: MIT
-
-### @tamagui/visually-hidden@2.2.0
-
-- License: MIT
-
-### @tamagui/web@2.2.0
-
-- License: MIT
-- Copyright: Nate Wienert
-- Homepage: https://github.com/tamagui/tamagui#readme
-
-### @tamagui/z-index-stack@2.2.0
-
-- License: MIT
+- Homepage: https://github.com/tailwindlabs/tailwindcss#readme
 
 ### @tanstack/query-core@5.101.0
 
@@ -1538,11 +1007,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 
 - License: MIT
 - Homepage: https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/istanbul-reports
-
-### @types/js-yaml@4.0.9
-
-- License: MIT
-- Homepage: https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/js-yaml
 
 ### @types/node@25.9.1
 
@@ -1640,12 +1104,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Homepage: https://github.com/expo/agent-cli-detector#readme
 
-### ajv@8.20.0
-
-- License: MIT
-- Copyright: Evgeny Poberezkin
-- Homepage: https://ajv.js.org
-
 ### anser@1.4.10
 
 - License: MIT
@@ -1703,18 +1161,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 
 - License: MIT
 - Homepage: https://github.com/kriskowal/asap#readme
-
-### astral-regex@2.0.0
-
-- License: MIT
-- Copyright: Kevin Mårtensson
-- Homepage: https://github.com/kevva/astral-regex#readme
-
-### babel-literal-to-ast@2.1.0
-
-- License: CC0-1.0
-- Copyright: Izaak Schroeder
-- Homepage: https://github.com/izaakschroeder/babel-literal-to-ast#readme
 
 ### babel-plugin-polyfill-corejs2@0.4.17
 
@@ -1860,17 +1306,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Homepage: https://github.com/chalk/chalk#readme
 
-### chalk@5.6.2
-
-- License: MIT
-- Homepage: https://github.com/chalk/chalk#readme
-
-### check-dependency-version-consistency@4.1.1
-
-- License: MIT
-- Copyright: Bryan Mishkin
-- Homepage: https://github.com/bmish/check-dependency-version-consistency#readme
-
 ### ci-info@3.9.0
 
 - License: MIT
@@ -1947,18 +1382,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Heather Arthur
 - Homepage: https://github.com/Qix-/color-string#readme
 
-### color2k@2.0.3
-
-- License: MIT
-- Copyright: Rico Kahler
-- Homepage: https://github.com/ricokahler/color2k#readme
-
-### commander@11.1.0
-
-- License: MIT
-- Copyright: TJ Holowaychuk
-- Homepage: https://github.com/tj/commander.js#readme
-
 ### commander@12.1.0
 
 - License: MIT
@@ -1976,12 +1399,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: TJ Holowaychuk
 - Homepage: https://github.com/tj/commander.js#readme
-
-### commondir@1.0.1
-
-- License: MIT
-- Copyright: James Halliday
-- Homepage: https://github.com/substack/node-commondir#readme
 
 ### compressible@2.0.18
 
@@ -2059,6 +1476,12 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Fredrik Nicol
 - Homepage: https://github.com/frenic/csstype#readme
 
+### culori@4.0.2
+
+- License: MIT
+- Copyright: Dan Burzo
+- Homepage: https://github.com/Evercoder/culori#readme
+
 ### debug@2.6.9
 
 - License: MIT
@@ -2107,12 +1530,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Lovell Fuller
 - Homepage: https://github.com/lovell/detect-libc#readme
 
-### dir-glob@3.0.1
-
-- License: MIT
-- Copyright: Kevin Mårtensson
-- Homepage: https://github.com/kevva/dir-glob#readme
-
 ### dnssd-advertise@1.1.6
 
 - License: MIT
@@ -2143,12 +1560,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Felix Boehm
 - Homepage: https://github.com/fb55/domutils#readme
 
-### edit-json-file@1.8.1
-
-- License: MIT
-- Copyright: Ionică Bizău
-- Homepage: https://github.com/IonicaBizau/edit-json-file#readme
-
 ### ee-first@1.1.1
 
 - License: MIT
@@ -2177,6 +1588,12 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Homepage: https://github.com/pillarjs/encodeurl#readme
 
+### enhanced-resolve@5.27.0
+
+- License: MIT
+- Copyright: Tobias Koppers @sokra
+- Homepage: https://github.com/webpack/enhanced-resolve#readme
+
 ### entities@4.5.0
 
 - License: BSD-2-Clause
@@ -2193,20 +1610,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/es-errors#readme
-
-### esbuild@0.28.1
-
-- License: MIT
-- Homepage: https://github.com/evanw/esbuild#readme
-
-### esbuild-register@3.6.0
-
-- License: MIT
-
-### esbuild-wasm@0.27.7
-
-- License: MIT
-- Homepage: https://github.com/evanw/esbuild#readme
 
 ### escalade@3.2.0
 
@@ -2427,30 +1830,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Sami Sayegh
 - Homepage: https://github.com/coveooss/exponential-backoff#readme
 
-### fast-deep-equal@3.1.3
-
-- License: MIT
-- Copyright: Evgeny Poberezkin
-- Homepage: https://github.com/epoberezkin/fast-deep-equal#readme
-
-### fast-glob@3.3.3
-
-- License: MIT
-- Copyright: Denis Malinochkin
-- Homepage: https://github.com/mrmlnc/fast-glob#readme
-
-### fast-uri@3.1.9
-
-- License: BSD-3-Clause
-- Copyright: Vincent Le Goff
-- Homepage: https://github.com/fastify/fast-uri
-
-### fastq@1.20.1
-
-- License: ISC
-- Copyright: Matteo Collina
-- Homepage: https://github.com/mcollina/fastq#readme
-
 ### fb-dotslash@0.5.8
 
 - License: (MIT OR Apache-2.0)
@@ -2496,29 +1875,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Douglas Christopher Wilson
 - Homepage: https://github.com/pillarjs/finalhandler#readme
 
-### find-cache-dir@3.3.2
-
-- License: MIT
-- Homepage: https://github.com/avajs/find-cache-dir#readme
-
-### find-root@1.1.0
-
-- License: MIT
-- Copyright: jsdnxx
-- Homepage: https://github.com/js-n/find-root#readme
-
-### find-up@4.1.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/find-up#readme
-
-### find-value@1.0.13
-
-- License: MIT
-- Copyright: Ionică Bizău
-- Homepage: https://github.com/IonicaBizau/find-value#readme
-
 ### flow-enums-runtime@0.0.6
 
 - License: MIT
@@ -2548,22 +1904,11 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Flow Team
 - Homepage: https://flow.org
 
-### framer-motion@12.40.0
-
-- License: MIT
-- Copyright: Matt Perry
-
 ### fresh@0.5.2
 
 - License: MIT
 - Copyright: TJ Holowaychuk
 - Homepage: https://github.com/jshttp/fresh#readme
-
-### fs-extra@11.3.5
-
-- License: MIT
-- Copyright: JP Richardson
-- Homepage: https://github.com/jprichardson/node-fs-extra
 
 ### function-bind@1.1.2
 
@@ -2588,18 +1933,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Abhinandan Kushwaha
 - Homepage: https://github.com/Abhinandan-Kushwaha/gifted-charts-core#readme
-
-### glob-parent@5.1.2
-
-- License: ISC
-- Copyright: Gulp Team
-- Homepage: https://github.com/gulpjs/glob-parent#readme
-
-### globby@13.2.2
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/globby#readme
 
 ### graceful-fs@4.2.11
 
@@ -2704,41 +2037,17 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/is-docker#readme
 
-### is-extglob@2.1.1
-
-- License: MIT
-- Copyright: Jon Schlinkert
-- Homepage: https://github.com/jonschlinkert/is-extglob
-
 ### is-fullwidth-code-point@3.0.0
 
 - License: MIT
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/is-fullwidth-code-point#readme
 
-### is-glob@4.0.3
-
-- License: MIT
-- Copyright: Jon Schlinkert
-- Homepage: https://github.com/micromatch/is-glob
-
 ### is-number@7.0.0
 
 - License: MIT
 - Copyright: Jon Schlinkert
 - Homepage: https://github.com/jonschlinkert/is-number
-
-### is-plain-object@2.0.4
-
-- License: MIT
-- Copyright: Jon Schlinkert
-- Homepage: https://github.com/jonschlinkert/is-plain-object
-
-### is-primitive@3.0.1
-
-- License: MIT
-- Copyright: Jon Schlinkert
-- Homepage: https://github.com/jonschlinkert/is-primitive
 
 ### is-wsl@2.2.0
 
@@ -2751,18 +2060,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: ISC
 - Copyright: Isaac Z. Schlueter
 - Homepage: https://github.com/isaacs/isexe#readme
-
-### isobject@3.0.1
-
-- License: MIT
-- Copyright: Jon Schlinkert
-- Homepage: https://github.com/jonschlinkert/isobject
-
-### iterate-object@1.3.5
-
-- License: MIT
-- Copyright: Ionică Bizău
-- Homepage: https://github.com/IonicaBizau/node-iterate-object
 
 ### jest-get-type@29.6.3
 
@@ -2789,6 +2086,11 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Homepage: https://github.com/nuxt-community/jimp-compact#readme
 
+### jiti@2.7.0
+
+- License: MIT
+- Homepage: https://github.com/unjs/jiti#readme
+
 ### js-tokens@4.0.0
 
 - License: MIT
@@ -2813,23 +2115,11 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Mathias Bynens
 - Homepage: https://mths.be/jsesc
 
-### json-schema-traverse@1.0.0
-
-- License: MIT
-- Copyright: Evgeny Poberezkin
-- Homepage: https://github.com/epoberezkin/json-schema-traverse#readme
-
 ### json5@2.2.3
 
 - License: MIT
 - Copyright: Aseem Kishore
 - Homepage: http://json5.org/
-
-### jsonfile@6.2.1
-
-- License: MIT
-- Copyright: JP Richardson
-- Homepage: https://github.com/jprichardson/node-jsonfile#readme
 
 ### kleur@3.0.3
 
@@ -2849,7 +2139,17 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/leven#readme
 
+### lightningcss@1.30.1
+
+- License: MPL-2.0
+- Homepage: https://github.com/parcel-bundler/lightningcss#readme
+
 ### lightningcss@1.32.0
+
+- License: MPL-2.0
+- Homepage: https://github.com/parcel-bundler/lightningcss#readme
+
+### lightningcss-linux-x64-gnu@1.30.1
 
 - License: MPL-2.0
 - Homepage: https://github.com/parcel-bundler/lightningcss#readme
@@ -2859,12 +2159,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MPL-2.0
 - Homepage: https://github.com/parcel-bundler/lightningcss#readme
 
-### locate-path@5.0.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/locate-path#readme
-
 ### lodash.debounce@4.0.8
 
 - License: MIT
@@ -2872,12 +2166,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Homepage: https://lodash.com/
 
 ### lodash.throttle@4.1.1
-
-- License: MIT
-- Copyright: John-David Dalton
-- Homepage: https://lodash.com/
-
-### lodash.truncate@4.4.2
 
 - License: MIT
 - Copyright: John-David Dalton
@@ -2907,11 +2195,11 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Isaac Z. Schlueter
 - Homepage: https://github.com/isaacs/node-lru-cache#readme
 
-### make-dir@3.1.0
+### magic-string@0.30.21
 
 - License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/make-dir#readme
+- Copyright: Rich Harris
+- Homepage: https://github.com/Rich-Harris/magic-string#readme
 
 ### makeerror@1.0.12
 
@@ -2942,11 +2230,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Stephen Sugden
 - Homepage: https://github.com/grncdr/merge-stream#readme
-
-### merge2@1.4.1
-
-- License: MIT
-- Homepage: https://github.com/teambition/merge2
 
 ### metro@0.87.1
 
@@ -3061,24 +2344,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: BlueOak-1.0.0
 - Copyright: Isaac Z. Schlueter
 - Homepage: https://github.com/isaacs/minimatch#readme
-
-### motion@12.40.0
-
-- License: MIT
-- Copyright: Matt Perry
-- Homepage: https://github.com/motiondivision/motion#readme
-
-### motion-dom@12.40.0
-
-- License: MIT
-- Copyright: Matt Perry
-- Homepage: https://github.com/motiondivision/motion#readme
-
-### motion-utils@12.39.0
-
-- License: MIT
-- Copyright: Matt Perry
-- Homepage: https://github.com/motiondivision/motion#readme
 
 ### ms@2.0.0
 
@@ -3209,24 +2474,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/ora#readme
 
-### p-limit@2.3.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/p-limit#readme
-
-### p-locate@4.1.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/p-locate#readme
-
-### p-try@2.2.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/p-try#readme
-
 ### parse-png@2.1.0
 
 - License: MIT
@@ -3237,12 +2484,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 
 - License: MIT
 - Homepage: https://github.com/pillarjs/parseurl#readme
-
-### path-exists@4.0.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/path-exists#readme
 
 ### path-key@3.1.1
 
@@ -3255,12 +2496,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Javier Blanco
 - Homepage: https://github.com/jbgutierrez/path-parse#readme
-
-### path-type@4.0.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/path-type#readme
 
 ### picocolors@1.1.1
 
@@ -3279,12 +2514,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Jon Schlinkert
 - Homepage: https://github.com/micromatch/picomatch
-
-### pkg-dir@4.2.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/pkg-dir#readme
 
 ### plist@3.1.1
 
@@ -3344,18 +2573,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Terkel Gjervig
 - Homepage: https://github.com/terkelg/prompts#readme
-
-### queue-microtask@1.2.3
-
-- License: MIT
-- Copyright: Feross Aboukhadijeh
-- Homepage: https://github.com/feross/queue-microtask
-
-### r-json@1.3.1
-
-- License: MIT
-- Copyright: Ionică Bizău
-- Homepage: https://github.com/IonicaBizau/node-r-json
 
 ### range-parser@1.2.1
 
@@ -3508,12 +2725,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Troy Goode
 - Homepage: https://github.com/troygoode/node-require-directory/
 
-### require-from-string@2.0.2
-
-- License: MIT
-- Copyright: Vsevolod Strukchinsky
-- Homepage: https://github.com/floatdrop/require-from-string#readme
-
 ### resolve@1.22.12
 
 - License: MIT
@@ -3537,18 +2748,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/restore-cursor#readme
-
-### reusify@1.1.0
-
-- License: MIT
-- Copyright: Matteo Collina
-- Homepage: https://github.com/mcollina/reusify#readme
-
-### run-parallel@1.2.0
-
-- License: MIT
-- Copyright: Feross Aboukhadijeh
-- Homepage: https://github.com/feross/run-parallel
 
 ### safe-buffer@5.2.1
 
@@ -3607,12 +2806,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 
 - License: MIT
 - Homepage: https://reactjs.org/
-
-### set-value@4.1.0
-
-- License: MIT
-- Copyright: Jon Schlinkert
-- Homepage: https://github.com/jonschlinkert/set-value
 
 ### setimmediate@1.0.5
 
@@ -3673,17 +2866,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Terkel Gjervig
 - Homepage: https://github.com/terkelg/sisteransi#readme
-
-### slash@4.0.0
-
-- License: MIT
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/slash#readme
-
-### slice-ansi@4.0.0
-
-- License: MIT
-- Homepage: https://github.com/chalk/slice-ansi#readme
 
 ### slugify@1.6.9
 
@@ -3819,22 +3001,16 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Jordan Harband
 - Homepage: https://github.com/inspect-js/node-supports-preserve-symlinks-flag#readme
 
-### synckit@0.9.3
+### tailwindcss@4.3.3
 
 - License: MIT
-- Copyright: JounQin
-- Homepage: https://github.com/un-ts/synckit#readme
+- Homepage: https://tailwindcss.com
 
-### table@6.9.0
-
-- License: BSD-3-Clause
-- Copyright: Gajus Kuizinas
-- Homepage: https://github.com/gajus/table#readme
-
-### tamagui@2.2.0
+### tapable@2.3.3
 
 - License: MIT
-- Homepage: https://github.com/tamagui/tamagui#readme
+- Copyright: Tobias Koppers @sokra
+- Homepage: https://github.com/webpack/tapable
 
 ### terminal-link@2.1.1
 
@@ -3890,12 +3066,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Sebastian Mayr
 - Homepage: https://github.com/Sebmaster/tr46.js#readme
 
-### tslib@2.8.1
-
-- License: 0BSD
-- Copyright: Microsoft Corp.
-- Homepage: https://www.typescriptlang.org/
-
 ### type-fest@0.21.3
 
 - License: (MIT OR CC0-1.0)
@@ -3903,12 +3073,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Homepage: https://github.com/sindresorhus/type-fest#readme
 
 ### type-fest@0.7.1
-
-- License: (MIT OR CC0-1.0)
-- Copyright: Sindre Sorhus
-- Homepage: https://github.com/sindresorhus/type-fest#readme
-
-### type-fest@4.41.0
 
 - License: (MIT OR CC0-1.0)
 - Copyright: Sindre Sorhus
@@ -3955,11 +3119,11 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - Copyright: Mathias Bynens
 - Homepage: https://github.com/mathiasbynens/unicode-property-aliases-ecmascript
 
-### universalify@2.0.1
+### uniwind@1.13.1
 
 - License: MIT
-- Copyright: Ryan Zimmerman
-- Homepage: https://github.com/RyanZim/universalify#readme
+- Copyright: Unistack
+- Homepage: https://uniwind.dev
 
 ### unpipe@1.0.0
 
@@ -4002,18 +3166,6 @@ pnpm-lock.yaml sha256:d26bf02710605b4f2ee69834da683995403ebefb3748906c6ba344b801
 - License: MIT
 - Copyright: Rich Harris
 - Homepage: https://github.com/Rich-Harris/vlq#readme
-
-### w-json@1.3.10
-
-- License: MIT
-- Copyright: Ionică Bizău
-- Homepage: https://github.com/IonicaBizau/node-w-json
-
-### w-json@1.3.11
-
-- License: MIT
-- Copyright: Ionică Bizău
-- Homepage: https://github.com/IonicaBizau/node-w-json
 
 ### w3c-keyname@2.2.8
 
@@ -4169,6 +3321,11 @@ These packages are used for development, test, or build tooling and are not bund
 
 - License: MIT
 - Homepage: https://github.com/cspotcode/node-source-map-support#readme
+
+### @esbuild/linux-x64@0.28.1
+
+- License: MIT
+- Homepage: https://github.com/evanw/esbuild#readme
 
 ### @eslint-community/eslint-utils@4.9.1
 
@@ -4507,7 +3664,7 @@ These packages are used for development, test, or build tooling and are not bund
 
 - License: MIT
 - Copyright: Evgeny Poberezkin
-- Homepage: https://ajv.js.org
+- Homepage: https://github.com/ajv-validator/ajv
 
 ### aria-query@5.3.0
 
@@ -4768,6 +3925,11 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/ljharb/es-to-primitive#readme
 
+### esbuild@0.28.1
+
+- License: MIT
+- Homepage: https://github.com/evanw/esbuild#readme
+
 ### escape-string-regexp@4.0.0
 
 - License: MIT
@@ -4887,6 +4049,12 @@ These packages are used for development, test, or build tooling and are not bund
 
 - License: Apache-2.0
 - Homepage: https://github.com/mmkal/expect-type#readme
+
+### fast-deep-equal@3.1.3
+
+- License: MIT
+- Copyright: Evgeny Poberezkin
+- Homepage: https://github.com/epoberezkin/fast-deep-equal#readme
 
 ### fast-json-stable-stringify@2.1.0
 
@@ -5126,6 +4294,12 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: Jordan Harband
 - Homepage: https://github.com/inspect-js/is-date-object#readme
 
+### is-extglob@2.1.1
+
+- License: MIT
+- Copyright: Jon Schlinkert
+- Homepage: https://github.com/jonschlinkert/is-extglob
+
 ### is-finalizationregistry@1.1.1
 
 - License: MIT
@@ -5137,6 +4311,12 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Copyright: Jordan Harband
 - Homepage: https://github.com/inspect-js/is-generator-function#readme
+
+### is-glob@4.0.3
+
+- License: MIT
+- Copyright: Jon Schlinkert
+- Homepage: https://github.com/micromatch/is-glob
 
 ### is-map@2.0.3
 
@@ -5312,12 +4492,6 @@ These packages are used for development, test, or build tooling and are not bund
 - Copyright: pieroxy
 - Homepage: http://pieroxy.net/blog/pages/lz-string/index.html
 
-### magic-string@0.30.21
-
-- License: MIT
-- Copyright: Rich Harris
-- Homepage: https://github.com/Rich-Harris/magic-string#readme
-
 ### magicast@0.5.5
 
 - License: MIT
@@ -5448,6 +4622,12 @@ These packages are used for development, test, or build tooling and are not bund
 - License: MIT
 - Copyright: Sindre Sorhus
 - Homepage: https://github.com/sindresorhus/parent-module#readme
+
+### path-exists@4.0.0
+
+- License: MIT
+- Copyright: Sindre Sorhus
+- Homepage: https://github.com/sindresorhus/path-exists#readme
 
 ### path-to-regexp@6.3.0
 

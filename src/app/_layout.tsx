@@ -1,3 +1,4 @@
+import '../../global.css'
 import Constants from 'expo-constants'
 import { Redirect, Stack, useLocalSearchParams, useSegments } from 'expo-router'
 import { useFonts } from 'expo-font'
@@ -5,9 +6,9 @@ import { useEffect } from 'react'
 import { ActivityIndicator, AppState, Platform, StyleSheet, View } from 'react-native'
 import type { AppStateStatus } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { focusManager } from '@tanstack/react-query'
 import { AppProviders } from '@/components/app-providers'
-import { SafeAreaRoot } from '@/components/safe-area-root'
 import { authSpinnerColor } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import { resolveAuthGuardHref } from '@/lib/auth-guard'
@@ -31,10 +32,6 @@ function onAppStateChange(status: AppStateStatus) {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    Inter: require('@tamagui/font-inter/otf/Inter-Medium.otf'),
-    InterBold: require('@tamagui/font-inter/otf/Inter-Bold.otf'),
-    InterMediumItalic: require('@tamagui/font-inter/otf/Inter-MediumItalic.otf'),
-    InterBoldItalic: require('@tamagui/font-inter/otf/Inter-BoldItalic.otf'),
     // v4 type. The keys are the family names in `src/lib/v4/typography.ts`;
     // the fonts-registered test keeps the two lists equal. Each weight is its
     // own file so a phone never has to synthesise one.
@@ -60,11 +57,11 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaRoot>
+      <SafeAreaProvider>
         <AppProviders>
           <AuthGuard />
         </AppProviders>
-      </SafeAreaRoot>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   )
 }
