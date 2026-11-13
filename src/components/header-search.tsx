@@ -6,8 +6,8 @@ import {
   Text,
   TextInput,
   View,
-  type TextInput as TextInputHandle,
   type ViewStyle,
+  type TextInputInstance,
 } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import {
@@ -415,7 +415,7 @@ export function HeaderSearch({
   onClose?: () => void
 }>) {
   const router = useRouter()
-  const inputRef = useRef<TextInputHandle>(null)
+  const inputRef = useRef<TextInputInstance>(null)
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [focused, setFocused] = useState(false)
