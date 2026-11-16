@@ -16,15 +16,15 @@ import {
   type CertificateView,
   type LetsEncryptRefusal,
 } from '@/lib/hosting-certificate'
+import { hostingHostnames } from '@/lib/environment-status'
 import type { HostingDnsReport } from '@/lib/instance-api'
 import {
   useHostingCertificate,
   useHostingDnsCheck,
   useUseLetsEncrypt,
 } from '@/lib/queries/hosting-certificate'
-import { hostingHostnames } from '@/lib/environment-status'
-import { tunnelOnlyCertificateView, tunnelOnlyOf, type TunnelOnly } from '@/lib/hosting-tunnel'
 import { isComposeAutomaticTlsHosting } from '@/lib/hosting-compose-owner'
+import { tunnelOnlyCertificateView, tunnelOnlyOf, type TunnelOnly } from '@/lib/hosting-tunnel'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -248,8 +248,9 @@ export function HostingCertificatePanel({
   const { deploy, refusal, onRefusal } = useScreenCertificateActions(hostingId, letsEncrypt.error)
   const hosting = query.data?.hosting
   const certificate = hosting?.certificate ?? null
-  const tunnel =
-    tunnelOnly ?? (hosting ? tunnelOnlyOf(hostingHostnames(hosting), new Map(), hosting) : null)
+  // undefined: no row told us, read the saved hosting; null: the row says it is not tunnel-only.
+  const savedTunnel = hosting ? tunnelOnlyOf(hostingHostnames(hosting), new Map(), hosting) : null
+  const tunnel = tunnelOnly === undefined ? savedTunnel : tunnelOnly
   const composeAutomatic = isComposeAutomaticTlsHosting(hosting?.metadata)
   const note = tunnel ? null : composeNote(composeOwned, composeAutomatic)
   if (!certificate) {

@@ -1092,7 +1092,7 @@ function HostingTlsPicker({
       <>
         <Text style={styles.tlsLabel}>Certificate</Text>
         <Text style={styles.tlsHint}>{TUNNEL_ONLY_CERTIFICATE_HINT}</Text>
-        <Text style={styles.wwwResult}>{`Certificate: ${INTERNAL_CERTIFICATE_LABEL}`}</Text>
+        <Text style={styles.wwwResult}>{INTERNAL_CERTIFICATE_LABEL}</Text>
       </>
     )
   }
@@ -1158,7 +1158,7 @@ function HostingBindPicker({
       <>
         <Text style={styles.tlsLabel}>Bind</Text>
         <Text style={styles.tlsHint}>{TUNNEL_ONLY_BIND_TEXT}</Text>
-        <Text style={styles.wwwResult}>{`Bind: ${TUNNEL_ONLY_LABEL}`}</Text>
+        <Text style={styles.wwwResult}>{TUNNEL_ONLY_LABEL}</Text>
       </>
     )
   }
@@ -1506,7 +1506,12 @@ export function HostingPanelRow({
 }>) {
   const covering = coveringCertificates(tlsOptions, editor.hostnames, editor.www)
   const pinnedGap = pinnedCertificateGap(tlsOptions, editor.tlsId, editor.hostnames, editor.www)
-  const tunnelOnly = useHostingTunnelOnly(orgId, hostingId, parseHostnameList(editor.hostnames))
+  const tunnelOnly = useHostingTunnelOnly(
+    orgId,
+    hostingId,
+    parseHostnameList(editor.hostnames),
+    expanded
+  )
   // A tunnel-only name never asks for a public certificate: undo the box's default.
   useEffect(() => {
     if (tunnelOnly && editor.getLetsEncrypt) onChange({ getLetsEncrypt: false })

@@ -18,13 +18,13 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ListGroup, ListRow, PageTitle, SectionHeading } from '@/components/ui/v4'
+import { readHostingHostname } from '@/lib/compose/hosting-extension'
+import { tunnelOnlyOf } from '@/lib/hosting-tunnel'
 import type { ComposeDocument, OrgServerRecord } from '@/lib/instance-api'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { useOrgProjectFormDefaults } from '@/lib/org-project-settings'
-import { readHostingHostname } from '@/lib/compose/hosting-extension'
-import { tunnelOnlyOf } from '@/lib/hosting-tunnel'
-import { useTunnelOnlyNames } from '@/lib/queries/tunnel-only'
 import { useOrgAllowsLetsEncrypt } from '@/lib/queries/org-tls-settings'
+import { useTunnelOnlyNames } from '@/lib/queries/tunnel-only'
 import {
   declaredHostname,
   defaultAlsoWww,

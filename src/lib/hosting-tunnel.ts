@@ -58,7 +58,7 @@ export function tunnelOnlyCertificateView(tunnel: TunnelOnly): CertificateView {
     tone: 'neutral',
     lines: [
       `Tunnel only · ${tunnel.tunnelNames.join(', ')}.`,
-      'Trusted at the Edge. The tunnel reaches the server with the server’s own certificate.',
+      'Trusted at the tunnel’s edge. The tunnel reaches the server with the server’s own certificate.',
     ],
     reason: null,
     actions: [],

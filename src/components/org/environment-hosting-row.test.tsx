@@ -130,8 +130,8 @@ describe('HostingPanelRow for a tunnel-only name', () => {
       editor: { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true },
     })
     expect(screen.getByText(/testing\.example · Tunnel only · Internal certificate/)).toBeTruthy()
-    expect(screen.getByText('Certificate: Internal certificate')).toBeTruthy()
-    expect(screen.getByText('Bind: Tunnel only')).toBeTruthy()
+    expect(screen.getByText('Internal certificate')).toBeTruthy()
+    expect(screen.getByText('Tunnel only')).toBeTruthy()
     expect(screen.queryByText(/Self-signed/)).toBeNull()
     expect(screen.queryByText(/Get a free Let’s Encrypt/)).toBeNull()
     expect(screen.queryByText('Public IP')).toBeNull()
