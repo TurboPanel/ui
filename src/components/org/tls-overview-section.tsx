@@ -27,7 +27,7 @@ import {
 } from '@/lib/instance-api'
 import { useCreateTlsCertificate, useDeleteTlsCertificate, useTlsLibrary } from '@/lib/queries/tls'
 import { useApiMutation, useCan, queryKeys } from '@/lib/query-client'
-import { tlsDateLines, tlsStoredCopyLines } from '@/lib/tls-managed-dates'
+import { plainIssuer, tlsDateLines, tlsStoredCopyLines } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
 import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
@@ -69,7 +69,7 @@ export function tlsIssuerLines(row: TlsRecord, locale?: string): string[] {
   if (row.source === 'lets_encrypt') return []
   const { issuer, notBefore } = row.metadata
   const lines: string[] = []
-  if (issuer) lines.push(`Issued by ${issuer}`)
+  if (issuer) lines.push(`Issued by ${plainIssuer(issuer)}`)
   const started = notBefore ? Date.parse(notBefore) : Number.NaN
   if (Number.isFinite(started) && started > 0) {
     lines.push(`Valid from ${new Date(started).toLocaleString(locale)}`)

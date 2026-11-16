@@ -248,6 +248,9 @@ describe('domains, volumes and databases', () => {
     failing.metadata.acme = { lastError: 'boom' }
     expect(certificateKey('issued', [issued])).toBe('ok')
     expect(certificateKey('failing', [failing])).toBe('issue_failed')
+    const waiting = tlsRecord('waiting', 'lets_encrypt', 'automatic')
+    waiting.metadata.acme = {}
+    expect(certificateKey('waiting', [waiting])).toBe('issuing')
   })
 
   it('never calls a domain secure before a deploy has carried its certificate', () => {

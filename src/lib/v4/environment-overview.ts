@@ -260,6 +260,8 @@ export function certificateKey(
  */
 function automaticKey(acme: TlsRecord['metadata']['acme']): string {
   if (acme?.lastError) return acme.lastIssuedAt ? 'renewal_failed' : 'issue_failed'
+  // A host report that carries no certificate yet: nothing has been issued, so not "Secure".
+  if (acme && !acme.notAfter && !acme.lastIssuedAt) return 'issuing'
   return 'ok'
 }
 
