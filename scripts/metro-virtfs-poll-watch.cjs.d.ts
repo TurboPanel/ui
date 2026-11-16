@@ -8,10 +8,7 @@ export const WATCHER_SPECS: ReadonlyArray<{
 
 export function decodeMountPoint(encoded: string): string
 
-export function fsTypeForPath(
-  mountsText: string,
-  resolvedPath: string,
-): string | null
+export function fsTypeForPath(mountsText: string, resolvedPath: string): string | null
 
 export function isPollFsType(fsType: string | null | undefined): boolean
 
@@ -25,17 +22,11 @@ export function shouldSkipDirName(name: string): boolean
 
 export function isWatchedFileName(name: string): boolean
 
-export function watcherCoversProject(
-  watcherRoot: string,
-  projectRoot: string,
-): boolean
+export function watcherCoversProject(watcherRoot: string, projectRoot: string): boolean
 
 export function collectSnapshotChanges(
-  previous: Record<
-    string,
-    { mtimeMs: number; size: number; ctimeMs?: number }
-  >,
-  current: Record<string, { mtimeMs: number; size: number; ctimeMs?: number }>,
+  previous: Record<string, { mtimeMs: number; size: number; ctimeMs?: number }>,
+  current: Record<string, { mtimeMs: number; size: number; ctimeMs?: number }>
 ): { deleted: string[]; touched: string[] }
 
 export function installMetroPollWatch(
@@ -44,5 +35,18 @@ export function installMetroPollWatch(
     env?: Record<string, string | undefined>
     mountsText?: string
     patch?: boolean
-  },
+  }
 ): { enabled: boolean; patched?: boolean }
+
+export const DEFAULT_FULL_EVERY: number
+
+export function createPollScanner(
+  projectRoot: string,
+  fsApi: Pick<typeof import('node:fs'), 'readdirSync' | 'statSync'>
+): {
+  scan(full: boolean): {
+    deleted: string[]
+    meta: Record<string, { mtimeMs: number; size: number }>
+    touched: string[]
+  }
+}
