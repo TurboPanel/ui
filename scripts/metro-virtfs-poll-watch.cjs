@@ -15,11 +15,6 @@ const path = require('node:path')
 
 const POLL_FS_TYPES = new Set(['9p', 'fuse.virtfs', 'fuse.virtiofs', 'virtiofs'])
 const SKIP_DIR_NAMES = new Set([
-  '.agents',
-  '.claude',
-  '.expo',
-  '.git',
-  '.local',
   'android',
   'coverage',
   'design-system',
@@ -161,7 +156,8 @@ function needsPollWatch(input) {
  * @param {string} name
  */
 function shouldSkipDirName(name) {
-  return SKIP_DIR_NAMES.has(name)
+  // Every dot-folder is tooling or local state (.git, .expo, nested worktrees).
+  return name.startsWith('.') || SKIP_DIR_NAMES.has(name)
 }
 
 /**
