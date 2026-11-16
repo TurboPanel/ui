@@ -1517,7 +1517,8 @@ export function HostingPanelRow({
   saving: boolean
   disabled: boolean
   onChange: (patch: Partial<HostingEditorState>) => void
-  onSave: () => void
+  /** Told whether the row's names are tunnel-only, so a save never asks for a certificate it cannot get. */
+  onSave: (tunnelOnly: TunnelOnly | null) => void
 }>) {
   const covering = coveringCertificates(tlsOptions, editor.hostnames, editor.www)
   const pinnedGap = pinnedCertificateGap(tlsOptions, editor.tlsId, editor.hostnames, editor.www)
@@ -1674,7 +1675,7 @@ export function HostingPanelRow({
           disabled={disabled}
           error={rowErrorFor(rowError, 'save')}
           savedNote={savedNote}
-          onSave={onSave}
+          onSave={() => onSave(tunnelOnly)}
         />
       ) : null}
 
@@ -2087,7 +2088,7 @@ function EnvironmentHostingSectionPanel({
   publicIps: IpRecord[]
   /** `editorKey` of the row being saved, or null. */
   savingHosting: string | null
-  onSaveHosting: (row: HostingPanelRowDescriptor) => void
+  onSaveHosting: (row: HostingPanelRowDescriptor, tunnelOnly: TunnelOnly | null) => void
   hostingRowActions: HostingRowActions
   focusHostingId: string | null
 }>) {
@@ -2164,7 +2165,7 @@ function EnvironmentHostingSectionPanel({
                       [row.editorKey]: { ...editor, ...patch },
                     }))
                   }
-                  onSave={() => onSaveHosting(row)}
+                  onSave={(tunnelOnly) => onSaveHosting(row, tunnelOnly)}
                 />
               )
             })}
@@ -2367,7 +2368,7 @@ function EnvironmentLoadedPanels({
   tlsLibrary: TlsRecord[]
   publicIps: IpRecord[]
   savingHosting: string | null
-  onSaveHosting: (row: HostingPanelRowDescriptor) => void
+  onSaveHosting: (row: HostingPanelRowDescriptor, tunnelOnly: TunnelOnly | null) => void
   hostingRowActions: HostingRowActions
   containersByService: Record<string, ContainerRecord[]>
   canManage: boolean
@@ -3009,7 +3010,9 @@ export function EnvironmentDetailBody({
     row: HostingPanelRowDescriptor,
     typed: HostingEditorState = hostingEditors[row.editorKey] ?? row.seed,
     onError: (message: string) => void = (message) =>
-      setRowError(row.editorKey, { field: 'save', message })
+      setRowError(row.editorKey, { field: 'save', message }),
+    /** The row's own answer when it has one: list records carry no tunnel paths. */
+    rowTunnelOnly?: TunnelOnly | null
   ): Promise<boolean> => {
     // New names must not keep the old name's certificate pinned.
     const editor = { ...typed, ...stalePinReset(tlsLibrary, typed, row.seed.hostnames) }
@@ -3039,7 +3042,10 @@ export function EnvironmentDetailBody({
       row.hostingId ??
       ('id' in result.value && typeof result.value.id === 'string' ? result.value.id : null)
     const saved = (hostingsByService[service.id] ?? []).find((item) => item.id === savedHostingId)
-    const tunnelOnly = tunnelOnlyOf(hostingCertificateNames(editor), tunnelOnlyLookup, saved)
+    const tunnelOnly =
+      rowTunnelOnly === undefined
+        ? tunnelOnlyOf(hostingCertificateNames(editor), tunnelOnlyLookup, saved)
+        : rowTunnelOnly
     const wantsCertificate = panelSaveAsksLetsEncrypt(editor, tunnelOnly)
     // The hosting is already saved; a refused certificate is said next to its
     // Certificate section (with the fix when there is one), never undone.
@@ -3071,10 +3077,10 @@ export function EnvironmentDetailBody({
     }
   }
 
-  const saveHosting = (row: HostingPanelRowDescriptor) =>
+  const saveHosting = (row: HostingPanelRowDescriptor, tunnelOnly: TunnelOnly | null) =>
     runRowAction(row, async () => {
       if (row.source.kind === 'panel') {
-        await savePanelHostingRow(row)
+        await savePanelHostingRow(row, undefined, undefined, tunnelOnly)
         return
       }
       // Nothing to save until the next deploy has removed it.
@@ -3231,8 +3237,8 @@ export function EnvironmentDetailBody({
           tlsLibrary={tlsLibrary}
           publicIps={publicIps}
           savingHosting={savingHosting}
-          onSaveHosting={(row) => {
-            saveHosting(row).catch((err: unknown) => {
+          onSaveHosting={(row, tunnelOnly) => {
+            saveHosting(row, tunnelOnly).catch((err: unknown) => {
               setRowError(row.editorKey, {
                 field: 'save',
                 message: userErrorMessage(err, 'Could not save this hostname.'),

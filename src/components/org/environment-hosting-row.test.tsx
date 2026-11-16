@@ -157,6 +157,20 @@ describe('HostingPanelRow for a tunnel-only name', () => {
     expect(panelSaveAsksLetsEncrypt(editor, null)).toBe(true)
   })
 
+  it('hands the row\u2019s tunnel-only answer to the save, so it cannot ask Let\u2019s Encrypt', () => {
+    const onSave = vi.fn()
+    tunnel.only = { tunnelNames: ['edge'] }
+    drawRow({ onSave })
+    fireEvent.click(screen.getByText('Save hosting'))
+    expect(onSave).toHaveBeenCalledWith({ tunnelNames: ['edge'] })
+    onSave.mockClear()
+    tunnel.only = null
+    cleanup()
+    drawRow({ onSave })
+    fireEvent.click(screen.getByText('Save hosting'))
+    expect(onSave).toHaveBeenCalledWith(null)
+  })
+
   it('counts the www name of a bare domain as a name to check', () => {
     drawRow({ editor: { ...readHostingEditor([]), hostnames: 'example.com' } })
     expect(tunnel.names).toEqual(['example.com', 'www.example.com'])
