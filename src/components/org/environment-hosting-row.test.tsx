@@ -6,8 +6,17 @@ import { normalizeCompose } from '@/lib/compose'
 import { PENDING_REMOVAL_CERTIFICATE_HINT, pendingRemovalNote } from '@/lib/hosting-plain-words'
 import type { HostingRecord } from '@/lib/instance-api'
 
-const tunnel = vi.hoisted(() => ({ only: null as { tunnelNames: string[] } | null }))
-vi.mock('@/lib/queries/tunnel-only', () => ({ useHostingTunnelOnly: () => tunnel.only }))
+const tunnel = vi.hoisted(() => ({
+  only: null as { tunnelNames: string[] } | null,
+  names: [] as readonly string[],
+}))
+vi.mock('@/lib/queries/tunnel-only', () => ({
+  useHostingTunnelOnly: (_org: string, _hosting: string | null, names: readonly string[]) => {
+    tunnel.names = names
+    return tunnel.only
+  },
+  useTunnelOnlyNames: () => new Map<string, string>(),
+}))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
@@ -85,6 +94,7 @@ vi.mock('@/components/ui', () => ({
 import {
   buildHostingPanelRows,
   HostingPanelRow,
+  panelSaveAsksLetsEncrypt,
   readHostingEditor,
 } from './environment-detail-section'
 import { useSyncedEditors } from './use-synced-editors'
@@ -131,20 +141,38 @@ describe('HostingPanelRow for a tunnel-only name', () => {
     })
     expect(screen.getByText(/testing\.example · Tunnel only · Internal certificate/)).toBeTruthy()
     expect(screen.getByText('Internal certificate')).toBeTruthy()
-    expect(screen.getByText('Tunnel only')).toBeTruthy()
+    expect(screen.getByText('Tunnel Only')).toBeTruthy()
     expect(screen.queryByText(/Self-signed/)).toBeNull()
     expect(screen.queryByText(/Get a free Let’s Encrypt/)).toBeNull()
     expect(screen.queryByText('Public IP')).toBeNull()
   })
 
-  it('turns off a Let\u2019s Encrypt request the box had switched on', () => {
-    tunnel.only = { tunnelNames: ['edge'] }
+  it('does not request Let\u2019s Encrypt on save for a tunnel-only name, and leaves the box alone', () => {
     const onChange = vi.fn()
+    const editor = { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true }
+    tunnel.only = { tunnelNames: ['edge'] }
+    drawRow({ onChange, editor })
+    expect(onChange).not.toHaveBeenCalled()
+    expect(panelSaveAsksLetsEncrypt(editor, tunnel.only)).toBe(false)
+    expect(panelSaveAsksLetsEncrypt(editor, null)).toBe(true)
+  })
+
+  it('counts the www name of a bare domain as a name to check', () => {
+    drawRow({ editor: { ...readHostingEditor([]), hostnames: 'example.com' } })
+    expect(tunnel.names).toEqual(['example.com', 'www.example.com'])
+    cleanup()
+    drawRow({ editor: { ...readHostingEditor([]), hostnames: 'example.com', www: 'off' } })
+    expect(tunnel.names).toEqual(['example.com'])
+  })
+
+  it('keeps showing a pinned certificate and its picker', () => {
+    tunnel.only = { tunnelNames: ['edge'] }
     drawRow({
-      onChange,
-      editor: { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true },
+      editor: { ...readHostingEditor([]), hostnames: 'testing.example', tlsId: 'cert-1' },
     })
-    expect(onChange).toHaveBeenCalledWith({ getLetsEncrypt: false })
+    expect(screen.queryByText('Internal certificate')).toBeNull()
+    expect(screen.getByText('Certificate')).toBeTruthy()
+    expect(screen.getByText('Tunnel Only')).toBeTruthy()
   })
 })
 

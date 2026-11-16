@@ -18,7 +18,7 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ListGroup, ListRow, PageTitle, SectionHeading } from '@/components/ui/v4'
-import { readHostingHostname } from '@/lib/compose/hosting-extension'
+import { readHostingHostname, wwwSiblingHostname } from '@/lib/compose/hosting-extension'
 import { tunnelOnlyOf } from '@/lib/hosting-tunnel'
 import type { ComposeDocument, OrgServerRecord } from '@/lib/instance-api'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
@@ -124,7 +124,11 @@ export function EnvironmentSetupForm({
   const { openEnvironmentSectionByDefault } = useOrgProjectFormDefaults(orgId)
   // A name a tunnel already carries gets the internal certificate: no request, no warning.
   const tunnelNames = useTunnelOnlyNames(orgId)
-  const tunnelOnly = tunnelOnlyOf([readHostingHostname(hostname) ?? ''], tunnelNames) !== null
+  const typedName = readHostingHostname(hostname)
+  // The www name counts too when the switch is on: the control plane needs every name locked.
+  const wwwName = alsoWww && typedName ? wwwSiblingHostname(typedName) : null
+  const tunnelOnly =
+    tunnelOnlyOf([typedName ?? '', ...(wwwName ? [wwwName] : [])], tunnelNames) !== null
   const certificateNote = setupCertificateNote({
     hostname,
     acmeEnabled,

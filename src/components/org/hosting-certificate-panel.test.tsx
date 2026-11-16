@@ -308,4 +308,18 @@ describe('a tunnel-only name', () => {
     renderPanel({}, { tunnelNames: ['other'] })
     expect(screen.getByText('Tunnel only · other.')).toBeTruthy()
   })
+
+  it('counts the www name a bare domain also answers on', () => {
+    state.options = { hostnames: ['example.com'], www: 'www-to-root' }
+    state.tunnels = [{ hostname: 'example.com', tunnelName: 'edge-1', tunnelOnly: true }]
+    renderPanel()
+    expect(screen.queryByText('Tunnel only · edge-1.')).toBeNull()
+    cleanup()
+    state.tunnels = [
+      { hostname: 'example.com', tunnelName: 'edge-1', tunnelOnly: true },
+      { hostname: 'www.example.com', tunnelName: 'edge-1', tunnelOnly: true },
+    ]
+    renderPanel()
+    expect(screen.getByText('Tunnel only · edge-1.')).toBeTruthy()
+  })
 })

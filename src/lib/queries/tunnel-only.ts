@@ -1,9 +1,8 @@
 import { useQueries } from '@tanstack/react-query'
 import { tunnelOnlyOf, type TunnelOnly } from '@/lib/hosting-tunnel'
-import { fetchTunnelHostnames } from '@/lib/instance-api'
 import { useHostingCertificate } from '@/lib/queries/hosting-certificate'
-import { useTunnels } from '@/lib/queries/tunnel-routes'
-import { queryKeys, useCan } from '@/lib/query-client'
+import { tunnelHostnamesOptions, useTunnels } from '@/lib/queries/tunnel-routes'
+import { useCan } from '@/lib/query-client'
 
 /**
  * Names the organization's tunnels carry as tunnel-only (lock on), lower case,
@@ -16,10 +15,8 @@ export function useTunnelOnlyNames(orgId: string): ReadonlyMap<string, string> {
   const tunnels = useTunnels(orgId, { enabled: canManage }).data?.tunnels ?? []
   const lists = useQueries({
     queries: tunnels.map((tunnel) => ({
-      queryKey: queryKeys.org(orgId).tunnelHostnames(tunnel.id),
-      queryFn: () => fetchTunnelHostnames(orgId, tunnel.id),
+      ...tunnelHostnamesOptions(orgId, tunnel.id),
       enabled: canManage,
-      refetchInterval: 30_000,
     })),
   })
   const names = new Map<string, string>()

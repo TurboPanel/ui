@@ -45,16 +45,23 @@ export function useTunnels(orgId: string, options?: Readonly<{ enabled?: boolean
   })
 }
 
+/** One tunnel's hostnames; shared so every reader polls and caches them the same way. */
+export function tunnelHostnamesOptions(orgId: string, tunnelId: string) {
+  return {
+    queryKey: queryKeys.org(orgId).tunnelHostnames(tunnelId),
+    queryFn: () => fetchTunnelHostnames(orgId, tunnelId),
+    refetchInterval: 30_000,
+  }
+}
+
 export function useTunnelHostnames(
   orgId: string,
   tunnelId: string,
   options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).tunnelHostnames(tunnelId),
-    queryFn: () => fetchTunnelHostnames(orgId, tunnelId),
+    ...tunnelHostnamesOptions(orgId, tunnelId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && tunnelId.length > 0,
-    refetchInterval: 30_000,
   })
 }
 

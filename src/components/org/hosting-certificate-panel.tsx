@@ -24,6 +24,7 @@ import {
   useUseLetsEncrypt,
 } from '@/lib/queries/hosting-certificate'
 import { isComposeAutomaticTlsHosting } from '@/lib/hosting-compose-owner'
+import { readWwwMode, wwwCertificateNames } from '@/lib/hosting-www'
 import { tunnelOnlyCertificateView, tunnelOnlyOf, type TunnelOnly } from '@/lib/hosting-tunnel'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
@@ -249,7 +250,13 @@ export function HostingCertificatePanel({
   const hosting = query.data?.hosting
   const certificate = hosting?.certificate ?? null
   // undefined: no row told us, read the saved hosting; null: the row says it is not tunnel-only.
-  const savedTunnel = hosting ? tunnelOnlyOf(hostingHostnames(hosting), new Map(), hosting) : null
+  const savedTunnel = hosting
+    ? tunnelOnlyOf(
+        wwwCertificateNames(hostingHostnames(hosting), readWwwMode(hosting.options)),
+        new Map(),
+        hosting
+      )
+    : null
   const tunnel = tunnelOnly === undefined ? savedTunnel : tunnelOnly
   const composeAutomatic = isComposeAutomaticTlsHosting(hosting?.metadata)
   const note = tunnel ? null : composeNote(composeOwned, composeAutomatic)

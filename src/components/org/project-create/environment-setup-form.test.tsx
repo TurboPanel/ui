@@ -378,7 +378,10 @@ describe('EnvironmentSetupForm', () => {
 
   it('describes a name a tunnel carries and asks for no certificate', () => {
     state.acmeEnabled = true
-    state.tunnelNames = new Map([['example.com', 'edge']])
+    state.tunnelNames = new Map([
+      ['example.com', 'edge'],
+      ['www.example.com', 'edge'],
+    ])
     const props = renderForm()
     fireEvent.change(screen.getByLabelText('Visitors reach it at'), {
       target: { value: 'example.com' },
@@ -391,6 +394,16 @@ describe('EnvironmentSetupForm', () => {
     expect(readComposeHostingEntries(result.compose as ComposeDocument, 'web')).toEqual([
       { hostname: 'example.com', www: 'www-to-root' },
     ])
+  })
+
+  it('keeps the normal certificate note while the www name is not on a tunnel', () => {
+    state.acmeEnabled = true
+    state.tunnelNames = new Map([['example.com', 'edge']])
+    renderForm()
+    fireEvent.change(screen.getByLabelText('Visitors reach it at'), {
+      target: { value: 'example.com' },
+    })
+    expect(screen.queryByText(/reached only through a tunnel, so it uses the internal/)).toBeNull()
   })
 
   it('says Let\u2019s Encrypt is off and links the setting', () => {
