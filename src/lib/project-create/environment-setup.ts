@@ -24,6 +24,7 @@ import { isPrincipalAlias, readServiceTurbopanelExtension } from '@/lib/compose/
 import type { ComposeDocument, CreateVariableBody, OrgServerRecord } from '@/lib/instance-api'
 import { validateEnvironmentName } from '@/lib/environment-validation'
 import { defaultWwwMode, wwwResultLines } from '@/lib/hosting-www'
+import { TUNNEL_ONLY_SETUP_NOTE } from '@/lib/hosting-tunnel'
 import { isLoopbackOrPrivateHostname } from '@/lib/install-tls'
 import { variableUseFlags, type VariableUse } from '@/lib/v4/config-edits'
 
@@ -186,8 +187,16 @@ export type SetupCertificateNote = Readonly<{ text: string; openSettings: boolea
  * setting could not be read (`acmeEnabled` null).
  */
 export function setupCertificateNote(
-  input: Readonly<{ hostname: string; acmeEnabled: boolean | null; tlsChosen: boolean }>
+  input: Readonly<{
+    hostname: string
+    acmeEnabled: boolean | null
+    tlsChosen: boolean
+    /** A tunnel already carries the name and only the tunnel reaches it. */
+    tunnelOnly?: boolean
+  }>
 ): SetupCertificateNote | null {
+  // The internal certificate, whatever the organization setting says: nothing is requested.
+  if (input.tunnelOnly === true) return { text: TUNNEL_ONLY_SETUP_NOTE, openSettings: false }
   if (input.acmeEnabled === null || input.tlsChosen) return null
   if (!letsEncryptCanIssueFor(input.hostname)) return null
   if (input.acmeEnabled) {

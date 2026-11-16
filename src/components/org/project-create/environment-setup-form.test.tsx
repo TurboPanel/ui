@@ -12,7 +12,9 @@ const state = vi.hoisted(() => ({
   acmeEnabled: null as boolean | null,
   openEnvironmentSectionByDefault: false,
   push: vi.fn(),
+  tunnelNames: new Map<string, string>(),
 }))
+vi.mock('@/lib/queries/tunnel-only', () => ({ useTunnelOnlyNames: () => state.tunnelNames }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('expo-router', () => ({ useRouter: () => ({ push: state.push }) }))
@@ -194,6 +196,7 @@ vi.mock('@/components/ui/v4', () => ({
 afterEach(() => {
   cleanup()
   state.acmeEnabled = null
+  state.tunnelNames = new Map()
   state.openEnvironmentSectionByDefault = false
   state.push.mockReset()
 })
@@ -370,6 +373,23 @@ describe('EnvironmentSetupForm', () => {
     const [result] = lastResult(props)
     expect(readComposeHostingEntries(result.compose as ComposeDocument, 'web')).toEqual([
       { hostname: 'example.com', www: 'www-to-root', tls: { mode: 'automatic' } },
+    ])
+  })
+
+  it('describes a name a tunnel carries and asks for no certificate', () => {
+    state.acmeEnabled = true
+    state.tunnelNames = new Map([['example.com', 'edge']])
+    const props = renderForm()
+    fireEvent.change(screen.getByLabelText('Visitors reach it at'), {
+      target: { value: 'example.com' },
+    })
+    expect(screen.getByText(/reached only through a tunnel, so it uses the internal/)).toBeTruthy()
+    expect(screen.queryByText(/Gets a free Let\u2019s Encrypt certificate/)).toBeNull()
+    expect(screen.queryByText(/Point the name's DNS at the server/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Deploy production' }))
+    const [result] = lastResult(props)
+    expect(readComposeHostingEntries(result.compose as ComposeDocument, 'web')).toEqual([
+      { hostname: 'example.com', www: 'www-to-root' },
     ])
   })
 

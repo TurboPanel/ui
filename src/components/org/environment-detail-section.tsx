@@ -150,6 +150,15 @@ import {
   SHARED_FILE_HOSTNAME_MESSAGE,
 } from '@/lib/hosting-plain-words'
 import {
+  INTERNAL_CERTIFICATE_LABEL,
+  TUNNEL_ONLY_BIND_TEXT,
+  TUNNEL_ONLY_CERTIFICATE_HINT,
+  TUNNEL_ONLY_LABEL,
+  TUNNEL_ONLY_SUMMARY,
+  type TunnelOnly,
+} from '@/lib/hosting-tunnel'
+import { useHostingTunnelOnly } from '@/lib/queries/tunnel-only'
+import {
   composeRowsAwaitingRemoval,
   configuredHostingState,
   findPanelRowForRoute,
@@ -884,7 +893,20 @@ const HOSTING_BIND_LABELS: Record<HostingBind, string> = {
 }
 
 /** One-line collapsed summary: hostnames/ports + port + TLS mode + bind. */
-function hostingRowSummary(editor: HostingEditorState, tlsOptions: TlsRecord[]): string {
+function hostingRowSummary(
+  editor: HostingEditorState,
+  tlsOptions: TlsRecord[],
+  tunnelOnly: TunnelOnly | null
+): string {
+  if (tunnelOnly && editor.protocol === 'http') {
+    return [
+      editor.hostnames.trim() || 'no hostnames',
+      editor.targetPort.trim() ? `port ${editor.targetPort.trim()}` : null,
+      TUNNEL_ONLY_SUMMARY,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
   const bindLabel = HOSTING_BIND_LABELS[editor.bind]
   if (editor.protocol !== 'http') {
     return [
@@ -1048,10 +1070,13 @@ function HostingTlsPicker({
   covering,
   pinnedGap,
   locked,
+  tunnelOnly,
   onChange,
 }: Readonly<{
   isHttp: boolean
   composeOwned: boolean
+  /** Reached only through a tunnel: the internal certificate, nothing to pick or request. */
+  tunnelOnly: TunnelOnly | null
   /** Waiting for the next deploy to remove it: no Save, so no Let’s Encrypt box. */
   awaitingRemoval: boolean
   editor: HostingEditorState
@@ -1062,6 +1087,15 @@ function HostingTlsPicker({
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
   if (!isHttp) return null
+  if (tunnelOnly) {
+    return (
+      <>
+        <Text style={styles.tlsLabel}>Certificate</Text>
+        <Text style={styles.tlsHint}>{TUNNEL_ONLY_CERTIFICATE_HINT}</Text>
+        <Text style={styles.wwwResult}>{`Certificate: ${INTERNAL_CERTIFICATE_LABEL}`}</Text>
+      </>
+    )
+  }
   const chips = pinnedGap ? [...covering, pinnedGap.row] : covering
   const picked = resolveCertificateRef(editor.tlsId ?? undefined, chips)
   const letsEncryptBoxShown =
@@ -1111,12 +1145,23 @@ function HostingTlsPicker({
 function HostingBindPicker({
   editor,
   locked,
+  tunnelOnly,
   onChange,
 }: Readonly<{
   editor: HostingEditorState
   locked: boolean
+  tunnelOnly: TunnelOnly | null
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
+  if (tunnelOnly && editor.protocol === 'http') {
+    return (
+      <>
+        <Text style={styles.tlsLabel}>Bind</Text>
+        <Text style={styles.tlsHint}>{TUNNEL_ONLY_BIND_TEXT}</Text>
+        <Text style={styles.wwwResult}>{`Bind: ${TUNNEL_ONLY_LABEL}`}</Text>
+      </>
+    )
+  }
   return (
     <>
       <Text style={styles.tlsLabel}>Bind</Text>
@@ -1461,6 +1506,11 @@ export function HostingPanelRow({
 }>) {
   const covering = coveringCertificates(tlsOptions, editor.hostnames, editor.www)
   const pinnedGap = pinnedCertificateGap(tlsOptions, editor.tlsId, editor.hostnames, editor.www)
+  const tunnelOnly = useHostingTunnelOnly(orgId, hostingId, parseHostnameList(editor.hostnames))
+  // A tunnel-only name never asks for a public certificate: undo the box's default.
+  useEffect(() => {
+    if (tunnelOnly && editor.getLetsEncrypt) onChange({ getLetsEncrypt: false })
+  }, [tunnelOnly, editor.getLetsEncrypt, onChange])
 
   const composeOwned = composeRoute !== null
   const targetPortAuthorable = hostingTargetPortAuthorable(composeServiceKindOf(serviceContext))
@@ -1496,7 +1546,7 @@ export function HostingPanelRow({
           <Text style={styles.serviceKindBadge}>{kindLabel}</Text>
         </View>
         <Text style={styles.hostingSummaryText} numberOfLines={1}>
-          {hostingRowSummary(editor, tlsOptions)}
+          {hostingRowSummary(editor, tlsOptions, tunnelOnly)}
         </Text>
       </View>
       <HeaderChevron size={12} color={colors.textMuted} open={expanded} />
@@ -1557,6 +1607,7 @@ export function HostingPanelRow({
         covering={covering}
         pinnedGap={pinnedGap}
         locked={locked}
+        tunnelOnly={tunnelOnly}
         onChange={onChange}
       />
 
@@ -1565,18 +1616,26 @@ export function HostingPanelRow({
           orgId={orgId}
           hostingId={hostingId}
           composeOwned={composeOwned}
+          tunnelOnly={tunnelOnly}
           disabled={frozen}
         />
       ) : null}
 
-      <HostingBindPicker editor={editor} locked={locked} onChange={onChange} />
-
-      <HostingPublicIpPicker
+      <HostingBindPicker
         editor={editor}
-        publicIps={publicIps}
         locked={locked}
+        tunnelOnly={tunnelOnly}
         onChange={onChange}
       />
+
+      {tunnelOnly ? null : (
+        <HostingPublicIpPicker
+          editor={editor}
+          publicIps={publicIps}
+          locked={locked}
+          onChange={onChange}
+        />
+      )}
 
       <HostingProxyFields
         isHttp={isHttp}
@@ -1592,7 +1651,7 @@ export function HostingPanelRow({
 
       {canSave ? (
         <HostingSaveControls
-          asksLetsEncrypt={!composeOwned && wantsLetsEncrypt(editor)}
+          asksLetsEncrypt={!composeOwned && !tunnelOnly && wantsLetsEncrypt(editor)}
           saving={saving}
           disabled={disabled}
           error={rowErrorFor(rowError, 'save')}

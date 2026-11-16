@@ -6,6 +6,8 @@ import { normalizeCompose } from '@/lib/compose'
 import { PENDING_REMOVAL_CERTIFICATE_HINT, pendingRemovalNote } from '@/lib/hosting-plain-words'
 import type { HostingRecord } from '@/lib/instance-api'
 
+const tunnel = vi.hoisted(() => ({ only: null as { tunnelNames: string[] } | null }))
+vi.mock('@/lib/queries/tunnel-only', () => ({ useHostingTunnelOnly: () => tunnel.only }))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
@@ -116,6 +118,35 @@ function drawRow(props: Partial<Parameters<typeof HostingPanelRow>[0]> = {}) {
     />
   )
 }
+
+describe('HostingPanelRow for a tunnel-only name', () => {
+  afterEach(() => {
+    tunnel.only = null
+  })
+
+  it('shows the internal certificate and never offers a public one', () => {
+    tunnel.only = { tunnelNames: ['edge'] }
+    drawRow({
+      editor: { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true },
+    })
+    expect(screen.getByText(/testing\.example · Tunnel only · Internal certificate/)).toBeTruthy()
+    expect(screen.getByText('Certificate: Internal certificate')).toBeTruthy()
+    expect(screen.getByText('Bind: Tunnel only')).toBeTruthy()
+    expect(screen.queryByText(/Self-signed/)).toBeNull()
+    expect(screen.queryByText(/Get a free Let’s Encrypt/)).toBeNull()
+    expect(screen.queryByText('Public IP')).toBeNull()
+  })
+
+  it('turns off a Let\u2019s Encrypt request the box had switched on', () => {
+    tunnel.only = { tunnelNames: ['edge'] }
+    const onChange = vi.fn()
+    drawRow({
+      onChange,
+      editor: { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true },
+    })
+    expect(onChange).toHaveBeenCalledWith({ getLetsEncrypt: false })
+  })
+})
 
 describe('HostingPanelRow save feedback', () => {
   it('says a missing hostname under the Hostname field', () => {
