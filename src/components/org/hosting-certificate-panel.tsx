@@ -16,6 +16,7 @@ import {
   type CertificateView,
   type LetsEncryptRefusal,
 } from '@/lib/hosting-certificate'
+import { hostingHostnames } from '@/lib/environment-status'
 import type { HostingDnsReport } from '@/lib/instance-api'
 import {
   useHostingCertificate,
@@ -23,6 +24,8 @@ import {
   useUseLetsEncrypt,
 } from '@/lib/queries/hosting-certificate'
 import { isComposeAutomaticTlsHosting } from '@/lib/hosting-compose-owner'
+import { readWwwMode, wwwCertificateNames } from '@/lib/hosting-www'
+import { tunnelOnlyCertificateView, tunnelOnlyOf, type TunnelOnly } from '@/lib/hosting-tunnel'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -231,24 +234,37 @@ export function HostingCertificatePanel({
   hostingId,
   composeOwned,
   disabled,
+  tunnelOnly,
 }: Readonly<{
   orgId: string
   hostingId: string
   composeOwned: boolean
   disabled: boolean
+  /** Reached only through a tunnel (from the row); the panel reads the hosting's own paths when absent. */
+  tunnelOnly?: TunnelOnly | null
 }>) {
   const query = useHostingCertificate(orgId, hostingId)
   const letsEncrypt = useUseLetsEncrypt(orgId, hostingId)
   const dnsCheck = useHostingDnsCheck(hostingId)
   const { deploy, refusal, onRefusal } = useScreenCertificateActions(hostingId, letsEncrypt.error)
-  const certificate = query.data?.hosting.certificate ?? null
-  const composeAutomatic = isComposeAutomaticTlsHosting(query.data?.hosting.metadata)
-  const note = composeNote(composeOwned, composeAutomatic)
+  const hosting = query.data?.hosting
+  const certificate = hosting?.certificate ?? null
+  // undefined: no row told us, read the saved hosting; null: the row says it is not tunnel-only.
+  const savedTunnel = hosting
+    ? tunnelOnlyOf(
+        wwwCertificateNames(hostingHostnames(hosting), readWwwMode(hosting.options)),
+        new Map(),
+        hosting
+      )
+    : null
+  const tunnel = tunnelOnly === undefined ? savedTunnel : tunnelOnly
+  const composeAutomatic = isComposeAutomaticTlsHosting(hosting?.metadata)
+  const note = tunnel ? null : composeNote(composeOwned, composeAutomatic)
   if (!certificate) {
     return refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null
   }
 
-  const view = describeCertificate(certificate)
+  const view = tunnel ? tunnelOnlyCertificateView(tunnel) : describeCertificate(certificate)
   const dnsError = dnsCheck.error ? userErrorMessage(dnsCheck.error, 'Could not check DNS.') : null
   const dns = dnsCheck.data?.dns ?? null
   const request = () => {

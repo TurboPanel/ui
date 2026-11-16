@@ -403,6 +403,20 @@ describe('setupCompose', () => {
 })
 
 describe('setupCertificateNote', () => {
+  it('describes a tunnel-only name whatever the organization setting says', () => {
+    for (const acmeEnabled of [true, false, null]) {
+      const note = setupCertificateNote({
+        hostname: 'example.com',
+        acmeEnabled,
+        tlsChosen: false,
+        tunnelOnly: true,
+      })
+      expect(note?.openSettings).toBe(false)
+      expect(note?.text).toContain('internal certificate')
+      expect(note?.text).not.toContain('warn')
+    }
+  })
+
   it('says the certificate is free when the organization allows it', () => {
     expect(
       setupCertificateNote({ hostname: 'example.com', acmeEnabled: true, tlsChosen: false })

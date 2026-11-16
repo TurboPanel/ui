@@ -13,6 +13,8 @@ import {
 const state = vi.hoisted(() => ({
   certificate: null as unknown,
   metadata: null as unknown,
+  options: undefined as unknown,
+  tunnels: undefined as unknown,
   requestError: null as unknown,
   lifecycle: null as unknown,
   push: vi.fn(),
@@ -28,7 +30,14 @@ vi.mock('@/components/org/project/overview-environments-panel', () => ({
 vi.mock('@/lib/queries/hosting-certificate', () => ({
   useHostingCertificate: () => ({
     data: state.certificate
-      ? { hosting: { certificate: state.certificate, metadata: state.metadata } }
+      ? {
+          hosting: {
+            certificate: state.certificate,
+            metadata: state.metadata,
+            options: state.options,
+            tunnels: state.tunnels,
+          },
+        }
       : undefined,
   }),
   useUseLetsEncrypt: () => ({ run: state.run, isPending: false, error: state.requestError }),
@@ -68,10 +77,19 @@ function cert(overrides: Partial<HostingCertificate>): HostingCertificate {
   } as HostingCertificate
 }
 
-function renderPanel(actions: HostingCertificateActions = {}) {
+function renderPanel(
+  actions: HostingCertificateActions = {},
+  tunnelOnly?: { tunnelNames: string[] } | null
+) {
   return render(
     <HostingCertificateActionsContext.Provider value={actions}>
-      <HostingCertificatePanel orgId="o1" hostingId="h1" composeOwned={false} disabled={false} />
+      <HostingCertificatePanel
+        orgId="o1"
+        hostingId="h1"
+        composeOwned={false}
+        disabled={false}
+        tunnelOnly={tunnelOnly}
+      />
     </HostingCertificateActionsContext.Provider>
   )
 }
@@ -85,6 +103,8 @@ const OFF = {
 beforeEach(() => {
   state.certificate = cert({})
   state.metadata = null
+  state.options = undefined
+  state.tunnels = undefined
   state.requestError = null
   state.lifecycle = null
 })
@@ -265,5 +285,41 @@ describe('environmentDeployShortcut', () => {
     expect(environmentDeployShortcut(model({ hasServer: false }))?.disabled).toBe(true)
     expect(environmentDeployShortcut(model({ needsPrincipal: true }))?.disabled).toBe(true)
     expect(environmentDeployShortcut(model({}))?.disabled).toBe(false)
+  })
+})
+
+describe('a tunnel-only name', () => {
+  beforeEach(() => {
+    state.options = { hostnames: ['a.example'] }
+    state.tunnels = [{ hostname: 'a.example', tunnelName: 'edge-1', tunnelOnly: true }]
+  })
+
+  it('shows the internal certificate when no row says otherwise', () => {
+    renderPanel()
+    expect(screen.getByText('Tunnel only · edge-1.')).toBeTruthy()
+  })
+
+  it('shows the normal certificate when the row says it is not tunnel-only', () => {
+    renderPanel({}, null)
+    expect(screen.queryByText('Tunnel only · edge-1.')).toBeNull()
+  })
+
+  it('shows the row’s own tunnel-only answer', () => {
+    renderPanel({}, { tunnelNames: ['other'] })
+    expect(screen.getByText('Tunnel only · other.')).toBeTruthy()
+  })
+
+  it('counts the www name a bare domain also answers on', () => {
+    state.options = { hostnames: ['example.com'], www: 'www-to-root' }
+    state.tunnels = [{ hostname: 'example.com', tunnelName: 'edge-1', tunnelOnly: true }]
+    renderPanel()
+    expect(screen.queryByText('Tunnel only · edge-1.')).toBeNull()
+    cleanup()
+    state.tunnels = [
+      { hostname: 'example.com', tunnelName: 'edge-1', tunnelOnly: true },
+      { hostname: 'www.example.com', tunnelName: 'edge-1', tunnelOnly: true },
+    ]
+    renderPanel()
+    expect(screen.getByText('Tunnel only · edge-1.')).toBeTruthy()
   })
 })
