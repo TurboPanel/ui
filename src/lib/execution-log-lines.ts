@@ -60,6 +60,7 @@ const DOCKER_PROGRESS_STATUSES = [
   'Downloading',
   'Restarting',
   'Recreating',
+  'Recreate',
   'Extracting',
   'Recreated',
   'Uploading',
