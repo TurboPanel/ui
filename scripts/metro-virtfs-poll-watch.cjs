@@ -38,15 +38,18 @@ const ROOT_WATCH_FILES = [
 ]
 const DEFAULT_POLL_MS = 400
 /**
- * Every Nth tick is a full sweep that stats every watched file. Ticks in
- * between only stat folders and re-read the ones whose mtime changed. An
- * in-place edit does not change the folder mtime, so it is noticed by the next
- * full sweep: at most pollMs * fullEvery (default 400 ms * 5 = 2 s). New,
- * deleted and renamed-over files (atomic editor saves) change the folder mtime
- * and are noticed within one pollMs. TURBOPANEL_METRO_POLL_FULL_EVERY=1 stats
- * every file on every tick (the old behaviour).
+ * Every Nth tick is a full sweep that re-reads every known folder and stats
+ * every watched file. Ticks in between only stat folders and re-read the ones
+ * whose mtime changed. An in-place edit does not change the folder mtime, so it
+ * is noticed by the next full sweep: at most pollMs * fullEvery (default
+ * 400 ms * 3 = 1.2 s). New, deleted and renamed-over files (atomic editor
+ * saves) change the folder mtime and are noticed within one pollMs; a create
+ * that lands in the same timestamp tick as an earlier readdir (mtime
+ * unchanged) is caught by the full sweep's re-read.
+ * TURBOPANEL_METRO_POLL_FULL_EVERY=1 stats every file on every tick (the old
+ * behaviour).
  */
-const DEFAULT_FULL_EVERY = 5
+const DEFAULT_FULL_EVERY = 3
 /** Packages Metro/Expo actually instantiate — none are direct deps of this app. */
 const WATCHER_SPECS = [
   {
@@ -199,7 +202,8 @@ function collectSnapshotChanges(previous, current) {
 /**
  * Incremental scanner. Keeps the folder tree and per-file stats between ticks.
  * `scan(full)` stats every known folder (cheap), re-reads and re-stats only the
- * folders whose mtime/ctime moved, and stats every file only when `full`.
+ * folders whose mtime/ctime moved, and on `full` also re-reads every folder and
+ * stats every file.
  *
  * @param {string} projectRoot
  * @param {Pick<typeof fs, 'readdirSync' | 'statSync'>} fsApi
@@ -277,7 +281,7 @@ function createPollScanner(projectRoot, fsApi) {
       return
     }
     let state = dirs.get(abs)
-    if (!state || state.mtimeMs !== stat.mtimeMs || state.ctimeMs !== stat.ctimeMs) {
+    if (full || !state || state.mtimeMs !== stat.mtimeMs || state.ctimeMs !== stat.ctimeMs) {
       let entries
       try {
         entries = fsApi.readdirSync(abs, { withFileTypes: true })
@@ -316,10 +320,6 @@ function createPollScanner(projectRoot, fsApi) {
       dirs.set(abs, state)
       // A rename-over (atomic save) keeps the name, so re-stat every file.
       for (const file of nextFiles) {
-        refreshFile(file)
-      }
-    } else if (full) {
-      for (const file of state.files) {
         refreshFile(file)
       }
     }
@@ -634,6 +634,7 @@ function installMetroPollWatch(projectRoot, options = {}) {
 module.exports = {
   DEFAULT_FULL_EVERY,
   POLL_FS_TYPES,
+  ROOT_WATCH_FILES,
   WATCHER_SPECS,
   collectSnapshotChanges,
   createPollScanner,

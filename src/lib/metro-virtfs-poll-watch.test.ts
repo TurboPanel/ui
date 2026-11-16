@@ -13,6 +13,7 @@ import {
   isPollFsType,
   isWatchedFileName,
   needsPollWatch,
+  ROOT_WATCH_FILES,
   shouldSkipDirName,
   watcherCoversProject,
   WATCHER_SPECS,
@@ -245,9 +246,9 @@ describe('createPollScanner', () => {
     const { calls, scanner } = setup()
     calls.stat = 0
     expect(scanner.scan(false)).toMatchObject({ deleted: [], touched: [] })
-    // 3 folders (src, src/a, src/a/deep; .claude skipped) + 6 root-file probes.
+    // 3 folders (src, src/a, src/a/deep; .claude skipped) + the root-file probes.
     const light = calls.stat
-    expect(light).toBe(3 + 6)
+    expect(light).toBe(3 + ROOT_WATCH_FILES.length)
     expect(calls.readdir).toBe(3) // baseline only
     calls.stat = 0
     scanner.scan(true)
@@ -278,6 +279,29 @@ describe('createPollScanner', () => {
     bump(join(root, 'src'), 6)
     const removed = scanner.scan(false)
     expect(removed.deleted).toEqual(['src/a/deep/new.ts', 'src/b/fresh.ts'])
+  })
+
+  it('catches a create that left the folder mtime unchanged on the next full sweep', () => {
+    // utimes would bump ctime, so freeze the folder's reported stat instead: this
+    // is what a create in the same timestamp tick as the last readdir looks like.
+    setup()
+    const dir = join(root, 'src/a')
+    const frozen = fs.statSync(dir)
+    const pinned = {
+      readdirSync: fs.readdirSync,
+      statSync: ((p: string, ...rest: unknown[]) =>
+        p === dir
+          ? frozen
+          : (fs.statSync as (...a: unknown[]) => unknown)(p, ...rest)) as typeof fs.statSync,
+    }
+    const pinnedScanner = createPollScanner(root, pinned)
+    pinnedScanner.scan(true)
+    fs.writeFileSync(join(dir, 'late.ts'), 'late')
+    expect(pinnedScanner.scan(false).touched).toEqual([])
+    expect(pinnedScanner.scan(true).touched).toEqual(['src/a/late.ts'])
+    fs.rmSync(join(dir, 'late.ts'))
+    expect(pinnedScanner.scan(false).deleted).toEqual([])
+    expect(pinnedScanner.scan(true).deleted).toEqual(['src/a/late.ts'])
   })
 
   it('detects an atomic rename-over save on a light tick', () => {
