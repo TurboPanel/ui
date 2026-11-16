@@ -20,6 +20,7 @@ import {
   stepNodeInfo,
   stepCounts,
   stepPosition,
+  stepTimeText,
   stepTitle,
   healthStepNote,
   stepsOf,
@@ -522,5 +523,55 @@ describe('healthStepNote', () => {
     expect(healthStepNote([health('running', 'Attempt 2, 4 s of up to 120 s')])).toBeNull()
     expect(healthStepNote([health('done')])).toBeNull()
     expect(healthStepNote(null)).toBeNull()
+  })
+})
+
+describe('stepTimeText', () => {
+  const NOW = Date.parse('2026-10-12T10:05:00Z')
+
+  it('counts a running step up to now and keeps start to finish on a finished one', () => {
+    expect(
+      stepTimeText(step('build', 'Build', 'running', { startedAt: '2026-10-12T10:03:48Z' }), NOW)
+    ).toBe('01:12')
+    expect(
+      stepTimeText(
+        step('build', 'Build', 'done', {
+          startedAt: '2026-10-12T10:00:00Z',
+          finishedAt: '2026-10-12T10:01:12Z',
+        }),
+        NOW
+      )
+    ).toBe('01:12')
+    expect(
+      stepTimeText(
+        step('start', 'Start', 'failed', {
+          startedAt: '2026-10-12T10:00:00Z',
+          finishedAt: '2026-10-12T10:00:09Z',
+        }),
+        NOW
+      )
+    ).toBe('00:09')
+  })
+
+  it('shows nothing for steps that did not run or lack times', () => {
+    const times = { startedAt: '2026-10-12T10:00:00Z', finishedAt: '2026-10-12T10:01:00Z' }
+    expect(stepTimeText(step('a', 'A', 'ready'), NOW)).toBeNull()
+    expect(stepTimeText(step('a', 'A', 'ready', times), NOW)).toBeNull()
+    expect(stepTimeText(step('a', 'A', 'pending'), NOW)).toBeNull()
+    expect(stepTimeText(step('a', 'A', 'skipped', times), NOW)).toBeNull()
+    expect(stepTimeText(step('a', 'A', 'running'), NOW)).toBeNull()
+    expect(stepTimeText(step('a', 'A', 'done'), NOW)).toBeNull()
+    expect(stepTimeText(step('a', 'A', 'done', { startedAt: times.startedAt }), NOW)).toBeNull()
+    expect(stepTimeText(step('a', 'A', 'failed', { finishedAt: times.finishedAt }), NOW)).toBeNull()
+    expect(
+      stepTimeText(step('a', 'A', 'done', { startedAt: 'nope', finishedAt: times.finishedAt }), NOW)
+    ).toBeNull()
+  })
+
+  it('adds the time to the spoken label', () => {
+    const steps = [step('build', 'Build', 'done')]
+    expect(stepAccessibilityLabel(steps, steps[0]!, '01:12')).toBe(
+      'Step 1 of 1, Build, done, 01:12'
+    )
   })
 })

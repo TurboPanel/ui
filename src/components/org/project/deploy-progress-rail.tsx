@@ -14,20 +14,19 @@ import { StepRail } from '@/components/ui/v4/step-rail'
 import { typeStyle } from '@/components/ui/v4/type-styles'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import {
-  elapsedSeconds,
   CHECKING_WITH_SERVER_LABEL,
   CHECKING_WITH_SERVER_TEXT,
   certificateStepNote,
   firstTimeSetupCaption,
   healthStepNote,
   isCheckingWithServer,
-  formatElapsed,
   progressCounterText,
   progressSummary,
   stepAccessibilityLabel,
   stepCountText,
   stepTitle,
   stepsOf,
+  stepTimeText,
   type ProgressSummary,
 } from '@/lib/deploy-progress'
 import type { CommandProgress, CommandProgressStep } from '@/lib/instance-api'
@@ -46,13 +45,17 @@ const RAIL_STATES: ReadonlySet<string> = new Set([
  * The plan as rail steps: the title-case label, the position the control
  * plane counts (a step already on the server has none) and the spoken name.
  */
-function railSteps(steps: readonly CommandProgressStep[]): StepRailItem[] {
-  return steps.map((step) => ({
-    id: step.id,
-    label: stepTitle(step.label),
-    state: (RAIL_STATES.has(step.state) ? step.state : 'pending') as StepRailState,
-    accessibilityLabel: stepAccessibilityLabel(steps, step),
-  }))
+function railSteps(steps: readonly CommandProgressStep[], now: number): StepRailItem[] {
+  return steps.map((step) => {
+    const time = stepTimeText(step, now)
+    return {
+      id: step.id,
+      label: stepTitle(step.label),
+      state: (RAIL_STATES.has(step.state) ? step.state : 'pending') as StepRailState,
+      accessibilityLabel: stepAccessibilityLabel(steps, step, time),
+      time,
+    }
+  })
 }
 
 const GLYPH = 8
@@ -145,11 +148,10 @@ function counterStyle(s: Sheet, phase: ProgressSummary['phase']): TextStyle[] {
 }
 
 /**
- * `mm:ss` since the running step started. The clock is seeded when a step
- * starts and ticks once a second only while a step with a start time runs.
+ * The clock for step times: seeded when a step with a start time starts
+ * running and ticking once a second only while one runs.
  */
-function useRunningElapsed(startedAt: string | undefined, running: boolean): string | null {
-  const ticking = running && Boolean(startedAt)
+function useStepClock(ticking: boolean, startedAt: string | undefined): number {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -159,9 +161,7 @@ function useRunningElapsed(startedAt: string | undefined, running: boolean): str
     return () => clearInterval(id)
   }, [ticking, startedAt])
 
-  if (!ticking) return null
-  const seconds = elapsedSeconds(startedAt, now)
-  return seconds == null ? null : formatElapsed(seconds)
+  return now
 }
 
 /**
@@ -182,7 +182,8 @@ export function DeployProgressRail({
   const steps = stepsOf(progress)
   const summary = progressSummary(progress)
   const running = summary?.phase === 'running' ? summary.focus : null
-  const elapsed = useRunningElapsed(running?.startedAt, running !== null)
+  const now = useStepClock(running !== null && Boolean(running.startedAt), running?.startedAt)
+  const elapsed = running ? stepTimeText(running, now) : null
   if (!summary) return null
 
   const caption = firstTimeSetupCaption(steps)
@@ -216,7 +217,7 @@ export function DeployProgressRail({
           </View>
         ) : null}
       </View>
-      <StepRail steps={railSteps(steps)} />
+      <StepRail steps={railSteps(steps, now)} />
       {caption ? <Text style={s.caption}>{caption}</Text> : null}
       {certificateNote ? <Text style={s.caption}>{certificateNote}</Text> : null}
       {healthNote ? <Text style={s.caption}>{healthNote}</Text> : null}

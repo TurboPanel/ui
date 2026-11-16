@@ -165,6 +165,26 @@ export function planElapsedSeconds(
   return Math.max(0, Math.floor((last - first) / 1000))
 }
 
+/**
+ * The time a step took, as `mm:ss`, from the server's own start and finish
+ * times; null when it has nothing to say. Only a step that ran has a time: a
+ * running one counts up to `now`, a done or failed one shows start to finish.
+ * A step already on the server, one not started or skipped, and one whose
+ * times are missing or unreadable (the server drops them under its size cap)
+ * show none; nothing is guessed from when this page last heard of the step.
+ */
+export function stepTimeText(step: CommandProgressStep, now: number): string | null {
+  if (step.state === 'running') {
+    const seconds = elapsedSeconds(step.startedAt, now)
+    return seconds == null ? null : formatElapsed(seconds)
+  }
+  if (step.state !== 'done' && step.state !== 'failed') return null
+  const started = step.startedAt ? Date.parse(step.startedAt) : Number.NaN
+  const finished = step.finishedAt ? Date.parse(step.finishedAt) : Number.NaN
+  if (Number.isNaN(started) || Number.isNaN(finished)) return null
+  return formatElapsed(Math.floor(Math.max(0, finished - started) / 1000))
+}
+
 export type ProgressPhase = 'waiting' | 'running' | 'done' | 'failed' | 'stopped'
 
 export type ProgressSummary = Readonly<{
@@ -361,12 +381,14 @@ export function stepNodeInfo(state: string): StepNodeInfo {
 /** What a screen reader hears for one node: "Step 3 of 7, Install Docker, in progress". */
 export function stepAccessibilityLabel(
   steps: readonly CommandProgressStep[] | null | undefined,
-  step: CommandProgressStep
+  step: CommandProgressStep,
+  time: string | null = null
 ): string {
   const info = stepNodeInfo(step.state)
   const { position, total } = stepCounts(steps, step)
   if (position === 0) return `${stepTitle(step.label)}, ${info.word}`
-  return `${stepCountText(position, total)}, ${stepTitle(step.label)}, ${info.word}`
+  const spoken = `${stepCountText(position, total)}, ${stepTitle(step.label)}, ${info.word}`
+  return time ? `${spoken}, ${time}` : spoken
 }
 
 /**
