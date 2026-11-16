@@ -60,7 +60,11 @@ vi.mock('@/lib/query-client', () => ({
   useCan: () => true,
   queryKeys: { org: () => ({ settings: { tlsSettings: ['tls-settings'] } }) },
 }))
-vi.mock('@/lib/tls-managed-dates', () => ({ tlsDateLines: () => [], tlsStoredCopyLines: () => [] }))
+vi.mock('@/lib/tls-managed-dates', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tls-managed-dates')>()),
+  tlsDateLines: () => [],
+  tlsStoredCopyLines: () => [],
+}))
 
 const certificate = (id: string, name: string, source = 'lets_encrypt'): TlsRecord =>
   ({
@@ -176,14 +180,14 @@ describe('TlsOverviewSection delete', () => {
         metadata: {
           status: 'ready',
           dnsNames: ['*.example.net', 'example.net'],
-          issuer: 'CN=R11,O=Let’s Encrypt,C=US',
+          issuer: '2.5.4.6=US, O=Let’s Encrypt, CN=YE1',
           notBefore: '2026-10-20T08:00:00.000Z',
           acme: { managedBy: 'panel', challengeType: 'dns-01' },
         },
       } as unknown as TlsRecord,
     ]
     render(<TlsOverviewSection orgId="o1" />)
-    expect(screen.getByText('Issued by CN=R11,O=Let’s Encrypt,C=US')).toBeTruthy()
+    expect(screen.getByText('Issued by Let’s Encrypt (YE1)')).toBeTruthy()
     expect(screen.getByText(/^Valid from /)).toBeTruthy()
   })
 
