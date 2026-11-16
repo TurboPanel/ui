@@ -16,6 +16,7 @@ const path = require('node:path')
 const POLL_FS_TYPES = new Set(['9p', 'fuse.virtfs', 'fuse.virtiofs', 'virtiofs'])
 const SKIP_DIR_NAMES = new Set([
   '.agents',
+  '.claude',
   '.expo',
   '.git',
   '.local',
@@ -26,16 +27,7 @@ const SKIP_DIR_NAMES = new Set([
   'ios',
   'node_modules',
 ])
-const WATCH_EXTENSIONS = new Set([
-  '.cjs',
-  '.css',
-  '.js',
-  '.json',
-  '.jsx',
-  '.mjs',
-  '.ts',
-  '.tsx',
-])
+const WATCH_EXTENSIONS = new Set(['.cjs', '.css', '.js', '.json', '.jsx', '.mjs', '.ts', '.tsx'])
 const ROOT_WATCH_FILES = [
   'app.config.js',
   'app.config.ts',
@@ -45,6 +37,16 @@ const ROOT_WATCH_FILES = [
   'metro.config.js',
 ]
 const DEFAULT_POLL_MS = 400
+/**
+ * Every Nth tick is a full sweep that stats every watched file. Ticks in
+ * between only stat folders and re-read the ones whose mtime changed. An
+ * in-place edit does not change the folder mtime, so it is noticed by the next
+ * full sweep: at most pollMs * fullEvery (default 400 ms * 5 = 2 s). New,
+ * deleted and renamed-over files (atomic editor saves) change the folder mtime
+ * and are noticed within one pollMs. TURBOPANEL_METRO_POLL_FULL_EVERY=1 stats
+ * every file on every tick (the old behaviour).
+ */
+const DEFAULT_FULL_EVERY = 5
 /** Packages Metro/Expo actually instantiate — none are direct deps of this app. */
 const WATCHER_SPECS = [
   {
@@ -68,12 +70,7 @@ const WATCHER_SPECS = [
     ],
   },
 ]
-const RESOLVE_SEEDS = [
-  'expo/metro-config',
-  'metro',
-  'metro-file-map',
-  '@expo/metro-file-map',
-]
+const RESOLVE_SEEDS = ['expo/metro-config', 'metro', 'metro-file-map', '@expo/metro-file-map']
 
 /** @type {WeakMap<object, ReturnType<typeof setInterval>>} */
 const pollers = new WeakMap()
@@ -85,7 +82,7 @@ let patched = false
  */
 function decodeMountPoint(encoded) {
   return encoded.replaceAll(/\\([0-7]{3})/g, (_match, octal) =>
-    String.fromCodePoint(Number.parseInt(octal, 8)),
+    String.fromCodePoint(Number.parseInt(octal, 8))
   )
 }
 
@@ -97,9 +94,7 @@ function pathIsInside(resolvedPath, mountPoint) {
   if (mountPoint === '/') {
     return true
   }
-  return (
-    resolvedPath === mountPoint || resolvedPath.startsWith(`${mountPoint}/`)
-  )
+  return resolvedPath === mountPoint || resolvedPath.startsWith(`${mountPoint}/`)
 }
 
 /**
@@ -202,65 +197,162 @@ function collectSnapshotChanges(previous, current) {
 }
 
 /**
- * @param {string} dir
+ * Incremental scanner. Keeps the folder tree and per-file stats between ticks.
+ * `scan(full)` stats every known folder (cheap), re-reads and re-stats only the
+ * folders whose mtime/ctime moved, and stats every file only when `full`.
+ *
  * @param {string} projectRoot
- * @param {Record<string, { mtimeMs: number, size: number }>} snapshot
- * @param {typeof fs} fsApi
+ * @param {Pick<typeof fs, 'readdirSync' | 'statSync'>} fsApi
  */
-function walkDir(dir, projectRoot, snapshot, fsApi) {
-  let entries
-  try {
-    entries = fsApi.readdirSync(dir, { withFileTypes: true })
-  } catch {
-    // src/ may not exist yet during a partial checkout.
-    return
-  }
-  for (const entry of entries) {
-    const abs = path.join(dir, entry.name)
-    if (entry.isDirectory()) {
-      if (!shouldSkipDirName(entry.name)) {
-        walkDir(abs, projectRoot, snapshot, fsApi)
-      }
-      continue
-    }
-    if (!entry.isFile() || !isWatchedFileName(entry.name)) {
-      continue
-    }
-    addWatchedFile(abs, projectRoot, snapshot, fsApi)
-  }
-}
+function createPollScanner(projectRoot, fsApi) {
+  /** @type {Map<string, { mtimeMs: number, ctimeMs: number, files: Set<string>, subdirs: Set<string> }>} */
+  const dirs = new Map()
+  /** @type {Map<string, { mtimeMs: number, ctimeMs: number, size: number }>} */
+  const files = new Map()
+  /** @type {Set<string>} */
+  let touched = new Set()
+  /** @type {Set<string>} */
+  let deleted = new Set()
 
-/**
- * @param {string} abs
- * @param {string} projectRoot
- * @param {Record<string, { mtimeMs: number, size: number }>} snapshot
- * @param {typeof fs} fsApi
- */
-function addWatchedFile(abs, projectRoot, snapshot, fsApi) {
-  try {
-    const stat = fsApi.statSync(abs)
-    snapshot[path.relative(projectRoot, abs)] = {
+  /** @param {string} abs */
+  function forgetFile(abs) {
+    if (files.delete(abs)) {
+      deleted.add(abs)
+      touched.delete(abs)
+    }
+  }
+
+  /** @param {string} abs */
+  function refreshFile(abs) {
+    let stat
+    try {
+      stat = fsApi.statSync(abs)
+    } catch {
+      // File vanished between readdir and stat.
+      forgetFile(abs)
+      return
+    }
+    const prev = files.get(abs)
+    if (
+      prev?.mtimeMs !== stat.mtimeMs ||
+      prev?.ctimeMs !== stat.ctimeMs ||
+      prev?.size !== stat.size
+    ) {
+      touched.add(abs)
+      deleted.delete(abs)
+    }
+    files.set(abs, {
       ctimeMs: stat.ctimeMs,
       mtimeMs: stat.mtimeMs,
       size: stat.size,
-    }
-  } catch {
-    // File vanished between readdir and stat.
+    })
   }
-}
 
-/**
- * @param {string} projectRoot
- * @param {typeof fs} fsApi
- */
-function collectWatchedSnapshot(projectRoot, fsApi) {
-  /** @type {Record<string, { mtimeMs: number, size: number }>} */
-  const snapshot = {}
-  walkDir(path.join(projectRoot, 'src'), projectRoot, snapshot, fsApi)
-  for (const name of ROOT_WATCH_FILES) {
-    addWatchedFile(path.join(projectRoot, name), projectRoot, snapshot, fsApi)
+  /** @param {string} abs */
+  function dropDir(abs) {
+    const state = dirs.get(abs)
+    if (!state) {
+      return
+    }
+    dirs.delete(abs)
+    for (const file of state.files) {
+      forgetFile(file)
+    }
+    for (const sub of state.subdirs) {
+      dropDir(sub)
+    }
   }
-  return snapshot
+
+  /**
+   * @param {string} abs
+   * @param {boolean} full
+   */
+  function scanDir(abs, full) {
+    let stat
+    try {
+      stat = fsApi.statSync(abs)
+    } catch {
+      // src/ may not exist yet, or the folder was removed.
+      dropDir(abs)
+      return
+    }
+    let state = dirs.get(abs)
+    if (!state || state.mtimeMs !== stat.mtimeMs || state.ctimeMs !== stat.ctimeMs) {
+      let entries
+      try {
+        entries = fsApi.readdirSync(abs, { withFileTypes: true })
+      } catch {
+        dropDir(abs)
+        return
+      }
+      const nextFiles = new Set()
+      const nextDirs = new Set()
+      for (const entry of entries) {
+        const child = path.join(abs, entry.name)
+        if (entry.isDirectory()) {
+          if (!shouldSkipDirName(entry.name)) {
+            nextDirs.add(child)
+          }
+        } else if (entry.isFile() && isWatchedFileName(entry.name)) {
+          nextFiles.add(child)
+        }
+      }
+      for (const old of state?.files ?? []) {
+        if (!nextFiles.has(old)) {
+          forgetFile(old)
+        }
+      }
+      for (const old of state?.subdirs ?? []) {
+        if (!nextDirs.has(old)) {
+          dropDir(old)
+        }
+      }
+      state = {
+        ctimeMs: stat.ctimeMs,
+        files: nextFiles,
+        mtimeMs: stat.mtimeMs,
+        subdirs: nextDirs,
+      }
+      dirs.set(abs, state)
+      // A rename-over (atomic save) keeps the name, so re-stat every file.
+      for (const file of nextFiles) {
+        refreshFile(file)
+      }
+    } else if (full) {
+      for (const file of state.files) {
+        refreshFile(file)
+      }
+    }
+    for (const sub of state.subdirs) {
+      scanDir(sub, full)
+    }
+  }
+
+  return {
+    /**
+     * @param {boolean} full
+     * @returns {{ touched: string[], deleted: string[], meta: Record<string, { mtimeMs: number, size: number }> }}
+     */
+    scan(full) {
+      touched = new Set()
+      deleted = new Set()
+      scanDir(path.join(projectRoot, 'src'), full)
+      for (const name of ROOT_WATCH_FILES) {
+        refreshFile(path.join(projectRoot, name))
+      }
+      const rel = (abs) => path.relative(projectRoot, abs)
+      const sortRel = (set) => [...set].map(rel).sort((a, b) => a.localeCompare(b))
+      /** @type {Record<string, { mtimeMs: number, size: number }>} */
+      const meta = {}
+      for (const abs of touched) {
+        const m = files.get(abs)
+        if (m) {
+          meta[rel(abs)] = m
+        }
+      }
+      return { deleted: sortRel(deleted), meta, touched: sortRel(touched) }
+    },
+  }
 }
 
 function readMountsText() {
@@ -311,9 +403,7 @@ function loadWatchersFromSpec(spec, roots, addClass) {
   if (spec.directIds) {
     for (const id of spec.directIds) {
       try {
-        addClass(
-          watcherFromModule(require(require.resolve(id, { paths: roots }))),
-        )
+        addClass(watcherFromModule(require(require.resolve(id, { paths: roots }))))
       } catch {
         // Nested Expo layout is absent on this Metro version.
       }
@@ -324,9 +414,7 @@ function loadWatchersFromSpec(spec, roots, addClass) {
   }
   let pkgDir
   try {
-    pkgDir = path.dirname(
-      require.resolve(`${spec.packageName}/package.json`, { paths: roots }),
-    )
+    pkgDir = path.dirname(require.resolve(`${spec.packageName}/package.json`, { paths: roots }))
   } catch {
     return
   }
@@ -417,6 +505,7 @@ function emitSnapshotEvents(watcher, current, touched, deleted) {
  * @param {Readonly<{
  *   fsApi?: typeof fs
  *   pollMs?: number
+ *   fullEvery?: number
  *   log?: (message: string) => void
  *   setIntervalFn?: typeof setInterval
  *   clearIntervalFn?: typeof clearInterval
@@ -432,17 +521,18 @@ function attachPoller(watcher, projectRoot, runtime) {
   const fsApi = runtime.fsApi ?? fs
   const pollMs = runtime.pollMs ?? DEFAULT_POLL_MS
   const setIntervalFn = runtime.setIntervalFn ?? setInterval
-  let previous = collectWatchedSnapshot(projectRoot, fsApi)
+  const fullEvery = Math.max(1, runtime.fullEvery ?? DEFAULT_FULL_EVERY)
+  const scanner = createPollScanner(projectRoot, fsApi)
+  // Baseline: do not emit events for files that already exist.
+  scanner.scan(true)
+  let tick = 0
   const timer = setIntervalFn(() => {
-    const current = collectWatchedSnapshot(projectRoot, fsApi)
-    const { deleted, touched } = collectSnapshotChanges(previous, current)
-    previous = current
-    emitSnapshotEvents(watcher, current, touched, deleted)
+    tick += 1
+    const { deleted, meta, touched } = scanner.scan(tick % fullEvery === 0)
+    emitSnapshotEvents(watcher, meta, touched, deleted)
     if (touched.length > 0 || deleted.length > 0) {
       const log = runtime.log ?? console.log
-      log(
-        `[metro] VirtFS poll ${touched.length} touched, ${deleted.length} deleted`,
-      )
+      log(`[metro] VirtFS poll ${touched.length} touched, ${deleted.length} deleted`)
     }
   }, pollMs)
   if (typeof timer === 'object' && timer && 'unref' in timer) {
@@ -517,8 +607,10 @@ function installMetroPollWatch(projectRoot, options = {}) {
     return { enabled: true, patched: true }
   }
   const pollMs = Number.parseInt(env.TURBOPANEL_METRO_POLL_MS ?? '', 10)
+  const fullEvery = Number.parseInt(env.TURBOPANEL_METRO_POLL_FULL_EVERY ?? '', 10)
   const runtime = {
     fsApi: options.fsApi,
+    fullEvery: Number.isFinite(fullEvery) && fullEvery > 0 ? fullEvery : DEFAULT_FULL_EVERY,
     pollMs: Number.isFinite(pollMs) && pollMs > 0 ? pollMs : DEFAULT_POLL_MS,
     log: options.log,
   }
@@ -528,23 +620,23 @@ function installMetroPollWatch(projectRoot, options = {}) {
   }
   if (watchers.length === 0) {
     const log = options.log ?? console.warn
-    log(
-      '[metro] VirtFS poll watch skipped — metro-file-map watchers were not found',
-    )
+    log('[metro] VirtFS poll watch skipped — metro-file-map watchers were not found')
     return { enabled: true, patched: false }
   }
   patched = true
   const log = options.log ?? console.log
   log(
-    `[metro] VirtFS poll watch enabled (${watchers.length} watcher classes) — host edits do not notify inotify on this share`,
+    `[metro] VirtFS poll watch enabled (${watchers.length} watcher classes) — host edits do not notify inotify on this share`
   )
   return { enabled: true, patched: true }
 }
 
 module.exports = {
+  DEFAULT_FULL_EVERY,
   POLL_FS_TYPES,
   WATCHER_SPECS,
   collectSnapshotChanges,
+  createPollScanner,
   decodeMountPoint,
   fsTypeForPath,
   installMetroPollWatch,
