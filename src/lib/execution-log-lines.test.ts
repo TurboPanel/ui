@@ -423,6 +423,7 @@ describe('docker progress lines', () => {
     ' 6d2dcf61e6fc Download complete',
     ' Container web-1 Restarting',
     ' Container web-1 Recreating',
+    ' Container 01a1d5af-52e0-7e03-8717-e7cf5ec7fdd9-1 Recreate ',
     ' Container web-1 Recreated',
     ' 6d2dcf61e6fc Uploading 1.2MB',
     ' Service web Building',
@@ -476,6 +477,33 @@ describe('docker progress lines', () => {
     expect(isErrorLine(progress)).toBe(false)
     expect(isErrorLine({ ...progress, seq: 2, message: 'boom' })).toBe(true)
     expect(isErrorLine({ ...progress, seq: 3, stream: 'stdout' })).toBe(false)
+  })
+
+  it('flags no line of a real Compose up transcript, but still flags a failure', () => {
+    const base: LogTranscriptLine = {
+      seq: 1,
+      timestamp: null,
+      stream: 'stderr',
+      phase: 'compose-up',
+      message: '',
+    }
+    const id = '01a1d5af-52e0-7e03-8717-e7cf5ec7fdd9'
+    const transcript = [
+      ` Network ${id}_default Creating `,
+      ` Network ${id}_default Created `,
+      ` Container ${id}-1 Recreate `,
+      ` Container ${id}-1 Recreated `,
+      ` Container ${id}-1 Starting `,
+      ` Container ${id}-1 Started `,
+      ` Container ${id}-1 Running `,
+    ]
+    for (const message of transcript) {
+      expect(isErrorLine({ ...base, message })).toBe(false)
+    }
+    expect(isErrorLine({ ...base, message: ` Container ${id}-1 Error ` })).toBe(true)
+    expect(
+      isErrorLine({ ...base, message: 'Error response from daemon: Conflict. name in use' })
+    ).toBe(true)
   })
 
   it('does not flag git clone and Next.js build stderr as errors', () => {
