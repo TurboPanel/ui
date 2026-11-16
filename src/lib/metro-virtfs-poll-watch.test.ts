@@ -106,7 +106,8 @@ describe('needsPollWatch', () => {
 describe('watch filters', () => {
   it('skips bind-mounted and generated trees', () => {
     expect(shouldSkipDirName('node_modules')).toBe(true)
-    expect(shouldSkipDirName('.claude')).toBe(true)
+    expect(shouldSkipDirName('.git')).toBe(true)
+    expect(shouldSkipDirName('.local-state')).toBe(true)
     expect(shouldSkipDirName('src')).toBe(false)
     // Source lives at src/components/org/logs — do not treat the name as cache.
     expect(shouldSkipDirName('logs')).toBe(false)
@@ -210,10 +211,10 @@ describe('createPollScanner', () => {
   function setup() {
     root = fs.mkdtempSync(join(tmpdir(), 'metro-poll-'))
     fs.mkdirSync(join(root, 'src/a/deep'), { recursive: true })
-    fs.mkdirSync(join(root, 'src/.claude/worktrees/x/src'), { recursive: true })
+    fs.mkdirSync(join(root, 'src/.hidden/worktrees/x/src'), { recursive: true })
     fs.writeFileSync(join(root, 'src/a/one.ts'), '1')
     fs.writeFileSync(join(root, 'src/a/deep/two.tsx'), '2')
-    fs.writeFileSync(join(root, 'src/.claude/worktrees/x/src/skip.ts'), 's')
+    fs.writeFileSync(join(root, 'src/.hidden/worktrees/x/src/skip.ts'), 's')
     fs.writeFileSync(join(root, 'src/a/note.md'), 'ignored')
     fs.writeFileSync(join(root, 'app.json'), '{}')
     const calls = { readdir: 0, stat: 0 }
@@ -237,7 +238,7 @@ describe('createPollScanner', () => {
     fs.utimesSync(file, t, t)
   }
 
-  it('baselines watched files and skips .claude worktrees', () => {
+  it('baselines watched files and skips dot-folders', () => {
     const { baseline } = setup()
     expect(baseline.touched).toEqual(['app.json', 'src/a/deep/two.tsx', 'src/a/one.ts'])
   })
@@ -246,7 +247,7 @@ describe('createPollScanner', () => {
     const { calls, scanner } = setup()
     calls.stat = 0
     expect(scanner.scan(false)).toMatchObject({ deleted: [], touched: [] })
-    // 3 folders (src, src/a, src/a/deep; .claude skipped) + the root-file probes.
+    // 3 folders (src, src/a, src/a/deep; dot-folders skipped) + the root-file probes.
     const light = calls.stat
     expect(light).toBe(3 + ROOT_WATCH_FILES.length)
     expect(calls.readdir).toBe(3) // baseline only
