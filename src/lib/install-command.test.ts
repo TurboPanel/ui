@@ -55,19 +55,24 @@ describe('parseInstallBaseUrl', () => {
 describe('defaultDevInstallBaseUrl', () => {
   it('prefers the managed URL that matches the browser origin', () => {
     vi.stubGlobal('location', {
-      origin: 'https://studio.lan:8443',
-      hostname: 'studio.lan',
+      origin: 'https://dev-workstation.example.lan:8443',
+      hostname: 'dev-workstation.example.lan',
     })
-    expect(defaultDevInstallBaseUrl(['https://other.lan:8443', 'https://studio.lan:8443'])).toBe(
-      'https://studio.lan:8443'
-    )
+    expect(
+      defaultDevInstallBaseUrl([
+        'https://other.lan:8443',
+        'https://dev-workstation.example.lan:8443',
+      ])
+    ).toBe('https://dev-workstation.example.lan:8443')
   })
 
   it('falls back to the first https managed URL, then host-derived https', () => {
-    expect(defaultDevInstallBaseUrl(['https://huey.lan:8443', 'https://other.lan:8443'])).toBe(
-      'https://huey.lan:8443'
+    expect(
+      defaultDevInstallBaseUrl(['https://server-a.example.lan:8443', 'https://other.lan:8443'])
+    ).toBe('https://server-a.example.lan:8443')
+    expect(defaultDevInstallBaseUrl(['http://server-a.example.lan'])).toBe(
+      'https://server-a.example.lan:8443'
     )
-    expect(defaultDevInstallBaseUrl(['http://huey.lan'])).toBe('https://huey.lan:8443')
   })
 
   it('uses the browser origin when no managed URLs are provided', () => {
@@ -85,16 +90,18 @@ describe('defaultDevInstallBaseUrl', () => {
 
   it('ignores a plaintext browser origin and uses the https managed URL', () => {
     vi.stubGlobal('location', {
-      origin: 'http://studio.lan',
-      hostname: 'studio.lan',
+      origin: 'http://dev-workstation.example.lan',
+      hostname: 'dev-workstation.example.lan',
     })
-    expect(defaultDevInstallBaseUrl(['https://studio.lan:8443'])).toBe('https://studio.lan:8443')
+    expect(defaultDevInstallBaseUrl(['https://dev-workstation.example.lan:8443'])).toBe(
+      'https://dev-workstation.example.lan:8443'
+    )
   })
 
   it('skips blank and invalid managed URLs when picking https', () => {
-    expect(defaultDevInstallBaseUrl(['', '  ', 'not a url', 'https://huey.lan:8443'])).toBe(
-      'https://huey.lan:8443'
-    )
+    expect(
+      defaultDevInstallBaseUrl(['', '  ', 'not a url', 'https://server-a.example.lan:8443'])
+    ).toBe('https://server-a.example.lan:8443')
   })
 
   it('ignores a browser origin that does not match any managed URL', () => {
@@ -102,8 +109,8 @@ describe('defaultDevInstallBaseUrl', () => {
       origin: 'https://other.lan:8443',
       hostname: 'other.lan',
     })
-    expect(defaultDevInstallBaseUrl(['  ', 'not a url', 'https://huey.lan:8443'])).toBe(
-      'https://huey.lan:8443'
+    expect(defaultDevInstallBaseUrl(['  ', 'not a url', 'https://server-a.example.lan:8443'])).toBe(
+      'https://server-a.example.lan:8443'
     )
   })
 
@@ -132,7 +139,9 @@ describe('defaultDevInstallBaseUrl', () => {
 
 describe('defaultDevCaddyHttpsBaseUrl', () => {
   it('derives https://host:8443 from managed URLs or the browser host', () => {
-    expect(defaultDevCaddyHttpsBaseUrl(['http://huey.lan'])).toBe('https://huey.lan:8443')
+    expect(defaultDevCaddyHttpsBaseUrl(['http://server-a.example.lan'])).toBe(
+      'https://server-a.example.lan:8443'
+    )
     vi.stubGlobal('location', {
       origin: 'http://dev.example.com',
       hostname: 'dev.example.com',

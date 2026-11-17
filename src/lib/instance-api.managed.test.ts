@@ -632,7 +632,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
             projectName: 'DB',
             workspaceId: 'ws-1',
             workspaceName: 'Default',
-            serverName: 'Huey',
+            serverName: 'Server A',
             members: [],
           },
         ],

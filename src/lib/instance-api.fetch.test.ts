@@ -507,7 +507,7 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ ok: true, commandId: 'cmd-2', status: 'queued' })
     )
-    await expect(setServerHostname('srv-1', 'huey')).resolves.toMatchObject({
+    await expect(setServerHostname('srv-1', 'server-a')).resolves.toMatchObject({
       commandId: 'cmd-2',
     })
 
@@ -595,7 +595,7 @@ describe('instance-api fetch wrappers', () => {
     ).resolves.toMatchObject({ commandId: 'cmd-ntp' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(updateServer('srv-1', { name: 'Huey' })).resolves.toEqual({
+    await expect(updateServer('srv-1', { name: 'Server A' })).resolves.toEqual({
       ok: true,
     })
   })
@@ -843,13 +843,13 @@ describe('instance-api fetch wrappers', () => {
         installCommand: 'curl | sh',
       })
     )
-    await expect(createLicense('Huey', ' https://panel.example/ ')).resolves.toMatchObject({
+    await expect(createLicense('Server A', ' https://panel.example/ ')).resolves.toMatchObject({
       licenseId: 'lic-1',
     })
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect((init as RequestInit).method).toBe('POST')
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      name: 'Huey',
+      name: 'Server A',
       installBaseUrl: 'https://panel.example/',
     })
   })

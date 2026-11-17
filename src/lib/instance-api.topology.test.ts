@@ -437,21 +437,21 @@ describe('instance-api topology fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
-        urls: ['https://panel.example', 'https://huey.lan:8443'],
+        urls: ['https://panel.example', 'https://server-a.example.lan:8443'],
         applied: false,
       }),
     )
     await expect(
-      savePublicUrls(['https://panel.example', 'https://huey.lan:8443']),
+      savePublicUrls(['https://panel.example', 'https://server-a.example.lan:8443']),
     ).resolves.toEqual({
       ok: true,
-      urls: ['https://panel.example', 'https://huey.lan:8443'],
+      urls: ['https://panel.example', 'https://server-a.example.lan:8443'],
       applied: false,
     })
     const saveCall = fetchMock.mock.calls[1]
     expect(requestInit(saveCall).method).toBe('PUT')
     expect(requestBody(saveCall)).toEqual({
-      urls: ['https://panel.example', 'https://huey.lan:8443'],
+      urls: ['https://panel.example', 'https://server-a.example.lan:8443'],
     })
 
     fetchMock.mockResolvedValueOnce(
@@ -550,7 +550,7 @@ describe('instance-api topology fetch wrappers', () => {
       daemonStatus: 'online' as const,
       connectedAt: '2026-01-01T00:00:00.000Z',
       statusChangedAt: '2026-01-01T00:00:00.000Z',
-      hostname: 'huey',
+      hostname: 'server-a',
       remoteAddress: '203.0.113.50',
       geo: null,
       colocatedWithInstance: false,

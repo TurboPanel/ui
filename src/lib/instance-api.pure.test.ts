@@ -211,7 +211,7 @@ describe('toRelayRecord', () => {
         advertisedCidrs: ['10.0.0.0/24'],
         resolvedAdvertisedCidrs: ['10.0.0.0/24'],
         resolvedEndpoint: '203.0.113.10:51820',
-        segments: [{ name: 'seg-a', subnet: '10.10.0.0/24' }],
+        segments: [{ name: 'seg-a', subnet: '10.50.0.0/24' }],
         paths: [
           {
             peerServerId: 'srv-2',
@@ -230,7 +230,7 @@ describe('toRelayRecord', () => {
     expect(record.advertisedCidrs).toEqual(['10.0.0.0/24'])
     expect(record.resolvedAdvertisedCidrs).toEqual(['10.0.0.0/24'])
     expect(record.resolvedEndpoint).toBe('203.0.113.10:51820')
-    expect(record.segments).toEqual([{ name: 'seg-a', subnet: '10.10.0.0/24' }])
+    expect(record.segments).toEqual([{ name: 'seg-a', subnet: '10.50.0.0/24' }])
     expect(record.paths).toHaveLength(1)
     expect(record.allowRelay).toBe(false)
     expect(record.effectiveAllowRelay).toBe(false)
@@ -600,13 +600,13 @@ describe('fetch wrappers (mocked fetch)', () => {
   it('fetchOrgServers / fetchServer fill missing host-default fields', async () => {
     const sparse = {
       id: 'srv-1',
-      name: 'Huey',
+      name: 'Server A',
       organizationId: 'org-1',
       licenseId: null,
       options: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       connected: true,
-      hostname: 'huey',
+      hostname: 'server-a',
       remoteAddress: null,
       lastInboundAt: null,
       connectedAt: null,
@@ -816,14 +816,14 @@ describe('fetch wrappers (mocked fetch)', () => {
         installCommand: 'curl -fsSL https://turbopanel.sh | sh',
       })
     )
-    await expect(createLicense('Huey', ' https://panel.example.com ')).resolves.toEqual({
+    await expect(createLicense('Server A', ' https://panel.example.com ')).resolves.toEqual({
       licenseId: 'lic-1',
       licenseToken: 'tok',
       installCommand: 'curl -fsSL https://turbopanel.sh | sh',
     })
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      name: 'Huey',
+      name: 'Server A',
       installBaseUrl: 'https://panel.example.com',
     })
   })
@@ -840,7 +840,7 @@ describe('fetch wrappers (mocked fetch)', () => {
       )
     )
     try {
-      await createLicense('Huey')
+      await createLicense('Server A')
       throw new TypeError('expected createLicense to throw')
     } catch (err) {
       expect(err).toBeInstanceOf(ServerCapacityExceededError)
@@ -878,7 +878,7 @@ describe('fetch wrappers (mocked fetch)', () => {
     }
     fetchMock.mockResolvedValueOnce(jsonResponse(body, 409))
     try {
-      await createLicense('Huey')
+      await createLicense('Server A')
       throw new TypeError('expected createLicense to throw')
     } catch (err) {
       expect(err).toBeInstanceOf(NoLicenseAvailableError)
