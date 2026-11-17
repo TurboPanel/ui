@@ -239,9 +239,11 @@ describe('runFailure', () => {
     ).toBe('Control plane step')
     expect(
       runFailure(
-        run({ steps: [step({ phase: 'fleet', status: 'needs_attention', serverName: 'kore' })] })
+        run({
+          steps: [step({ phase: 'fleet', status: 'needs_attention', serverName: 'server-c' })],
+        })
       )?.stepTitle
-    ).toBe('kore')
+    ).toBe('server-c')
     expect(
       runFailure(
         run({

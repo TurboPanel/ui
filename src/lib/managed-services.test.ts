@@ -706,7 +706,7 @@ describe('managedRecoveryBanner after a finished failover', () => {
     targetServerId: 's2',
     completedAt: '2026-08-19T00:01:00.000Z',
   })
-  const names = (id: string) => ({ s1: 'adrastea', s2: 'kore' })[id] ?? null
+  const names = (id: string) => ({ s1: 'adrastea', s2: 'server-c' })[id] ?? null
 
   it('says in plain words what happened for a day', () => {
     const banner = managedRecoveryBanner(done, {
@@ -716,7 +716,7 @@ describe('managedRecoveryBanner after a finished failover', () => {
     expect(banner?.kind).toBe('completed')
     expect(banner?.text).toContain('failed over automatically')
     expect(banner?.text).toContain('12 minutes ago')
-    expect(banner?.text).toContain('kore is now the primary')
+    expect(banner?.text).toContain('server-c is now the primary')
     expect(banner?.text).toContain('adrastea is stopped')
   })
 
