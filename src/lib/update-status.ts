@@ -284,8 +284,13 @@ export function runFailure(
   return { ...explainUpgradeFailure(step, run.channel), stepTitle: failedStepTitle(step) }
 }
 
-/** Title of the step that ended badly in this run ("Daemon step"), or null. */
+/**
+ * Title of the step that failed in this run ("Daemon step"), or null. Only a
+ * failed, rolled back or needs-attention step counts: a cancelled run, or a
+ * failed run with no failed step, is not backed off and retries at the next check.
+ */
 export function failedStepTitleOf(run: RunWithSteps | null): string | null {
+  if (!run?.steps.some((item) => FAILED_STEP_STATUSES.has(item.status))) return null
   return runFailure(run)?.stepTitle ?? null
 }
 

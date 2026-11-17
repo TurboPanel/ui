@@ -11,6 +11,7 @@ import {
   stallHint,
   UPGRADE_DOCS_URL,
   UpgradeStartTimeoutError,
+  failedStepTitleOf,
   updateBanner,
   showsUpdateBanner,
   updateOffered,
@@ -210,6 +211,24 @@ describe('runToShow with the running build', () => {
       ],
     })
     expect(runToShow({ run: null, lastRun: mixed }, { commit: 'abc' }).run).toBe(mixed)
+  })
+})
+
+describe('failedStepTitleOf', () => {
+  it('names the failed step', () => {
+    expect(failedStepTitleOf(run({ status: 'failed', steps: [step({ status: 'failed' })] }))).toBe(
+      'Daemon step'
+    )
+  })
+
+  it('is null for a cancelled run and for a failed run with no failed step', () => {
+    expect(
+      failedStepTitleOf(run({ status: 'cancelled', steps: [step({ status: 'skipped' })] }))
+    ).toBeNull()
+    expect(
+      failedStepTitleOf(run({ status: 'failed', steps: [step({ status: 'done' })] }))
+    ).toBeNull()
+    expect(failedStepTitleOf(null)).toBeNull()
   })
 })
 

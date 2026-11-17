@@ -1,9 +1,9 @@
 import { useRouter, type Href } from 'expo-router'
-import { getInstanceRevision, getInstanceVersion } from '@/lib/instance-version'
 import { useMemo, useState } from 'react'
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { adminAreaHref } from '@/lib/admin-navigation'
+import { getInstanceRevision, getInstanceVersion } from '@/lib/instance-version'
 import { Button, InlineNotice, TextLink } from '@/components/ui'
 import { isAdminSession, isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
@@ -14,8 +14,8 @@ import {
   isDevelopmentInstall,
 } from '@/lib/development-updates'
 import {
-  readDismissedUpdateBanner,
   failedStepTitleOf,
+  readDismissedUpdateBanner,
   runToShow,
   showsUpdateBanner,
   updateBanner,
