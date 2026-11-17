@@ -58,6 +58,7 @@ function PortalRow({ portal, serverName }: Readonly<{ portal: TunnelPortal; serv
 
 function PeerHopRow({ hop, serverName }: Readonly<{ hop: TunnelPeerHop; serverName: string }>) {
   const state = peerHopState(hop)
+  const reported = hop.mode === 'none' ? null : reportedLabel(hop.reportedAt)
   return (
     <View style={panelStyles.detailCard}>
       <View style={styles.titleRow}>
@@ -65,9 +66,7 @@ function PeerHopRow({ hop, serverName }: Readonly<{ hop: TunnelPeerHop; serverNa
         <Badge label={state.label} tone={state.tone} />
       </View>
       <Text style={hop.downgraded ? panelStyles.error : panelStyles.muted}>{state.note}</Text>
-      {hop.mode === 'none' ? null : (
-        <Text style={panelStyles.muted}>{reportedLabel(hop.reportedAt)}</Text>
-      )}
+      {reported ? <Text style={panelStyles.muted}>{reported}</Text> : null}
     </View>
   )
 }

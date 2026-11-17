@@ -300,7 +300,7 @@ describe('words for status', () => {
   })
   it('describes the peer hop mode of a server', () => {
     const none = peerHopState({ mode: 'none', downgraded: false })
-    expect(none).toMatchObject({ label: 'Not Reported Yet', tone: 'pending' })
+    expect(none).toMatchObject({ label: 'No Mode Reported', tone: 'pending' })
     expect(peerHopState({ mode: 'require', downgraded: false })).toMatchObject({
       label: 'Require',
       tone: 'ok',
@@ -311,11 +311,11 @@ describe('words for status', () => {
     })
     const down = peerHopState({ mode: 'verify', downgraded: true })
     expect(down).toMatchObject({ label: 'Downgraded', tone: 'danger' })
-    expect(down.note).toContain('lacks client use')
+    expect(down.note).toContain('cannot be used as a client certificate')
   })
   it('words when a peer hop mode was reported', () => {
-    expect(reportedLabel(null)).toBe('Not reported yet')
-    expect(reportedLabel('nope')).toBe('Not reported yet')
+    expect(reportedLabel(null)).toBeNull()
+    expect(reportedLabel('nope')).toBeNull()
     expect(reportedLabel('2026-11-03T14:05:00Z')).toMatch(/^Reported /)
   })
   it('reads versions and dates defensively', () => {

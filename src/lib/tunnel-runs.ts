@@ -323,9 +323,9 @@ export function peerHopState(hop: Pick<TunnelPeerHop, 'mode' | 'downgraded'>): {
 } {
   if (hop.mode === 'none') {
     return {
-      label: 'Not Reported Yet',
+      label: 'No Mode Reported',
       tone: 'pending',
-      note: 'This server has not reported how it checks other servers yet. It may need an update.',
+      note: 'This server has no mode on record for how it checks other servers.',
     }
   }
   if (hop.mode === 'verify') {
@@ -333,7 +333,7 @@ export function peerHopState(hop: Pick<TunnelPeerHop, 'mode' | 'downgraded'>): {
       ? {
           label: 'Downgraded',
           tone: 'danger',
-          note: 'Client certificates were asked for, but this server admits servers without one because their certificate lacks client use. A new certificate is being issued.',
+          note: 'Client certificates were asked for, but this server also admits servers without one, because their certificate cannot be used as a client certificate.',
         }
       : {
           label: 'Verify',
@@ -363,11 +363,11 @@ export function seenLabel(iso: string | null): string {
   return `Seen ${when.toLocaleString()}`
 }
 
-/** "Reported 3 Nov 2026, 14:05", or that nothing was. */
-export function reportedLabel(iso: string | null): string {
-  if (!iso) return 'Not reported yet'
+/** "Reported 3 Nov 2026, 14:05", or null when the time is missing (a mode recorded before times were kept). */
+export function reportedLabel(iso: string | null): string | null {
+  if (!iso) return null
   const when = new Date(iso)
-  if (Number.isNaN(when.getTime())) return 'Not reported yet'
+  if (Number.isNaN(when.getTime())) return null
   return `Reported ${when.toLocaleString()}`
 }
 

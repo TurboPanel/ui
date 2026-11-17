@@ -158,6 +158,7 @@ describe('a tunnel card', () => {
       <NetworkTunnelCard
         orgId="o1"
         tunnel={tunnel({
+          portals: [],
           peerHop: [
             {
               serverId: 's1',
@@ -172,16 +173,25 @@ describe('a tunnel card', () => {
               reportedAt: '2026-11-03T14:05:00Z',
             },
             { serverId: 's3', mode: 'none', downgraded: false, reportedAt: null },
+            { serverId: 's4', mode: 'verify', downgraded: false, reportedAt: null },
           ],
         })}
-        servers={[server('s1'), server('s2'), server('s3')]}
+        servers={[server('s1'), server('s2'), server('s3'), server('s4')]}
         datacenters={[]}
       />
     )
     expect(screen.getByText('Server-to-Server Checks')).toBeTruthy()
-    const labels = screen.getAllByTestId('badge').map((b) => b.textContent)
-    expect(labels).toEqual(expect.arrayContaining(['Require', 'Downgraded', 'Not Reported Yet']))
-    expect(screen.getByText(/lacks client use/)).toBeTruthy()
+    const rowOf = (name: string) =>
+      within(screen.getByText(name).parentElement?.parentElement as HTMLElement)
+    expect(rowOf('s1').getByTestId('badge').textContent).toBe('Require')
+    expect(rowOf('s1').getByText(/^Reported /)).toBeTruthy()
+    expect(rowOf('s2').getByTestId('badge').textContent).toBe('Downgraded')
+    expect(rowOf('s2').getByText(/cannot be used as a client certificate/)).toBeTruthy()
+    expect(rowOf('s3').getByTestId('badge').textContent).toBe('No Mode Reported')
+    expect(rowOf('s3').queryByText(/^Reported /)).toBeNull()
+    // A mode recorded without a time says nothing about when.
+    expect(rowOf('s4').getByTestId('badge').textContent).toBe('Verify')
+    expect(rowOf('s4').queryByText(/^Reported /)).toBeNull()
   })
   it('renders without peer hop data from an older control plane', () => {
     render(
