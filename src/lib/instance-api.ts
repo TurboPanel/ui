@@ -7628,6 +7628,12 @@ export type DaemonSupport = {
   status: 'supported' | 'unsupported' | 'unknown'
   version: string | null
   minVersion: string
+  /** Set with `unsupported`; absent on control planes that predate it. */
+  code?: string
+  /** Required wire features the daemon's hello does not list. */
+  missingFeatures?: string[]
+  /** The control plane's sentence for why commands are refused. */
+  reason?: string
 }
 
 export type ServerUpdateStatus = {
