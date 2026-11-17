@@ -222,6 +222,47 @@ describe('SelfHostedUpdates', () => {
     expect(
       screen.getByRole('switch', { name: 'Pause All Updates' }).getAttribute('aria-checked')
     ).toBe('true')
+    expect(
+      screen.getByText(
+        'Waiting to update: control plane v1.0.1. Updates are paused, so it waits until updates are resumed.'
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/starts on its own/)).toBeNull()
+  })
+
+  it('says the last update failed and when it is tried again, not that it starts on its own', () => {
+    queries.useUpgradeActiveRun.mockReturnValue({
+      data: {
+        run: null,
+        lastRun: {
+          id: 'run-failed',
+          status: 'failed',
+          phase: null,
+          channel: 'canary',
+          source: 'automatic',
+          error: 'colocated_daemon_failed',
+          steps: [
+            {
+              id: 'step-1',
+              runId: 'run-failed',
+              serverId: 'server-1',
+              phase: 'colocated_daemon',
+              unit: 'daemon',
+              status: 'failed',
+              errorCode: 'failed',
+            },
+          ],
+        },
+      },
+    })
+    render(<SelfHostedUpdates data={DATA} />)
+    expect(screen.getByText('Needs Attention')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'Waiting to update: control plane v1.0.1. The last update failed (Daemon step). TurboPanel tries again at a later check, after a wait that starts at one hour and doubles each time, up to a day.'
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/starts on its own at the next check/)).toBeNull()
   })
 
   it('shows the backup and rollback command while a control plane install waits', () => {

@@ -13,6 +13,7 @@ import {
 } from '@/lib/instance-updates'
 import { isDevelopmentInstall } from '@/lib/development-updates'
 import { joinWithAnd } from '@/lib/upgrade-display'
+import { UPDATE_RETRY_LATER_COPY } from '@/lib/update-automation'
 import { plainStepFailureMessage } from '@/lib/user-error'
 
 /**
@@ -283,6 +284,11 @@ export function runFailure(
   return { ...explainUpgradeFailure(step, run.channel), stepTitle: failedStepTitle(step) }
 }
 
+/** Title of the step that ended badly in this run ("Daemon step"), or null. */
+export function failedStepTitleOf(run: RunWithSteps | null): string | null {
+  return runFailure(run)?.stepTitle ?? null
+}
+
 const WAITING_STATUSES = new Set([
   'pending',
   'waiting',
@@ -345,7 +351,12 @@ export type UpdateBanner = Readonly<{
 
 type UpdateOfferInput = Readonly<{
   updates:
-    Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged' | 'development'> | null | undefined
+    | Pick<
+        InstanceUpdates,
+        'units' | 'runtime' | 'updatesManaged' | 'development' | 'updatesPaused'
+      >
+    | null
+    | undefined
   activeRun: boolean
   /** This app's build, so a UI-only update counts as an offer. */
   consoleBuild?: ConsoleBuild | null
@@ -392,15 +403,33 @@ export function updateBanner(
       dismissedKey: string | null
       /** This app's build, so the web app is listed when the channel serves a newer one. */
       consoleBuild?: ConsoleBuild | null
+      /** Title of the step that failed in the last update (the update did not finish), or null. */
+      failedStep?: string | null
     }>
 ): UpdateBanner | null {
   if (!input.updates || !updateOffered(input)) return null
   const pieces = updatePieces(input.updates.units, input.consoleBuild ?? null)
   if (pieces.length === 0) return null
-  const key = pieces.map(pieceKey).join(';')
+  const paused = input.updates.updatesPaused === true
+  const failedStep = paused ? null : (input.failedStep ?? null)
+  const key = pieces.map(pieceKey).join(';') + (failedStep ? '|failed' : '')
   if (key === input.dismissedKey) return null
   const labels = pieces.map(updatePieceLabel).join(', ')
   const names = joinWithAnd(pieces.map((piece) => BODY_NAMES[piece.name]))
+  if (paused) {
+    return {
+      key,
+      title: `TurboPanel update available: ${labels}`,
+      body: `This updates ${names}. Updates are paused, so it waits until updates are resumed in Admin > Updates.`,
+    }
+  }
+  if (failedStep) {
+    return {
+      key,
+      title: `TurboPanel update failed: ${labels}`,
+      body: `The last update failed (${failedStep}). ${UPDATE_RETRY_LATER_COPY} Open Admin > Updates for the reason or to pause updates.`,
+    }
+  }
   return {
     key,
     title: `TurboPanel update available: ${labels}`,

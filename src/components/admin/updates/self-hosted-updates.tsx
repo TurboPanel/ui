@@ -42,7 +42,7 @@ import {
   useUpgradeServersPage,
   useUpgradeSettings,
 } from '@/lib/queries/admin'
-import { runFailure, runToShow, stallHint } from '@/lib/update-status'
+import { failedStepTitleOf, runFailure, runToShow, stallHint } from '@/lib/update-status'
 import { spacing } from '@/lib/theme'
 
 type ShownRun = NonNullable<ReturnType<typeof runToShow>['run']>
@@ -185,13 +185,16 @@ function UpgradeProgressPanel({
 function selfHostedWaiting(
   data: InstanceUpdates,
   consoleBuild: ConsoleBuild | null,
-  runGoing: boolean
+  runGoing: boolean,
+  failedStep: string | null
 ): string | null {
   const localWaiting = selfHostedUpdateAvailable(data.units, consoleBuild)
   if (runGoing || !isUpdateWaiting(data, localWaiting)) return null
   return waitingSentence({
     pieceLabels: updatePieces(data.units, consoleBuild).map(updatePieceLabel),
     daemonsBehind: data.daemonsBehind === true,
+    paused: data.updatesPaused === true,
+    failedStep,
   })
 }
 
@@ -220,12 +223,13 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
   const controlPlaneStep = run?.steps.find((step) => step.phase === 'control_plane')
   const needsAttention = fleetSummary.needsAttention + (run?.counts?.needsAttention ?? 0)
   const runGoing = Boolean(run && !shown.finished)
-  const waiting = selfHostedWaiting(data, consoleBuild, runGoing)
+  const failedStep = failedStepTitleOf(run)
+  const waiting = selfHostedWaiting(data, consoleBuild, runGoing, failedStep)
 
   const headline = resolvePlatformUpgradeHeadline({
     activeRunStatus: shown.finished ? null : (run?.status ?? null),
     updateAvailable: waiting !== null,
-    needsAttentionCount: needsAttention,
+    needsAttentionCount: needsAttention + (shown.finished && failedStep ? 1 : 0),
     paused: data.updatesPaused === true,
   })
 
