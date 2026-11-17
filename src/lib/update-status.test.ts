@@ -11,6 +11,7 @@ import {
   stallHint,
   UPGRADE_DOCS_URL,
   UpgradeStartTimeoutError,
+  failedStepTitleOf,
   updateBanner,
   showsUpdateBanner,
   updateOffered,
@@ -213,6 +214,24 @@ describe('runToShow with the running build', () => {
   })
 })
 
+describe('failedStepTitleOf', () => {
+  it('names the failed step', () => {
+    expect(failedStepTitleOf(run({ status: 'failed', steps: [step({ status: 'failed' })] }))).toBe(
+      'Daemon step'
+    )
+  })
+
+  it('is null for a cancelled run and for a failed run with no failed step', () => {
+    expect(
+      failedStepTitleOf(run({ status: 'cancelled', steps: [step({ status: 'skipped' })] }))
+    ).toBeNull()
+    expect(
+      failedStepTitleOf(run({ status: 'failed', steps: [step({ status: 'done' })] }))
+    ).toBeNull()
+    expect(failedStepTitleOf(null)).toBeNull()
+  })
+})
+
 describe('runFailure', () => {
   it('explains the first failed step with its phase', () => {
     const failure = runFailure(
@@ -377,6 +396,33 @@ describe('updateBanner', () => {
       'This updates the control plane (the part that runs TurboPanel). It installs on its own at the next check; open Admin > Updates to follow it or pause updates.'
     )
     expect(banner?.key).toBe('control plane|canary|0.1.2|abc1234def|20260927-180000-abc1234')
+  })
+
+  it('says the update waits until resumed while updates are paused', () => {
+    const banner = updateBanner({
+      updates: { ...updates(), updatesPaused: true },
+      activeRun: false,
+      dismissedKey: null,
+      failedStep: 'Daemon step',
+    })
+    expect(banner?.title).toBe('TurboPanel update available: control plane v0.1.2')
+    expect(banner?.body).toBe(
+      'This updates the control plane (the part that runs TurboPanel). Updates are paused, so it waits until updates are resumed in Admin > Updates.'
+    )
+  })
+
+  it('says the last update failed and what happens next', () => {
+    const banner = updateBanner({
+      updates: updates(),
+      activeRun: false,
+      dismissedKey: null,
+      failedStep: 'Daemon step',
+    })
+    expect(banner?.title).toBe('TurboPanel update failed: control plane v0.1.2')
+    expect(banner?.body).toBe(
+      'The last update failed (Daemon step). TurboPanel tries again at a later check, after a wait that starts at one hour and doubles each time, up to a day. Open Admin > Updates for the reason or to pause updates.'
+    )
+    expect(banner?.key.endsWith('|failed')).toBe(true)
   })
 
   it('names every piece with an update in the order control plane, UI, daemon', () => {

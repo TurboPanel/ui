@@ -17,7 +17,7 @@ import {
   pausedSinceText,
   SERVER_UPDATES_AUTOMATIC_COPY,
   UPDATE_NOW_UNREACHABLE,
-  UPDATE_WAITING_COPY,
+  updateWaitingCopy,
   waitingSentence,
 } from './update-automation'
 
@@ -113,8 +113,31 @@ describe('what waits', () => {
   })
 
   it('has a general sentence for a wait it cannot name', () => {
-    expect(UPDATE_WAITING_COPY).toBe(
+    expect(updateWaitingCopy(false)).toBe(
       'An update is waiting. It starts on its own at the next check.'
+    )
+  })
+
+  it('says the update waits until resumed while paused, never that it starts on its own', () => {
+    expect(
+      waitingSentence({ pieceLabels: ['control plane v1.0.1'], daemonsBehind: false, paused: true })
+    ).toBe(
+      'Waiting to update: control plane v1.0.1. Updates are paused, so it waits until updates are resumed.'
+    )
+    expect(updateWaitingCopy(true)).toBe(
+      'An update is waiting. Updates are paused, so it waits until updates are resumed.'
+    )
+  })
+
+  it('says the last update failed and when it is tried again, instead of starting on its own', () => {
+    expect(
+      waitingSentence({
+        pieceLabels: ['control plane v1.0.1'],
+        daemonsBehind: false,
+        failedStep: 'Daemon step',
+      })
+    ).toBe(
+      'Waiting to update: control plane v1.0.1. The last update failed (Daemon step). TurboPanel tries again at a later check, after a wait that starts at one hour and doubles each time, up to a day.'
     )
   })
 

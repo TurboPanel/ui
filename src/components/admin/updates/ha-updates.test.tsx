@@ -253,6 +253,20 @@ describe('HighAvailabilityUpdates', () => {
     ).toBeTruthy()
   })
 
+  it('says a waiting daemon update waits until resumed while paused', () => {
+    render(
+      <HighAvailabilityUpdates
+        data={{ ...DATA, daemonsBehind: true, updateWaiting: true, updatesPaused: true }}
+      />
+    )
+    expect(
+      screen.getByText(
+        'Waiting to update: the daemon on some servers. Updates are paused, so it waits until updates are resumed.'
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/starts on its own/)).toBeNull()
+  })
+
   it('does not claim daemons are behind when only something else waits', () => {
     render(
       <HighAvailabilityUpdates data={{ ...DATA, daemonsBehind: false, updateWaiting: true }} />

@@ -213,22 +213,43 @@ export function pauseSwitchNote(paused: boolean): string {
     : 'Updates start on their own.'
 }
 
+/** What happens after a failed update: the control plane's retry backoff, in plain words. */
+export const UPDATE_RETRY_LATER_COPY =
+  'TurboPanel tries again at a later check, after a wait that starts at one hour and doubles each time, up to a day.'
+
+/** The closing sentence for something that waits: paused, after a failure, or on its own. */
+function waitingEnding(paused: boolean, failedStep: string | null): string {
+  if (paused) return 'Updates are paused, so it waits until updates are resumed.'
+  if (failedStep) return `The last update failed (${failedStep}). ${UPDATE_RETRY_LATER_COPY}`
+  return 'It starts on its own at the next check.'
+}
+
 /**
  * What waits to update, as one sentence: the pieces with a newer build (each
  * with its version) and, when a connected daemon is behind, the daemons on
- * those servers. Null when nothing waits.
+ * those servers. Null when nothing waits. While paused it says the update
+ * waits until updates are resumed; after a failed update it says that, and
+ * that the control plane tries again later, instead of "starts on its own".
  */
 export function waitingSentence(
-  input: Readonly<{ pieceLabels: readonly string[]; daemonsBehind: boolean }>
+  input: Readonly<{
+    pieceLabels: readonly string[]
+    daemonsBehind: boolean
+    paused?: boolean
+    /** Title of the step that failed in the last update, or null. */
+    failedStep?: string | null
+  }>
 ): string | null {
   const items = [...input.pieceLabels]
   if (input.daemonsBehind) items.push('the daemon on some servers')
   if (items.length === 0) return null
-  return `Waiting to update: ${joinWithAnd(items)}. It starts on its own at the next check.`
+  return `Waiting to update: ${joinWithAnd(items)}. ${waitingEnding(input.paused === true, input.failedStep ?? null)}`
 }
 
 /** When something waits that the screen cannot name piece by piece. */
-export const UPDATE_WAITING_COPY = 'An update is waiting. It starts on its own at the next check.'
+export function updateWaitingCopy(paused: boolean): string {
+  return `An update is waiting. ${waitingEnding(paused, null)}`
+}
 
 /**
  * Whether anything waits to update. The control plane's `updateWaiting` is the
