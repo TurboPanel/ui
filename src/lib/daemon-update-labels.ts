@@ -37,7 +37,7 @@ export function daemonUnsupportedLabel(support: DaemonSupport): string {
   const reason = support.reason
     ?.trim()
     .replace(/^[a-z]+(?:_[a-z]+)+:\s*/, '')
-    .replace(/\s*[—-]\s*update the daemon\.?$/, '')
+    .replace(/ — update the daemon\.?$/, '')
   if (!reason) return UNSUPPORTED_FALLBACK
   const sentence = reason.charAt(0).toUpperCase() + reason.slice(1)
   return `${sentence.replace(/\.$/, '')}. It stays connected but gets no commands until it is updated.`
