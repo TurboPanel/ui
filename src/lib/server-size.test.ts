@@ -39,7 +39,7 @@ describe('parseSizeOutput', () => {
   })
 
   it('tolerates the older "-> S2" suffix, a prompt around it and odd spacing', () => {
-    expect(parseSizeOutput('root@adrastea:~# 4 cores ,  7.6 GiB RAM -> S1\n')).toEqual({
+    expect(parseSizeOutput('root@host-a:~# 4 cores ,  7.6 GiB RAM -> S1\n')).toEqual({
       cores: 4,
       memoryBytes: Math.round(7.6 * GIB),
     })

@@ -47,7 +47,7 @@ describe('provisioning keys', () => {
   const provisioning = license({
     id: 'prov',
     createdAt: '2026-03-01T00:00:00.000Z',
-    provisioning: { since: '2026-09-26T23:50:00.000Z', hostname: 'adrastea' },
+    provisioning: { since: '2026-09-26T23:50:00.000Z', hostname: 'host-a' },
   })
   const unused = license({ id: 'unused' })
   const bound = license({
@@ -69,7 +69,7 @@ describe('provisioning keys', () => {
   it('names one provisioning server with its host and start time', () => {
     const since = formatLocalDateTime('2026-09-26T23:50:00.000Z', { includeSeconds: false })
     expect(provisioningServersLabel([provisioning])).toBe(
-      `1 server provisioning (adrastea) since ${since}`
+      `1 server provisioning (host-a) since ${since}`
     )
   })
 
