@@ -13233,6 +13233,18 @@ export type TunnelRecord = {
   runTokenRotation?: TunnelRunTokenRotation | null
   /** Why Rotate Run Token would be refused now, or null when it can start; missing from an older panel. */
   runTokenRotationBlock?: TunnelRotationBlock | null
+  /** What each server that carries the tunnel or runs one of its sites last reported about the peer hop; missing from an older panel. */
+  peerHop?: TunnelPeerHop[]
+}
+
+/** One server's report on the client-certificate check between servers. */
+export type TunnelPeerHop = {
+  serverId: string
+  /** `require` checks a client certificate, `verify` admits a peer without one, `none` means no mode reported yet. */
+  mode: 'require' | 'verify' | 'none'
+  /** `require` was asked for but `verify` is what runs, because the peer certificate lacks client use. */
+  downgraded: boolean
+  reportedAt: string | null
 }
 
 /** Where a run-token rotation is. The token itself is never returned. */
@@ -13306,6 +13318,8 @@ export type TunnelHostnameRecord = {
   status: string
   /** `created` when a DNS name was made, `none` when no zone the token can edit holds it. */
   dns: 'created' | 'none'
+  /** Why the name is not being forwarded to its site right now; null when routed or unknown, missing from an older panel. */
+  routingNote?: string | null
   createdAt: string
 }
 

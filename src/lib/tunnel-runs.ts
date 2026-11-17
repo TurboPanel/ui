@@ -10,6 +10,7 @@ import type {
   OriginCertificateRecord,
   TunnelPlacement,
   TunnelPlacementBody,
+  TunnelPeerHop,
   TunnelPortal,
   TunnelRecord,
   TunnelRunTokenRotation,
@@ -314,6 +315,39 @@ export function portalState(portal: Pick<TunnelPortal, 'wanted' | 'reported'>): 
   }
 }
 
+/** A server's peer hop mode, as a badge, with a plain line saying what it means. */
+export function peerHopState(hop: Pick<TunnelPeerHop, 'mode' | 'downgraded'>): {
+  label: string
+  tone: BadgeTone
+  note: string
+} {
+  if (hop.mode === 'none') {
+    return {
+      label: 'Not Reported Yet',
+      tone: 'pending',
+      note: 'This server has not reported how it checks other servers yet. It may need an update.',
+    }
+  }
+  if (hop.mode === 'verify') {
+    return hop.downgraded
+      ? {
+          label: 'Downgraded',
+          tone: 'danger',
+          note: 'Client certificates were asked for, but this server admits servers without one because their certificate lacks client use. A new certificate is being issued.',
+        }
+      : {
+          label: 'Verify',
+          tone: 'info',
+          note: 'Checks a client certificate when one is shown, and admits a server without one.',
+        }
+  }
+  return {
+    label: 'Require',
+    tone: 'ok',
+    note: 'Only servers that show a client certificate are admitted.',
+  }
+}
+
 /** "Connector 2026.5.2", or a plain note before the server has reported one. */
 export function connectorLine(portal: Pick<TunnelPortal, 'connectorVersion'>): string {
   return portal.connectorVersion
@@ -327,6 +361,14 @@ export function seenLabel(iso: string | null): string {
   const when = new Date(iso)
   if (Number.isNaN(when.getTime())) return 'Not seen yet'
   return `Seen ${when.toLocaleString()}`
+}
+
+/** "Reported 3 Nov 2026, 14:05", or that nothing was. */
+export function reportedLabel(iso: string | null): string {
+  if (!iso) return 'Not reported yet'
+  const when = new Date(iso)
+  if (Number.isNaN(when.getTime())) return 'Not reported yet'
+  return `Reported ${when.toLocaleString()}`
 }
 
 /** Where a tunnel runs, in a sentence, for the card's header. */
