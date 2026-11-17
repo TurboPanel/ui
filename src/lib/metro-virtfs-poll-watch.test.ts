@@ -97,7 +97,7 @@ describe('needsPollWatch', () => {
       needsPollWatch({
         env: {},
         mountsText: '/dev/nvme0n1p1 /home ext4 rw 0 0\n',
-        resolvedRoot: '/home/muncherelli/Development/turbopanel/ui',
+        resolvedRoot: '/home/dev/turbopanel/ui',
       })
     ).toBe(false)
   })

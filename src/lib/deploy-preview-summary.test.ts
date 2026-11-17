@@ -72,7 +72,7 @@ describe('buildDeploySummary', () => {
     const { services } = buildDeploySummary({
       document,
       preview: preview(),
-      placementLabel: 'omicron',
+      placementLabel: 'server-f',
     })
     expect(services.map((s) => [s.name, s.kind])).toEqual([
       ['web', 'Node app'],
@@ -80,7 +80,7 @@ describe('buildDeploySummary', () => {
       ['blog', 'PHP site'],
     ])
     expect(services[0]).toMatchObject({
-      servers: ['omicron'],
+      servers: ['server-f'],
       origin: 'acme/app @ main',
       hostnames: [{ name: 'app.example.com', tunnel: false }],
     })
@@ -107,13 +107,13 @@ describe('buildDeploySummary', () => {
       document,
       preview: preview({
         servers: [
-          { serverId: 's1', name: 'omicron', composeFiles: [], services: ['web'] },
+          { serverId: 's1', name: 'server-f', composeFiles: [], services: ['web'] },
           { serverId: 's2', name: ' ', composeFiles: [], services: ['db', 'web'] },
         ],
       }),
-      placementLabel: 'omicron',
+      placementLabel: 'server-f',
     })
-    expect(services[0].servers).toEqual(['omicron', 's2'])
+    expect(services[0].servers).toEqual(['server-f', 's2'])
     expect(services[1].servers).toEqual(['s2'])
   })
 
@@ -121,7 +121,7 @@ describe('buildDeploySummary', () => {
     const { variableGroups } = buildDeploySummary({
       document,
       preview: preview(),
-      placementLabel: 'omicron',
+      placementLabel: 'server-f',
     })
     expect(variableGroups).toHaveLength(1)
     const byName = Object.fromEntries(variableGroups[0].variables.map((v) => [v.name, v]))
@@ -140,7 +140,7 @@ describe('buildDeploySummary', () => {
   it('splits a service’s own variables into building and running, by the name set', () => {
     const { serviceVariables } = buildDeploySummary({
       document,
-      placementLabel: 'omicron',
+      placementLabel: 'server-f',
       preview: preview({
         serviceVariables: [
           {

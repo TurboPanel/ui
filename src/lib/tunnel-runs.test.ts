@@ -430,8 +430,8 @@ describe('run token rotation', () => {
   const A = '00000000-0000-4000-8000-00000000000a'
   const B = '00000000-0000-4000-8000-00000000000b'
   const names = new Map([
-    [A, 'juliet'],
-    [B, 'panvm'],
+    [A, 'server-b'],
+    [B, 'server-h'],
   ])
   const base = {
     phase: 'rolling' as const,
@@ -445,10 +445,10 @@ describe('run token rotation', () => {
 
   it('says which servers moved and which is next', () => {
     expect(rotationProgressLine(base, names)).toBe(
-      'Rotating run token: juliet moved, panvm next (about 10 min)'
+      'Rotating run token: server-b moved, server-h next (about 10 min)'
     )
     expect(rotationProgressLine({ ...base, currentServerId: A }, names)).toBe(
-      'Rotating run token: juliet moving now'
+      'Rotating run token: server-b moving now'
     )
     expect(rotationProgressLine({ ...base, phase: 'starting', movedServerIds: [] }, names)).toBe(
       'Rotating run token: asking for a new token'
@@ -472,15 +472,15 @@ describe('run token rotation', () => {
         { ...base, phase: 'stopped', stoppedReason: `Server ${B} is offline` },
         names
       )
-    ).toBe('Run token rotation stopped: Server panvm is offline')
+    ).toBe('Run token rotation stopped: Server server-h is offline')
     expect(rotationStoppedLine(base, names)).toBeNull()
-    expect(withServerNames(`a ${A} b ${A}`, names)).toBe('a juliet b juliet')
+    expect(withServerNames(`a ${A} b ${A}`, names)).toBe('a server-b b server-b')
   })
 
   it('says whether a stop carries on by itself, and which servers keep the old token meanwhile', () => {
     const stopped = { ...base, phase: 'stopped' as const, oldTokenServerIds: [B] }
     expect(rotationStoppedHint({ ...stopped, resumesOnItsOwn: true }, names)).toBe(
-      'It tries again by itself in a few minutes, or resume it now. Until then panvm keeps the old token, which cannot reconnect after a restart.'
+      'It tries again by itself in a few minutes, or resume it now. Until then server-h keeps the old token, which cannot reconnect after a restart.'
     )
     expect(rotationStoppedHint({ ...stopped, oldTokenServerIds: [] }, names)).toBe(
       'Resuming carries on from where it stopped, with the token already issued.'
@@ -496,7 +496,7 @@ describe('run token rotation', () => {
         },
         names
       )
-    ).toContain('Update the daemon on panvm')
+    ).toContain('Update the daemon on server-h')
     expect(
       rotationBlockedReason(
         {
@@ -505,7 +505,7 @@ describe('run token rotation', () => {
         },
         names
       )
-    ).toBe('juliet cannot be reached right now. Try again once it is back.')
+    ).toBe('server-b cannot be reached right now. Try again once it is back.')
     expect(
       rotationBlockedReason(
         {
@@ -514,7 +514,7 @@ describe('run token rotation', () => {
         },
         names
       )
-    ).toBe('juliet, panvm cannot be reached right now. Try again once they are back.')
+    ).toBe('server-b, server-h cannot be reached right now. Try again once they are back.')
     expect(
       rotationBlockedReason(
         {

@@ -51,13 +51,13 @@ describe('serversPinnedToAnotherKey', () => {
     const fp = 'X'.repeat(43)
     expect(
       serversPinnedToAnotherKey([
-        { id: 's1', name: 'kappa', pinReport: { fingerprint: fp, matches: false } },
+        { id: 's1', name: 'server-c', pinReport: { fingerprint: fp, matches: false } },
         { id: 's2', name: null, pinReport: { fingerprint: '', matches: false } },
-        { id: 's3', name: 'omicron', pinReport: { fingerprint: fp, matches: true } },
+        { id: 's3', name: 'server-f', pinReport: { fingerprint: fp, matches: true } },
         { id: 's4', name: 'lambda', pinReport: null },
         { id: 's5', name: 'mu' },
       ])
-    ).toEqual([`kappa (${fp})`, 's2 (no key)'])
+    ).toEqual([`server-c (${fp})`, 's2 (no key)'])
   })
 })
 
@@ -66,17 +66,17 @@ describe('serversNotRotatable', () => {
     expect(
       serversNotRotatable([
         // Reported a pin with no passkeys.
-        { id: 's1', name: 'kappa', pinnedBy: 'install', pinPasskeys: '' },
+        { id: 's1', name: 'server-c', pinnedBy: 'install', pinPasskeys: '' },
         // Pinned, never reported them (an older daemon).
         { id: 's2', name: null, pinnedBy: 'upgrade', pinPasskeys: null },
         // Holds the passkeys.
-        { id: 's3', name: 'omicron', pinnedBy: 'install', pinPasskeys: 'H'.repeat(43) },
+        { id: 's3', name: 'server-f', pinnedBy: 'install', pinPasskeys: 'H'.repeat(43) },
         // Not pinned at all: it has its own warning.
         { id: 's4', name: 'sigma', pinnedBy: 'unsafe', pinPasskeys: null },
         { id: 's5', name: 'tau', pinnedBy: 'none', pinPasskeys: null },
         // An older control plane sends no such field.
         { id: 's6', name: 'lambda', pinnedBy: 'install' },
       ])
-    ).toEqual(['kappa', 's2'])
+    ).toEqual(['server-c', 's2'])
   })
 })

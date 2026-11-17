@@ -70,8 +70,8 @@ const MODES = [
 const CLOSED: EdgeGate = {
   open: false,
   reason:
-    "1 server still needs to re-learn this control plane's key before an edge mode can be used: kappa.",
-  waiting: [{ id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: null }],
+    "1 server still needs to re-learn this control plane's key before an edge mode can be used: server-c.",
+  waiting: [{ id: 's1', name: 'server-c', organizationId: 'o1', pinnedBy: null }],
   remoteServers: 1,
   forcedClosed: false,
 }
