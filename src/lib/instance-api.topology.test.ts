@@ -93,9 +93,7 @@ describe('instance-api topology fetch wrappers', () => {
   it('addDatacenterMembers and removeDatacenterMember hit member routes', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(
-      addDatacenterMembers('dc-1', [
-        { serverId: 'srv-2', address: '203.0.113.20' },
-      ]),
+      addDatacenterMembers('dc-1', [{ serverId: 'srv-2', address: '203.0.113.20' }])
     ).resolves.toEqual({ ok: true })
     const addCall = fetchMock.mock.calls[0]
     expect(requestUrl(addCall)).toContain('/api/client/v1/datacenters/dc-1/members')
@@ -109,9 +107,7 @@ describe('instance-api topology fetch wrappers', () => {
       ok: true,
     })
     const removeCall = fetchMock.mock.calls[1]
-    expect(requestUrl(removeCall)).toContain(
-      '/api/client/v1/datacenters/dc-1/members/srv-2',
-    )
+    expect(requestUrl(removeCall)).toContain('/api/client/v1/datacenters/dc-1/members/srv-2')
     expect(requestInit(removeCall).method).toBe('DELETE')
   })
 
@@ -121,12 +117,10 @@ describe('instance-api topology fetch wrappers', () => {
       createDatacenterSubnet('dc-1', {
         cidr: '203.0.113.0/24',
         name: 'lab-v5',
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'net-1' })
     const createCall = fetchMock.mock.calls[0]
-    expect(requestUrl(createCall)).toContain(
-      '/api/client/v1/datacenters/dc-1/subnets',
-    )
+    expect(requestUrl(createCall)).toContain('/api/client/v1/datacenters/dc-1/subnets')
     expect(requestInit(createCall).method).toBe('POST')
     expect(requestBody(createCall)).toEqual({
       cidr: '203.0.113.0/24',
@@ -135,12 +129,10 @@ describe('instance-api topology fetch wrappers', () => {
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(
-      updateDatacenterSubnet('dc-1', 'net-1', { description: 'TEST-NET-3' }),
+      updateDatacenterSubnet('dc-1', 'net-1', { description: 'TEST-NET-3' })
     ).resolves.toEqual({ ok: true })
     const updateCall = fetchMock.mock.calls[1]
-    expect(requestUrl(updateCall)).toContain(
-      '/api/client/v1/datacenters/dc-1/subnets/net-1',
-    )
+    expect(requestUrl(updateCall)).toContain('/api/client/v1/datacenters/dc-1/subnets/net-1')
     expect(requestInit(updateCall).method).toBe('PATCH')
     expect(requestBody(updateCall)).toEqual({ description: 'TEST-NET-3' })
 
@@ -149,9 +141,7 @@ describe('instance-api topology fetch wrappers', () => {
       ok: true,
     })
     const deleteCall = fetchMock.mock.calls[2]
-    expect(requestUrl(deleteCall)).toContain(
-      '/api/client/v1/datacenters/dc-1/subnets/net-1',
-    )
+    expect(requestUrl(deleteCall)).toContain('/api/client/v1/datacenters/dc-1/subnets/net-1')
     expect(requestInit(deleteCall).method).toBe('DELETE')
   })
 
@@ -161,7 +151,7 @@ describe('instance-api topology fetch wrappers', () => {
       updateDatacenter('dc-1', {
         name: 'Lab DC',
         options: { addressPreference: 'ipv4' },
-      }),
+      })
     ).resolves.toEqual({ ok: true })
     const updateCall = fetchMock.mock.calls[0]
     expect(requestUrl(updateCall)).toContain('/api/client/v1/datacenters/dc-1')
@@ -175,19 +165,11 @@ describe('instance-api topology fetch wrappers', () => {
     await expect(deleteDatacenter('dc-1')).resolves.toEqual({ ok: true })
     expect(requestInit(fetchMock.mock.calls[1]).method).toBe('DELETE')
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: DATACENTER_HAS_MEMBERS_ERROR }, 409),
-    )
-    await expect(deleteDatacenter('dc-2')).rejects.toThrow(
-      DATACENTER_HAS_MEMBERS_ERROR,
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: DATACENTER_HAS_MEMBERS_ERROR }, 409))
+    await expect(deleteDatacenter('dc-2')).rejects.toThrow(DATACENTER_HAS_MEMBERS_ERROR)
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: DATACENTER_HAS_NETWORKS_ERROR }, 409),
-    )
-    await expect(deleteDatacenter('dc-3')).rejects.toThrow(
-      DATACENTER_HAS_NETWORKS_ERROR,
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: DATACENTER_HAS_NETWORKS_ERROR }, 409))
+    await expect(deleteDatacenter('dc-3')).rejects.toThrow(DATACENTER_HAS_NETWORKS_ERROR)
   })
 
   it('fetchIps builds filter query strings and fetchIp loads one row', async () => {
@@ -221,7 +203,7 @@ describe('instance-api topology fetch wrappers', () => {
         networkId: 'net-1',
         scope: 'datacenter',
         allocation: 'dedicated',
-      }),
+      })
     ).resolves.toEqual({ ips })
     const filteredUrl = requestUrl(fetchMock.mock.calls[1])
     expect(filteredUrl).toContain('/api/client/v1/ips?')
@@ -258,7 +240,7 @@ describe('instance-api topology fetch wrappers', () => {
       updateIp('ip-2', {
         description: 'edge vip',
         serverId: 'srv-1',
-      }),
+      })
     ).resolves.toEqual({ ok: true })
     const updateCall = fetchMock.mock.calls[1]
     expect(requestUrl(updateCall)).toContain('/api/client/v1/ips/ip-2')
@@ -292,7 +274,7 @@ describe('instance-api topology fetch wrappers', () => {
         datacenterId: 'dc-1',
         serverId: 'srv-1',
         kind: 'docker',
-      }),
+      })
     ).resolves.toEqual({ networks })
     const listUrl = requestUrl(fetchMock.mock.calls[0])
     expect(listUrl).toContain('/api/client/v1/networks?')
@@ -323,9 +305,9 @@ describe('instance-api topology fetch wrappers', () => {
     expect(requestBody(createCall)).toEqual(createBody)
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(
-      updateNetwork('net-2', { name: 'lab-renamed', cidr: null }),
-    ).resolves.toEqual({ ok: true })
+    await expect(updateNetwork('net-2', { name: 'lab-renamed', cidr: null })).resolves.toEqual({
+      ok: true,
+    })
     const updateCall = fetchMock.mock.calls[3]
     expect(requestUrl(updateCall)).toContain('/api/client/v1/networks/net-2')
     expect(requestInit(updateCall).method).toBe('PATCH')
@@ -342,9 +324,7 @@ describe('instance-api topology fetch wrappers', () => {
   })
 
   it('access grant helpers create, revoke, and accept invitations', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, id: 'grant-1', created: true }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'grant-1', created: true }))
     const grantBody = {
       resourceId: 'res-1',
       subjectKind: 'team' as const,
@@ -368,17 +348,13 @@ describe('instance-api topology fetch wrappers', () => {
     expect(requestUrl(revokeCall)).toContain('/api/client/v1/access/grant-1')
     expect(requestInit(revokeCall).method).toBe('DELETE')
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, organizationId: 'org-1' }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, organizationId: 'org-1' }))
     await expect(acceptInvitation('inv-1')).resolves.toEqual({
       ok: true,
       organizationId: 'org-1',
     })
     const acceptCall = fetchMock.mock.calls[2]
-    expect(requestUrl(acceptCall)).toContain(
-      '/api/client/v1/invitations/inv-1/accept',
-    )
+    expect(requestUrl(acceptCall)).toContain('/api/client/v1/invitations/inv-1/accept')
     expect(requestInit(acceptCall).method).toBe('POST')
 
     fetchMock.mockResolvedValueOnce(
@@ -386,15 +362,15 @@ describe('instance-api topology fetch wrappers', () => {
         ok: true,
         id: 'inv-2',
         expiresAt: '2099-01-01T00:00:00.000Z',
-      }),
+      })
     )
-    await expect(
-      createInvitation({ teamId: 'team-1', email: 'new@example.com' }),
-    ).resolves.toEqual({
-      ok: true,
-      id: 'inv-2',
-      expiresAt: '2099-01-01T00:00:00.000Z',
-    })
+    await expect(createInvitation({ teamId: 'team-1', email: 'new@example.com' })).resolves.toEqual(
+      {
+        ok: true,
+        id: 'inv-2',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      }
+    )
     const createInviteCall = fetchMock.mock.calls[3]
     expect(requestUrl(createInviteCall)).toContain('/api/client/v1/invitations')
     expect(requestInit(createInviteCall).method).toBe('POST')
@@ -404,45 +380,37 @@ describe('instance-api topology fetch wrappers', () => {
     })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ invitations: [{ id: 'inv-2', email: 'new@example.com' }] }),
+      jsonResponse({ invitations: [{ id: 'inv-2', email: 'new@example.com' }] })
     )
     await expect(listInvitations()).resolves.toEqual({
       invitations: [{ id: 'inv-2', email: 'new@example.com' }],
     })
-    expect(requestUrl(fetchMock.mock.calls[4])).toContain(
-      '/api/client/v1/invitations',
-    )
+    expect(requestUrl(fetchMock.mock.calls[4])).toContain('/api/client/v1/invitations')
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     await expect(revokeInvitation('inv-2')).resolves.toEqual({ ok: true })
     const revokeInviteCall = fetchMock.mock.calls[5]
-    expect(requestUrl(revokeInviteCall)).toContain(
-      '/api/client/v1/invitations/inv-2',
-    )
+    expect(requestUrl(revokeInviteCall)).toContain('/api/client/v1/invitations/inv-2')
     expect(requestInit(revokeInviteCall).method).toBe('DELETE')
   })
 
   it('public URL admin helpers fetch, save, and apply with optional urls', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, urls: ['https://panel.example'] }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, urls: ['https://panel.example'] }))
     await expect(fetchPublicUrls()).resolves.toEqual({
       ok: true,
       urls: ['https://panel.example'],
     })
-    expect(requestUrl(fetchMock.mock.calls[0])).toContain(
-      '/api/admin/v1/instance/public-urls',
-    )
+    expect(requestUrl(fetchMock.mock.calls[0])).toContain('/api/admin/v1/instance/public-urls')
 
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
         ok: true,
         urls: ['https://panel.example', 'https://server-a.example.lan:8443'],
         applied: false,
-      }),
+      })
     )
     await expect(
-      savePublicUrls(['https://panel.example', 'https://server-a.example.lan:8443']),
+      savePublicUrls(['https://panel.example', 'https://server-a.example.lan:8443'])
     ).resolves.toEqual({
       ok: true,
       urls: ['https://panel.example', 'https://server-a.example.lan:8443'],
@@ -454,35 +422,27 @@ describe('instance-api topology fetch wrappers', () => {
       urls: ['https://panel.example', 'https://server-a.example.lan:8443'],
     })
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, applied: true }),
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, applied: true }))
     await expect(applyPublicUrls()).resolves.toEqual({ ok: true, applied: true })
     const applyNoBody = fetchMock.mock.calls[2]
-    expect(requestUrl(applyNoBody)).toContain(
-      '/api/admin/v1/instance/public-urls/apply',
-    )
+    expect(requestUrl(applyNoBody)).toContain('/api/admin/v1/instance/public-urls/apply')
     expect(requestInit(applyNoBody).method).toBe('POST')
     expect(requestInit(applyNoBody).body).toBeUndefined()
 
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ ok: true, applied: true }),
-    )
-    await expect(
-      applyPublicUrls(['https://panel.example']),
-    ).resolves.toEqual({ ok: true, applied: true })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, applied: true }))
+    await expect(applyPublicUrls(['https://panel.example'])).resolves.toEqual({
+      ok: true,
+      applied: true,
+    })
     expect(requestBody(fetchMock.mock.calls[3])).toEqual({
       urls: ['https://panel.example'],
     })
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        { error: 'cert apply is not applicable on this runtime' },
-        422,
-      ),
+      jsonResponse({ error: 'cert apply is not applicable on this runtime' }, 422)
     )
     await expect(applyPublicUrls(['https://panel.example'])).rejects.toThrow(
-      'cert apply is not applicable on this runtime',
+      'cert apply is not applicable on this runtime'
     )
   })
 
@@ -496,13 +456,13 @@ describe('instance-api topology fetch wrappers', () => {
         failed: 0,
         completed: false,
         cursor: { stage: 'tls', afterId: 'tls-10' },
-      }),
+      })
     )
     await expect(
       applyReencryptSecrets({
         cursor: { stage: 'variables', afterId: 'var-9' },
         limit: 50,
-      }),
+      })
     ).resolves.toEqual({
       ok: true,
       scanned: 50,
@@ -529,7 +489,7 @@ describe('instance-api topology fetch wrappers', () => {
         failed: 0,
         completed: true,
         cursor: null,
-      }),
+      })
     )
     await expect(applyReencryptSecrets()).resolves.toEqual({
       ok: true,
@@ -557,15 +517,11 @@ describe('instance-api topology fetch wrappers', () => {
     }
     fetchMock.mockResolvedValueOnce(jsonResponse({ servers: [status] }))
     await expect(fetchServersStatus()).resolves.toEqual({ servers: [status] })
-    expect(requestUrl(fetchMock.mock.calls[0])).toContain(
-      '/api/client/v1/servers/status',
-    )
+    expect(requestUrl(fetchMock.mock.calls[0])).toContain('/api/client/v1/servers/status')
 
     fetchMock.mockResolvedValueOnce(jsonResponse(status))
     await expect(fetchServerStatus('srv-1')).resolves.toEqual(status)
-    expect(requestUrl(fetchMock.mock.calls[1])).toContain(
-      '/api/client/v1/servers/srv-1/status',
-    )
+    expect(requestUrl(fetchMock.mock.calls[1])).toContain('/api/client/v1/servers/srv-1/status')
 
     const cell = {
       ok: true,
@@ -586,8 +542,6 @@ describe('instance-api topology fetch wrappers', () => {
     }
     fetchMock.mockResolvedValueOnce(jsonResponse(cell))
     await expect(fetchServerCell('srv-1')).resolves.toEqual(cell)
-    expect(requestUrl(fetchMock.mock.calls[2])).toContain(
-      '/api/client/v1/servers/srv-1/cell',
-    )
+    expect(requestUrl(fetchMock.mock.calls[2])).toContain('/api/client/v1/servers/srv-1/cell')
   })
 })

@@ -9,16 +9,12 @@ import {
 describe('installOriginNeedsInsecureTls', () => {
   it('treats Cloudflare-style public HTTPS on 443 as trusted', () => {
     expect(installOriginNeedsInsecureTls('https://turbopanel.dev')).toBe(false)
-    expect(installOriginNeedsInsecureTls('https://panel.example.com')).toBe(
-      false,
-    )
+    expect(installOriginNeedsInsecureTls('https://panel.example.com')).toBe(false)
   })
 
   it('treats the self-signed Caddy listener as insecure', () => {
     expect(installOriginNeedsInsecureTls('https://dev-workstation.example.lan:8443')).toBe(true)
-    expect(installOriginNeedsInsecureTls('https://panel.example.com:8443')).toBe(
-      true,
-    )
+    expect(installOriginNeedsInsecureTls('https://panel.example.com:8443')).toBe(true)
   })
 
   it('treats reserved LAN TLDs as insecure even on 443', () => {
@@ -43,9 +39,7 @@ describe('installOriginNeedsInsecureTls', () => {
 
   it('treats loopback and ULA IPv6 hosts as insecure on 443', () => {
     expect(installOriginNeedsInsecureTls('https://[::1]')).toBe(true)
-    expect(installOriginNeedsInsecureTls('https://[0:0:0:0:0:0:0:1]')).toBe(
-      true,
-    )
+    expect(installOriginNeedsInsecureTls('https://[0:0:0:0:0:0:0:1]')).toBe(true)
     expect(installOriginNeedsInsecureTls('https://[fe80::1]')).toBe(true)
     expect(installOriginNeedsInsecureTls('https://[fd12::1]')).toBe(true)
     expect(installOriginNeedsInsecureTls('https://[fc00::1]')).toBe(true)
@@ -65,19 +59,17 @@ describe('installOriginNeedsInsecureTls', () => {
 describe('formatInstanceDlBase', () => {
   it('appends /downloads/daemon', () => {
     expect(formatInstanceDlBase('https://turbopanel.dev/')).toBe(
-      'https://turbopanel.dev/downloads/daemon',
+      'https://turbopanel.dev/downloads/daemon'
     )
     expect(formatInstanceDlBase('https://turbopanel.dev')).toBe(
-      'https://turbopanel.dev/downloads/daemon',
+      'https://turbopanel.dev/downloads/daemon'
     )
   })
 })
 
 describe('installTlsHint', () => {
   it('explains public TLS vs platform CA', () => {
-    expect(installTlsHint('https://turbopanel.dev')).toContain(
-      'publicly trusted TLS',
-    )
+    expect(installTlsHint('https://turbopanel.dev')).toContain('publicly trusted TLS')
     expect(installTlsHint('https://dev-workstation.example.lan:8443')).toContain('platform CA')
     expect(installTlsHint('http://dev-workstation.example.lan')).toBeNull()
   })
