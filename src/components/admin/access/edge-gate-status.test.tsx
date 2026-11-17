@@ -14,8 +14,8 @@ const WAITING: EdgeGate = {
   open: false,
   reason: 'held',
   waiting: [
-    { id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: null },
-    { id: 's2', name: 'omicron', organizationId: null, pinnedBy: 'unsafe' },
+    { id: 's1', name: 'server-c', organizationId: 'o1', pinnedBy: null },
+    { id: 's2', name: 'server-f', organizationId: null, pinnedBy: 'unsafe' },
   ],
   remoteServers: 3,
   forcedClosed: false,
@@ -40,11 +40,11 @@ describe('EdgeGateStatus', () => {
     expect(
       screen.getByText("2 servers still need to re-learn this control plane's key.")
     ).toBeTruthy()
-    fireEvent.click(screen.getByText('kappa'))
+    fireEvent.click(screen.getByText('server-c'))
     expect(mocks.push).toHaveBeenCalledWith('/o1/servers/s1')
     // A server no organization owns has no page: its name only.
-    expect(screen.queryByRole('button', { name: 'omicron' })).toBeNull()
-    expect(screen.getByText('omicron')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'server-f' })).toBeNull()
+    expect(screen.getByText('server-f')).toBeTruthy()
     expect(screen.getByText(REENROLL_HINT)).toBeTruthy()
   })
 

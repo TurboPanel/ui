@@ -75,8 +75,8 @@ describe('words and bodies', () => {
   it('names the access and the server', () => {
     expect(adminToolAccessLabel('admin')).toBe('Database Admin')
     expect(adminToolAccessLabel('read-only')).toBe('Read-Only')
-    expect(hostnameHint('omicron')).toBe(
-      'Point this name at omicron before you deploy, like any site.'
+    expect(hostnameHint('server-f')).toBe(
+      'Point this name at server-f before you deploy, like any site.'
     )
     expect(hostnameHint()).toContain("this Database Cluster's server")
   })

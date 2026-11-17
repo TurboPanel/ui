@@ -458,7 +458,7 @@ function nameOf(id: string, names: ReadonlyMap<string, string>): string {
 
 /**
  * One line on where a running rotation is, for example
- * `Rotating run token: juliet moved, panvm next (about 10 min)`.
+ * `Rotating run token: server-b moved, server-h next (about 10 min)`.
  */
 export function rotationProgressLine(
   rotation: TunnelRunTokenRotation,

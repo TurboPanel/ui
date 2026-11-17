@@ -183,7 +183,7 @@ describe('ingress queries', () => {
       api.updateHostnameIngress.mockResolvedValueOnce({
         ok: false,
         error: 'held',
-        waiting: [{ id: 's1', name: 'kappa', organizationId: null, pinnedBy: null }],
+        waiting: [{ id: 's1', name: 'server-c', organizationId: null, pinnedBy: null }],
       })
       await result.current.update.run({ id: 'h1', patch: { mode: 'cloudflare-tunnel' } })
       await result.current.preflight.run('h1')
