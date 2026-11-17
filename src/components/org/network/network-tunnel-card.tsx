@@ -13,6 +13,7 @@ import {
 import type {
   DatacenterRecord,
   OrgServerRecord,
+  TunnelPeerHop,
   TunnelPortal,
   TunnelRecord,
 } from '@/lib/instance-api'
@@ -23,8 +24,10 @@ import {
   connectorLine,
   draftFromTunnel,
   placementBody,
+  peerHopState,
   placementSummary,
   portalState,
+  reportedLabel,
   seenLabel,
   serverLabel,
   tunnelHealth,
@@ -49,6 +52,21 @@ function PortalRow({ portal, serverName }: Readonly<{ portal: TunnelPortal; serv
         </Text>
       )}
       {portal.lastError ? <Text style={panelStyles.error}>{portal.lastError}</Text> : null}
+    </View>
+  )
+}
+
+function PeerHopRow({ hop, serverName }: Readonly<{ hop: TunnelPeerHop; serverName: string }>) {
+  const state = peerHopState(hop)
+  const reported = hop.mode === 'none' ? null : reportedLabel(hop.reportedAt)
+  return (
+    <View style={panelStyles.detailCard}>
+      <View style={styles.titleRow}>
+        <Text style={panelStyles.detailTitle}>{serverName}</Text>
+        <Badge label={state.label} tone={state.tone} />
+      </View>
+      <Text style={hop.downgraded ? panelStyles.error : panelStyles.muted}>{state.note}</Text>
+      {reported ? <Text style={panelStyles.muted}>{reported}</Text> : null}
     </View>
   )
 }
@@ -186,6 +204,21 @@ export function NetworkTunnelCard({
           />
         ))}
       </View>
+      {tunnel.peerHop && tunnel.peerHop.length > 0 ? (
+        <View style={styles.list}>
+          <Text style={panelStyles.detailTitle}>Server-to-Server Checks</Text>
+          <Text style={panelStyles.muted}>
+            How each server checks a client certificate when another server connects to it.
+          </Text>
+          {tunnel.peerHop.map((hop) => (
+            <PeerHopRow
+              key={hop.serverId}
+              hop={hop}
+              serverName={names.get(hop.serverId) ?? hop.serverId.slice(0, 8)}
+            />
+          ))}
+        </View>
+      ) : null}
       <PlacementEditor orgId={orgId} tunnel={tunnel} servers={servers} datacenters={datacenters} />
       <NetworkTunnelVerify orgId={orgId} tunnel={tunnel} />
       <NetworkTunnelRotate orgId={orgId} tunnel={tunnel} names={names} />

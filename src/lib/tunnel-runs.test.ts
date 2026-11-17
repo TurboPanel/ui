@@ -25,7 +25,9 @@ import {
   normalizeHostname,
   placementBody,
   placementSummary,
+  peerHopState,
   portalState,
+  reportedLabel,
   seenLabel,
   serverChoices,
   serverInDatacenter,
@@ -295,6 +297,26 @@ describe('words for status', () => {
     expect(portalState(portal({ reported: 'down' })).label).toBe('Not Connected')
     expect(portalState(portal({ reported: 'error' })).label).toBe('Error')
     expect(portalState(portal({ reported: 'unknown' })).label).toBe('Not Reported Yet')
+  })
+  it('describes the peer hop mode of a server', () => {
+    const none = peerHopState({ mode: 'none', downgraded: false })
+    expect(none).toMatchObject({ label: 'No Mode Reported', tone: 'pending' })
+    expect(peerHopState({ mode: 'require', downgraded: false })).toMatchObject({
+      label: 'Require',
+      tone: 'ok',
+    })
+    expect(peerHopState({ mode: 'verify', downgraded: false })).toMatchObject({
+      label: 'Verify',
+      tone: 'info',
+    })
+    const down = peerHopState({ mode: 'verify', downgraded: true })
+    expect(down).toMatchObject({ label: 'Downgraded', tone: 'danger' })
+    expect(down.note).toContain('cannot be used as a client certificate')
+  })
+  it('words when a peer hop mode was reported', () => {
+    expect(reportedLabel(null)).toBeNull()
+    expect(reportedLabel('nope')).toBeNull()
+    expect(reportedLabel('2026-11-03T14:05:00Z')).toMatch(/^Reported /)
   })
   it('reads versions and dates defensively', () => {
     expect(connectorLine({ connectorVersion: '2026.5.2' })).toBe('Connector 2026.5.2')

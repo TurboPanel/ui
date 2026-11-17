@@ -13,6 +13,7 @@ type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 type AddResult = { ok: true; value: unknown } | { ok: false; cause: unknown }
 
 const state = vi.hoisted(() => ({
+  hostnames: [] as unknown[],
   add: vi.fn(async (_body: unknown): Promise<AddResult> => ({ ok: false, cause: null })),
 }))
 
@@ -26,6 +27,7 @@ vi.mock('@/components/ui', () => ({
     </button>
   ),
   ButtonRow: ({ children }: Props) => <div>{children}</div>,
+  InlineNotice: ({ title }: Props) => <p role="note">{title as string}</p>,
   ConfirmButton: ({ label, onConfirm }: Props) => (
     <button type="button" onClick={onConfirm as () => void}>
       {label as string}
@@ -43,7 +45,11 @@ vi.mock('@/components/ui', () => ({
   TypeNameDeleteButton: () => null,
 }))
 vi.mock('@/lib/queries/tunnel-routes', () => ({
-  useTunnelHostnames: () => ({ data: { hostnames: [] }, isError: false, isLoading: false }),
+  useTunnelHostnames: () => ({
+    data: { hostnames: state.hostnames },
+    isError: false,
+    isLoading: false,
+  }),
   useAddTunnelHostname: () => ({ run: state.add, isPending: false }),
   useRemoveTunnelHostname: () => ({ run: vi.fn(), isPending: false }),
 }))
@@ -77,6 +83,7 @@ async function press(name: string) {
 }
 
 beforeEach(() => {
+  state.hostnames = []
   state.add.mockReset()
 })
 afterEach(cleanup)
@@ -156,5 +163,31 @@ describe('replacing the DNS records that hold a tunnel hostname', () => {
     await press('Replace Records')
     expect(screen.getByText('Only partly replaced.')).toBeTruthy()
     expect(screen.queryByText('DNS Records Removed')).toBeNull()
+  })
+})
+
+describe('the routing note on a hostname', () => {
+  const record = (extra: Record<string, unknown>) => ({
+    id: 'h1',
+    tunnelId: 't1',
+    hostname: 'app.example.com',
+    hostingId: null,
+    isLocalOnly: true,
+    status: 'live',
+    dns: 'created',
+    createdAt: '2026-11-01T00:00:00Z',
+    ...extra,
+  })
+
+  it('shows why the name is not forwarded', () => {
+    state.hostnames = [record({ routingNote: 'The site runs on no server yet.' })]
+    render(<NetworkTunnelHostnames orgId="o1" tunnelId="t1" />)
+    expect(screen.getByRole('note').textContent).toBe('The site runs on no server yet.')
+  })
+
+  it('shows nothing when the note is null or an older panel omits it', () => {
+    state.hostnames = [record({ routingNote: null }), record({ id: 'h2' })]
+    render(<NetworkTunnelHostnames orgId="o1" tunnelId="t1" />)
+    expect(screen.queryByRole('note')).toBeNull()
   })
 })

@@ -153,6 +153,52 @@ describe('a tunnel card', () => {
     )
     expect(screen.getAllByTestId('badge')[0]?.textContent).toBe('Running')
   })
+  it('shows each server peer hop mode and flags a downgrade or no report', () => {
+    render(
+      <NetworkTunnelCard
+        orgId="o1"
+        tunnel={tunnel({
+          portals: [],
+          peerHop: [
+            {
+              serverId: 's1',
+              mode: 'require',
+              downgraded: false,
+              reportedAt: '2026-11-03T14:05:00Z',
+            },
+            {
+              serverId: 's2',
+              mode: 'verify',
+              downgraded: true,
+              reportedAt: '2026-11-03T14:05:00Z',
+            },
+            { serverId: 's3', mode: 'none', downgraded: false, reportedAt: null },
+            { serverId: 's4', mode: 'verify', downgraded: false, reportedAt: null },
+          ],
+        })}
+        servers={[server('s1'), server('s2'), server('s3'), server('s4')]}
+        datacenters={[]}
+      />
+    )
+    expect(screen.getByText('Server-to-Server Checks')).toBeTruthy()
+    const rowOf = (name: string) =>
+      within(screen.getByText(name).parentElement?.parentElement as HTMLElement)
+    expect(rowOf('s1').getByTestId('badge').textContent).toBe('Require')
+    expect(rowOf('s1').getByText(/^Reported /)).toBeTruthy()
+    expect(rowOf('s2').getByTestId('badge').textContent).toBe('Downgraded')
+    expect(rowOf('s2').getByText(/cannot be used as a client certificate/)).toBeTruthy()
+    expect(rowOf('s3').getByTestId('badge').textContent).toBe('No Mode Reported')
+    expect(rowOf('s3').queryByText(/^Reported /)).toBeNull()
+    // A mode recorded without a time says nothing about when.
+    expect(rowOf('s4').getByTestId('badge').textContent).toBe('Verify')
+    expect(rowOf('s4').queryByText(/^Reported /)).toBeNull()
+  })
+  it('renders without peer hop data from an older control plane', () => {
+    render(
+      <NetworkTunnelCard orgId="o1" tunnel={tunnel()} servers={[server('s1')]} datacenters={[]} />
+    )
+    expect(screen.queryByText('Server-to-Server Checks')).toBeNull()
+  })
   it('removes through the confirm button, and not while it is already being removed', () => {
     const { rerender } = render(
       <NetworkTunnelCard orgId="o1" tunnel={tunnel()} servers={[server('s1')]} datacenters={[]} />

@@ -6,6 +6,7 @@ import {
   Button,
   ButtonRow,
   ConfirmButton,
+  InlineNotice,
   LoadingState,
   MonoText,
   TextField,
@@ -79,6 +80,7 @@ function HostnameRow({
         />
       </View>
       <Text style={panelStyles.muted}>{dnsOutcome(record.dns)}</Text>
+      {record.routingNote ? <InlineNotice tone="warning" title={record.routingNote} /> : null}
     </View>
   )
 }
