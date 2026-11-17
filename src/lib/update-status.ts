@@ -317,6 +317,15 @@ export function stallHint(
   return `Still waiting — no progress reported for ${minutes} minutes. The control plane retries on its own; to see what the server is doing, check its daemon log (${DAEMON_LOGS_COMMAND}).`
 }
 
+/** The "still waiting" line for the first step of a run that has gone quiet, or null. */
+export function stalledStepHint(run: RunWithSteps | null, nowMs: number): string | null {
+  for (const step of run?.steps ?? []) {
+    const hint = stallHint(step, nowMs)
+    if (hint !== null) return hint
+  }
+  return null
+}
+
 /** Rejects with {@link UpgradeStartTimeoutError} when `work` outlives `ms`. */
 export class UpgradeStartTimeoutError extends Error {
   constructor() {

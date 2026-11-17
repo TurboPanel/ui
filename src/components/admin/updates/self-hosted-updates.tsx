@@ -42,7 +42,7 @@ import {
   useUpgradeServersPage,
   useUpgradeSettings,
 } from '@/lib/queries/admin'
-import { failedStepTitleOf, runFailure, runToShow, stallHint } from '@/lib/update-status'
+import { failedStepTitleOf, runFailure, runToShow, stalledStepHint } from '@/lib/update-status'
 import { spacing } from '@/lib/theme'
 
 type ShownRun = NonNullable<ReturnType<typeof runToShow>['run']>
@@ -233,10 +233,7 @@ export function SelfHostedUpdates({ data }: Readonly<{ data: InstanceUpdates }>)
     paused: data.updatesPaused === true,
   })
 
-  const waitingStep = shown.finished
-    ? null
-    : (run?.steps.find((step) => stallHint(step, nowMs) !== null) ?? null)
-  const stalled = waitingStep ? stallHint(waitingStep, nowMs) : null
+  const stalled = shown.finished ? null : stalledStepHint(run, nowMs)
 
   const fleetServers = serversPage.data?.servers.length ? serversPage.data.servers : fleetSteps
 
