@@ -83,9 +83,9 @@ describe('sizeBandRows', () => {
 
 describe('describeSizeFit', () => {
   it('names the tier the server needs', () => {
-    expect(describeSizeFit({ cores: 8, memoryBytes: Math.round(31.3 * GIB) }, { label: 'S2' })).toBe(
-      '8 cores, 31.3 GiB RAM → S2'
-    )
+    expect(
+      describeSizeFit({ cores: 8, memoryBytes: Math.round(31.3 * GIB) }, { label: 'S2' })
+    ).toBe('8 cores, 31.3 GiB RAM → S2')
     expect(describeSizeFit({ cores: 1, memoryBytes: 2 * GIB }, { label: 'S1' })).toBe(
       '1 core, 2 GiB RAM → S1'
     )
