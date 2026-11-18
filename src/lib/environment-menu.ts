@@ -41,11 +41,7 @@ export function destroyConfirmReady(
   }>
 ): boolean {
   if (!input.deleteVolumes) return true
-  return (
-    input.volumesLoaded &&
-    input.expectedName !== '' &&
-    input.typedName === input.expectedName
-  )
+  return input.volumesLoaded && input.expectedName !== '' && input.typedName === input.expectedName
 }
 
 export const LAST_ENVIRONMENT_REASON = 'A project needs at least one environment'

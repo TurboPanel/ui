@@ -1,8 +1,5 @@
 /** Preserve HTTP status in client fetch errors for session recovery (`isForbiddenError`). */
-export function formatFetchFailureDetail(
-  status: number,
-  bodyError?: string,
-): string {
+export function formatFetchFailureDetail(status: number, bodyError?: string): string {
   const statusLabel = `HTTP ${status}`
   return bodyError ? `${statusLabel}: ${bodyError}` : statusLabel
 }
@@ -26,10 +23,7 @@ export function isForbiddenError(err: unknown): boolean {
 }
 
 export function isServerPlacementRequiredError(err: unknown): boolean {
-  return (
-    isHttpStatusError(err, 409) &&
-    err.message.includes('server_placement_required')
-  )
+  return isHttpStatusError(err, 409) && err.message.includes('server_placement_required')
 }
 
 /**

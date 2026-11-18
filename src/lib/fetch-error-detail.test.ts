@@ -7,8 +7,7 @@ import {
   isServerPlacementRequiredError,
 } from './fetch-error-detail'
 
-const METRICS_PATH =
-  '/api/client/v1/servers/00000000-0000-4000-8000-000000000001/metrics/series'
+const METRICS_PATH = '/api/client/v1/servers/00000000-0000-4000-8000-000000000001/metrics/series'
 
 describe('formatFetchFailureDetail', () => {
   it('keeps HTTP status with backend error body', () => {
@@ -66,15 +65,11 @@ describe('isHttpStatusError', () => {
 describe('isServerPlacementRequiredError', () => {
   it('recognizes 409 server_placement_required', () => {
     const error = new Error(
-      '/api/client/v1/environments/x/deploy-preview failed: HTTP 409: server_placement_required',
+      '/api/client/v1/environments/x/deploy-preview failed: HTTP 409: server_placement_required'
     )
     expect(isServerPlacementRequiredError(error)).toBe(true)
-    expect(
-      isServerPlacementRequiredError(new Error('path failed: HTTP 409: other')),
-    ).toBe(false)
-    expect(isServerPlacementRequiredError('HTTP 409: server_placement_required')).toBe(
-      false,
-    )
+    expect(isServerPlacementRequiredError(new Error('path failed: HTTP 409: other'))).toBe(false)
+    expect(isServerPlacementRequiredError('HTTP 409: server_placement_required')).toBe(false)
   })
 })
 

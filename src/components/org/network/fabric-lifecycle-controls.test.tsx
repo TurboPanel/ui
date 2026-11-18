@@ -156,9 +156,7 @@ describe('FabricLifecycleControls', () => {
     render(<FabricLifecycleControls orgId="org-1" state="on" hasFabric disabled={false} />)
     fireEvent.click(screen.getByRole('switch'))
     fireEvent.click(screen.getByRole('button', { name: 'Turn Off TurboFabric' }))
-    expect(
-      screen.getByText('TurboFabric is paused: turn it back on first.')
-    ).toBeTruthy()
+    expect(screen.getByText('TurboFabric is paused: turn it back on first.')).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
