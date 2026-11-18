@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
+import { CONTROL_PLANE_UNREACHABLE_COPY } from '@/lib/user-error'
 import {
   type ConfiguredHostingState,
   certificateChoiceText,
@@ -220,6 +221,15 @@ describe('plain hosting words', () => {
     expect(
       hostingSaveErrorMessage({ error: null, cause: undefined }, 'Could not save this hostname.')
     ).toBe('Could not save this hostname.')
+  })
+
+  it('keeps the unreachable wording for a network failure that also fills error', () => {
+    expect(
+      hostingSaveErrorMessage(
+        { error: 'Failed to fetch', cause: new TypeError('Failed to fetch') },
+        'Could not save this hostname.'
+      )
+    ).toBe(CONTROL_PLANE_UNREACHABLE_COPY)
   })
 
   it('words a refused hosting action without paths or codes', () => {

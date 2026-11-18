@@ -281,13 +281,18 @@ export function hostingActionErrorMessage(error: string | null | undefined): str
 }
 
 /**
- * The words for a failed hostname save: a refusal the panel sent is worded by
- * `hostingActionErrorMessage` (so a 409 `hostname_in_use` names the fix); a
- * failure with no refusal text keeps the caller's fallback.
+ * The words for a failed hostname save: a refusal carrying a hosting code is
+ * worded by `hostingActionErrorMessage` (so a 409 `hostname_in_use` names the
+ * fix); every other failure keeps the shared wording (unreachable panel, the
+ * mapped code, the server's words, then the caller's fallback).
  */
 export function hostingSaveErrorMessage(
   result: Readonly<{ error: string | null; cause?: unknown }>,
   fallback: string
 ): string {
-  return result.error ? hostingActionErrorMessage(result.error) : failedRunMessage(result, fallback)
+  const error = result.error ?? ''
+  if (HOSTING_ERROR_COPY.some(([code]) => error.includes(code))) {
+    return hostingActionErrorMessage(error)
+  }
+  return failedRunMessage(result, fallback)
 }

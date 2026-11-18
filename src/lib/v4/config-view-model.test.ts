@@ -9,6 +9,7 @@ import {
   firstRows,
   withHostingHostnames,
 } from './config-view-model'
+import { INTERNAL_CERTIFICATE_LABEL } from '@/lib/hosting-tunnel'
 import type { HostingRecord } from '@/lib/instance-api'
 import {
   domainRow,
@@ -340,6 +341,20 @@ describe('hostnames held by the panel', () => {
     const merged = withHostingHostnames(model, {
       'id-web': [
         hosting('h1', ['Tunnel.example.com', 'direct.example.com'], {
+          certificate: {
+            state: 'waiting_for_dns',
+            source: 'lets_encrypt',
+            expiresAt: null,
+            expiresInDays: null,
+            renewsAutomatically: true,
+            lastError: null,
+            lastIssuedAt: null,
+            uploadedExpiryWarning: 'none',
+            dns: null,
+            letsEncryptAvailable: true,
+            www: 'off',
+            needsDeploy: false,
+          },
           tunnels: [
             { ...path, hostname: 'tunnel.example.com', tunnelOnly: true },
             { ...path, hostname: 'direct.example.com', tunnelOnly: false },
@@ -348,10 +363,11 @@ describe('hostnames held by the panel', () => {
       ],
     })
     expect(merged.domains[0].certificate).toEqual({
-      label: 'Internal certificate',
+      label: INTERNAL_CERTIFICATE_LABEL,
       tone: 'neutral',
     })
-    expect(merged.domains[1].certificate).toBeNull()
+    expect(merged.domains[1].certificate?.label).toBeTruthy()
+    expect(merged.domains[1].certificate?.label).not.toBe(INTERNAL_CERTIFICATE_LABEL)
   })
 
   it('ignores a hosting without hostnames and an app the panel has no id for', () => {
