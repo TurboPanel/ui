@@ -1355,11 +1355,6 @@ describe('fetch wrappers (mocked fetch)', () => {
       expect(err.code).toBe('tunnel_name_public_certificate')
       expect(err.hostnames).toEqual(['a.example.com', 'b.example.com'])
     }
-    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'tunnel_daemon_too_old' }, 409))
-    await expect(deployEnvironment('env-1')).rejects.toMatchObject({
-      code: 'tunnel_daemon_too_old',
-      hostnames: [],
-    })
   })
 
   it('deployEnvironment treats missing services/violations as empty arrays', async () => {

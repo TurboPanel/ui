@@ -27,16 +27,10 @@ export function destroyStaysOnCopy(names: readonly string[]): string | null {
   return `A copy on ${names.join(', ')} stays.`
 }
 
-/** Why data cannot be deleted yet, naming the servers; null when every daemon can. */
-export function destroyOutdatedServersCopy(names: readonly string[]): string | null {
-  if (names.length === 0) return null
-  return `Update the daemon on ${names.join(', ')} before deleting data volumes.`
-}
-
 /**
  * Whether Confirm Destroy may be pressed: always for a plain Destroy; with
- * data deletion, only once the list is loaded, every daemon can remove
- * volumes and the typed name matches exactly.
+ * data deletion, only once the list is loaded and the typed name matches
+ * exactly.
  */
 export function destroyConfirmReady(
   input: Readonly<{
@@ -44,16 +38,10 @@ export function destroyConfirmReady(
     typedName: string
     expectedName: string
     volumesLoaded: boolean
-    outdatedServerCount: number
   }>
 ): boolean {
   if (!input.deleteVolumes) return true
-  return (
-    input.volumesLoaded &&
-    input.outdatedServerCount === 0 &&
-    input.expectedName !== '' &&
-    input.typedName === input.expectedName
-  )
+  return input.volumesLoaded && input.expectedName !== '' && input.typedName === input.expectedName
 }
 
 export const LAST_ENVIRONMENT_REASON = 'A project needs at least one environment'

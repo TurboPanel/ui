@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
-vi.mock('@/lib/theme-preference', async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub)
+vi.mock(
+  '@/lib/theme-preference',
+  async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
+)
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
   Badge: ({ label }: { label: string }) => <span>{label}</span>,
@@ -36,7 +39,13 @@ vi.mock('@/components/ui', () => ({
     label?: string
     disabled?: boolean
   }) => (
-    <button role="checkbox" aria-checked={checked} aria-label={label} disabled={disabled} onClick={onPress}>
+    <button
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onPress}
+    >
       {label}
     </button>
   ),
@@ -71,7 +80,12 @@ vi.mock('@/components/ui', () => ({
   }) => (
     <div>
       {options.map((o) => (
-        <button key={o.value} disabled={disabled} aria-pressed={o.value === value} onClick={() => onChange(o.value)}>
+        <button
+          key={o.value}
+          disabled={disabled}
+          aria-pressed={o.value === value}
+          onClick={() => onChange(o.value)}
+        >
           {o.label}
         </button>
       ))}
@@ -88,7 +102,12 @@ vi.mock('@/components/ui', () => ({
     onChangeText: (v: string) => void
     editable?: boolean
   }) => (
-    <input aria-label={label} value={value} disabled={editable === false} onChange={(e) => onChangeText(e.target.value)} />
+    <input
+      aria-label={label}
+      value={value}
+      disabled={editable === false}
+      onChange={(e) => onChangeText(e.target.value)}
+    />
   ),
 }))
 
@@ -148,7 +167,8 @@ function Harness({ initial = EMPTY_LIMITS_DRAFT }: Readonly<{ initial?: LoginLim
   )
 }
 
-const drafted = () => JSON.parse(screen.getByTestId('draft').textContent ?? '{}') as LoginLimitsDraft
+const drafted = () =>
+  JSON.parse(screen.getByTestId('draft').textContent ?? '{}') as LoginLimitsDraft
 
 describe('LoginLimitsFields', () => {
   it('defaults to anywhere and hides the places', () => {
@@ -162,11 +182,17 @@ describe('LoginLimitsFields', () => {
     render(<Harness />)
     fireEvent.click(screen.getByText('Only from chosen places'))
     expect(screen.getByText(/A blocked address can still connect/)).toBeTruthy()
-    expect(screen.getByText(/counts as “this server” only if that server is also picked/)).toBeTruthy()
+    expect(
+      screen.getByText(/counts as “this server” only if that server is also picked/)
+    ).toBeTruthy()
     fireEvent.click(screen.getByRole('checkbox', { name: 'This server and its containers' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Web 2' }))
-    fireEvent.change(screen.getByLabelText('Specific addresses or ranges'), { target: { value: '10.1.%' } })
-    fireEvent.change(screen.getByLabelText(/^Most connections at once/), { target: { value: '12' } })
+    fireEvent.change(screen.getByLabelText('Specific addresses or ranges'), {
+      target: { value: '10.1.%' },
+    })
+    fireEvent.change(screen.getByLabelText(/^Most connections at once/), {
+      target: { value: '12' },
+    })
     expect(drafted()).toMatchObject({
       limited: true,
       internal: true,
@@ -187,7 +213,7 @@ describe('LoginLimitsFields', () => {
         onChange={vi.fn()}
         servers={[]}
         disabled={false}
-      />,
+      />
     )
     expect(screen.getByText('No servers to pick.')).toBeTruthy()
   })
@@ -196,20 +222,32 @@ describe('LoginLimitsFields', () => {
 describe('LoginLimitsEditor', () => {
   const setup = (over: Partial<ManagedUserRecord> = {}, onUpdate = vi.fn()) => {
     const onError = vi.fn()
-    render(<LoginLimitsEditor user={user(over)} servers={servers} disabled={false} onUpdate={onUpdate} onError={onError} />)
+    render(
+      <LoginLimitsEditor
+        user={user(over)}
+        servers={servers}
+        disabled={false}
+        onUpdate={onUpdate}
+        onError={onError}
+      />
+    )
     return { onUpdate, onError }
   }
 
   it('summarises the current limits in plain words', () => {
     setup({ allowedSources: ['internal', 'server:s1'], maxConnections: 3 })
     expect(
-      screen.getByText('Limited to: this server and its containers, the server Web 1. At most 3 connections at once.'),
+      screen.getByText(
+        'Limited to: this server and its containers, the server Web 1. At most 3 connections at once.'
+      )
     ).toBeTruthy()
   })
 
   it('previews with a dry run, then saves the same change', async () => {
     const onUpdate = vi.fn(async (_id: string, body: { dryRun?: boolean }) =>
-      body.dryRun ? { ok: true as const, dryRun: true, statements: ['Limit this login to: server s1'] } : { ok: true as const },
+      body.dryRun
+        ? { ok: true as const, dryRun: true, statements: ['Limit this login to: server s1'] }
+        : { ok: true as const }
     )
     setup({}, onUpdate)
     fireEvent.click(screen.getByText('Change where it connects from'))
@@ -218,14 +256,23 @@ describe('LoginLimitsEditor', () => {
     fireEvent.change(screen.getByLabelText(/^Most connections at once/), { target: { value: '4' } })
     fireEvent.click(screen.getByText('Review change'))
     await screen.findByRole('dialog')
-    expect(onUpdate).toHaveBeenCalledWith('u1', { allowedSources: ['server:s1'], maxConnections: 4, dryRun: true })
+    expect(onUpdate).toHaveBeenCalledWith('u1', {
+      allowedSources: ['server:s1'],
+      maxConnections: 4,
+      dryRun: true,
+    })
     expect(screen.getByText('Limited to: the server Web 1.')).toBeTruthy()
     expect(screen.getByText('At most 4 connections at once.')).toBeTruthy()
-    expect(within(screen.getByRole('dialog')).getByText(/Every query it sends is then refused/)).toBeTruthy()
+    expect(
+      within(screen.getByRole('dialog')).getByText(/Every query it sends is then refused/)
+    ).toBeTruthy()
     expect(screen.getByText('• Limit this login to: server s1')).toBeTruthy()
     fireEvent.click(screen.getByText('Save change'))
     await waitFor(() =>
-      expect(onUpdate).toHaveBeenLastCalledWith('u1', { allowedSources: ['server:s1'], maxConnections: 4 }),
+      expect(onUpdate).toHaveBeenLastCalledWith('u1', {
+        allowedSources: ['server:s1'],
+        maxConnections: 4,
+      })
     )
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(screen.queryByText('Review change')).toBeNull()
@@ -239,8 +286,14 @@ describe('LoginLimitsEditor', () => {
     fireEvent.change(screen.getByLabelText(/^Most connections at once/), { target: { value: '' } })
     fireEvent.click(screen.getByText('Review change'))
     await screen.findByRole('dialog')
-    expect(onUpdate).toHaveBeenCalledWith('u1', { allowedSources: null, maxConnections: null, dryRun: true })
-    expect(screen.getByText('Can connect from anywhere.', { selector: 'span, div, p' })).toBeTruthy()
+    expect(onUpdate).toHaveBeenCalledWith('u1', {
+      allowedSources: null,
+      maxConnections: null,
+      dryRun: true,
+    })
+    expect(
+      screen.getByText('Can connect from anywhere.', { selector: 'span, div, p' })
+    ).toBeTruthy()
     expect(screen.queryByText(/A blocked address can still connect/)).toBeNull()
   })
 
@@ -271,7 +324,9 @@ describe('LoginLimitsEditor', () => {
     fireEvent.click(screen.getByText('Only from chosen places'))
     fireEvent.click(screen.getByText('Review change'))
     expect(screen.getByText(/at least one place/)).toBeTruthy()
-    fireEvent.change(screen.getByLabelText('Specific addresses or ranges'), { target: { value: '10.0.0.0/20' } })
+    fireEvent.change(screen.getByLabelText('Specific addresses or ranges'), {
+      target: { value: '10.0.0.0/20' },
+    })
     fireEvent.click(screen.getByText('Review change'))
     expect(screen.getByText(/can't be matched exactly/)).toBeTruthy()
     expect(onUpdate).not.toHaveBeenCalled()
@@ -279,13 +334,13 @@ describe('LoginLimitsEditor', () => {
 
   it('shows the control plane refusal and can be cancelled', async () => {
     const onUpdate = vi.fn(async () => {
-      throw new Error('HTTP 409: managed_login_limits_need_daemon_update')
+      throw new Error('HTTP 409: managed_login_not_editable')
     })
     setup({}, onUpdate)
     fireEvent.click(screen.getByText('Change where it connects from'))
     fireEvent.change(screen.getByLabelText(/^Most connections at once/), { target: { value: '5' } })
     fireEvent.click(screen.getByText('Review change'))
-    await screen.findByText(/needs updating before it can limit/)
+    await screen.findByText(/kept by the panel and cannot be changed/)
     fireEvent.click(screen.getByText('Cancel'))
     expect(screen.getByText('Change where it connects from')).toBeTruthy()
   })

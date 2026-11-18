@@ -125,12 +125,12 @@ describe('Rotate Run Token on a tunnel card', () => {
   it('disables the action with the reason when it cannot start', () => {
     show(
       tunnel({
-        runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: ['s2'] },
+        runTokenRotationBlock: { code: 'tunnel_not_ready', message: 'x' },
       })
     )
     const button = screen.getByRole('button', { name: 'Rotate Run Token' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
-    expect(screen.getByText(/Update the daemon on server-h first/)).toBeTruthy()
+    expect(screen.getByText('This tunnel does not exist at the provider yet.')).toBeTruthy()
   })
 
   it('offers Resume for a stopped rotation, also while a server is out of reach', async () => {
@@ -160,12 +160,12 @@ describe('Rotate Run Token on a tunnel card', () => {
     show(
       tunnel({
         runTokenRotation: rotation({ phase: 'stopped', stoppedReason: 'The provider refused' }),
-        runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: ['s2'] },
+        runTokenRotationBlock: { code: 'tunnel_not_ready', message: 'x' },
       })
     )
     expect(screen.getByText('Run token rotation stopped: The provider refused')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Resume Rotation' })).toBeNull()
-    expect(screen.getByText(/Update the daemon on server-h first/)).toBeTruthy()
+    expect(screen.getByText('This tunnel does not exist at the provider yet.')).toBeTruthy()
   })
 
   it('shows a failed start in plain words', async () => {

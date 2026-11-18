@@ -149,16 +149,14 @@ describe('FabricLifecycleControls', () => {
     save.mockImplementation((_body, options: { onError: (err: unknown) => void }) => {
       options.onError(
         new Error(
-          '/api/client/v1/organizations/org-1/fabric failed: HTTP 409: fabric_pause_needs_daemon_update — TurboFabric is still on: alpha runs a TurboPanel daemon too old.'
+          '/api/client/v1/organizations/org-1/fabric failed: HTTP 409: fabric_paused — TurboFabric is paused: turn it back on first.'
         )
       )
     })
     render(<FabricLifecycleControls orgId="org-1" state="on" hasFabric disabled={false} />)
     fireEvent.click(screen.getByRole('switch'))
     fireEvent.click(screen.getByRole('button', { name: 'Turn Off TurboFabric' }))
-    expect(
-      screen.getByText('TurboFabric is still on: alpha runs a TurboPanel daemon too old.')
-    ).toBeTruthy()
+    expect(screen.getByText('TurboFabric is paused: turn it back on first.')).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 })

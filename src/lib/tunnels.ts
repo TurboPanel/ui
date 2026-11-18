@@ -129,7 +129,6 @@ const ERROR_COPY: Readonly<Record<string, string>> = {
   origin_certificate_invalid: 'Check the zone and the hostnames, then try again.',
   origin_certificate_names: 'Give exact hostnames inside the zone, at most 100 per certificate.',
   origin_certificate_limit: 'This organization has reached its limit of origin certificates.',
-  tunnel_daemon_too_old: 'Update this server before deploying a site with a tunnel-only name.',
   tunnel_name_public_certificate: 'A tunnel-only name cannot use a public certificate.',
 }
 
@@ -174,9 +173,6 @@ export function tunnelDeployRefusalMessage(
   const names = hostnames.length > 0 ? ` (${hostnames.join(', ')})` : ''
   if (code === 'tunnel_name_public_certificate') {
     return `A tunnel-only name cannot use a public certificate${names}. Choose Self-signed for this site's certificate, then deploy again.`
-  }
-  if (code === 'tunnel_daemon_too_old') {
-    return `Update this server before deploying a site with a tunnel-only name${names}. It installs on its own at the next update check.`
   }
   return null
 }

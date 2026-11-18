@@ -8944,11 +8944,11 @@ export class DeployResourceLimitExceededError extends Error {
 }
 
 /**
- * A deploy the panel refused because of a tunnel-only hostname: the server's
- * daemon is too old to lock the name, or the site is pinned to a public
- * certificate. The body names the site and the hostnames that are locked.
+ * A deploy the panel refused because of a tunnel-only hostname: the site is
+ * pinned to a public certificate. The body names the site and the hostnames
+ * that are locked.
  */
-export type DeployTunnelRefusalCode = 'tunnel_daemon_too_old' | 'tunnel_name_public_certificate'
+export type DeployTunnelRefusalCode = 'tunnel_name_public_certificate'
 
 export class DeployTunnelRefusedError extends Error {
   readonly code: DeployTunnelRefusalCode
@@ -8987,10 +8987,7 @@ async function throwIfDeployConflict(response: Response): Promise<void> {
         Array.isArray(errorBody.violations) ? errorBody.violations : []
       )
     }
-    if (
-      errorBody.error === 'tunnel_daemon_too_old' ||
-      errorBody.error === 'tunnel_name_public_certificate'
-    ) {
+    if (errorBody.error === 'tunnel_name_public_certificate') {
       throw new DeployTunnelRefusedError(
         errorBody.error,
         Array.isArray(errorBody.hostnames)
@@ -9972,8 +9969,7 @@ export type CancelDeploymentResponse = {
 /**
  * Ask the control plane to cancel a running or queued deploy (the whole deploy,
  * every host). `deploymentId` is the deploy command id. No step-up: a re-deploy
- * fully reverses it. **409** `deploy_not_cancellable` (already finished) or
- * `cancel_unsupported` (the server's agent is too old).
+ * fully reverses it. **409** `deploy_not_cancellable` (already finished).
  */
 export async function cancelDeployment(
   environmentId: string,
@@ -9988,8 +9984,7 @@ export async function cancelDeployment(
 /**
  * Destroy also deletes the data volumes: the environment name typed exactly.
  * The control plane answers 400 `confirm_name_required` without it, 403 for
- * someone who could not delete the environment, and 409
- * `delete_volumes_needs_daemon_update` when a server runs an older daemon.
+ * someone who could not delete the environment.
  */
 export type DestroyDataOptions = {
   deleteVolumes: true
@@ -10035,8 +10030,8 @@ export type KeptEnvironmentDataVolume = EnvironmentDataVolume & {
 export type EnvironmentDataVolumesResponse = {
   volumes: RemovableEnvironmentDataVolume[]
   kept: KeptEnvironmentDataVolume[]
-  /** Servers whose daemon must be updated before data can be deleted. */
-  outdatedServers: NamedServer[]
+  /** Still sent, always empty; nothing reads it. */
+  outdatedServers?: NamedServer[]
 }
 
 export async function fetchEnvironmentDataVolumes(
@@ -11272,7 +11267,7 @@ export async function createManagedUser(
     grantMode?: 'recipe' | 'self'
     /** A database tool uses this login: always the primary, no read splitting. */
     tool?: boolean
-    /** Places the login may connect from; omit (or `any`) for anywhere. 400 `managed_login_source*` when a place is wrong; 409 `managed_login_limits_need_daemon_update`. */
+    /** Places the login may connect from; omit (or `any`) for anywhere. 400 `managed_login_source*` when a place is wrong. */
     allowedSources?: string[]
     /** Most connections at once, 1 to 10000; omit for no cap. */
     maxConnections?: number
@@ -11465,7 +11460,7 @@ export async function fetchManagedAdminTools(
  * deploy the returned `environmentId` next. Refusals: 400 `admin_tool_unknown`,
  * `invalid_hostname`, `admin_tool_access_invalid`, `admin_tool_engine_mismatch`,
  * `admin_tool_email_invalid`; 409 `admin_tool_needs_database`,
- * `admin_tool_needs_daemon_update`, `admin_tool_hostname_in_use`,
+ * `admin_tool_hostname_in_use`,
  * `hostname_in_use`, `managed_destroy_in_progress`.
  */
 export async function createManagedAdminTool(
@@ -11523,7 +11518,7 @@ export async function fetchManagedBackupLogin(
  * Create the cluster's backup login: read-only rights a backup tool needs to
  * copy every database, always routed to the primary. `allowedSources` is
  * required and never `any` (400 `managed_backup_login_sources_required`); 409
- * `managed_backup_login_exists` / `managed_backup_login_needs_daemon_update`.
+ * `managed_backup_login_exists`.
  * The returned `password` is **show-once**.
  */
 export async function createManagedBackupLogin(
@@ -13356,7 +13351,7 @@ export async function createTunnel(
 /**
  * Give the tunnel a new run token; servers move to it one at a time. **409**
  * `rotation_single_server` (send `confirmSingleServer: true`),
- * `tunnel_daemon_too_old`, `server_not_ready`, `rotation_in_progress`,
+ * `server_not_ready`, `rotation_in_progress`,
  * `tunnel_removing`. A stopped rotation resumes.
  */
 export async function rotateTunnelRunToken(

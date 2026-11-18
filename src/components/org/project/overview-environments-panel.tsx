@@ -842,7 +842,6 @@ function useDestroyDataState(
     expectedName,
     // Never confirm against a list that is still being refreshed.
     volumesLoaded: query.isSuccess && !query.isFetching,
-    outdatedServerCount: query.data?.outdatedServers.length ?? 0,
   })
   return {
     available,
@@ -1125,7 +1124,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     setActionError(null)
     const result = await stopEnvironmentMutation.run(destroyData.options)
     if (!result.ok) {
-      // A refused data delete (changed list, older daemon) shows the list afresh.
+      // A refused data delete (changed list) shows the list afresh.
       if (destroyData.options) destroyData.refetch()
       if (stopEnvironmentMutation.actionError) {
         setActionError(stopEnvironmentMutation.actionError)
