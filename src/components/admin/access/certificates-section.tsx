@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { AttachmentEditor } from '@/components/admin/access/certificate-attachment-editor'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   CoverageChips,
@@ -25,6 +26,7 @@ import {
 } from '@/components/ui'
 import {
   certificateSourceEligibility,
+  daemonCapabilitiesStatus,
   hostnameStatusPresentation,
   http01PreflightPresentation,
   panelHostnameHttpsUrl,
@@ -34,16 +36,14 @@ import {
   type InstanceHostnameRecord,
   type UploadedCertificateRecord,
 } from '@/lib/instance-api'
-import { parsePublicUrlEntry } from '@/lib/public-url-entry'
 import {
-  useAttachInstanceCertificate,
   useInstanceAcmeSettings,
   useInstanceCertificates,
+  useInstanceDaemon,
   useInstanceHostnames,
   useSaveInstanceAcmeSettings,
   useUploadInstanceCertificate,
 } from '@/lib/queries/admin'
-import { coversHostname } from '@/lib/tls-match'
 import { expiryCell, formatDay, realDate } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
 
@@ -120,6 +120,7 @@ function UploadedPanel({
   hostnames: readonly InstanceHostnameRecord[]
 }>) {
   const wildcard = certificates.some((certificate) => certificateHasWildcard(certificate.dnsNames))
+  const capabilitiesStatus = daemonCapabilitiesStatus(useInstanceDaemon())
   return (
     <SectionPanel
       title="Uploaded certificates"
@@ -144,6 +145,7 @@ function UploadedPanel({
           key={attachmentKey(certificate)}
           certificate={certificate}
           hostnames={hostnames}
+          capabilitiesStatus={capabilitiesStatus}
         />
       ))}
       <UploadPairForm />
@@ -219,96 +221,6 @@ function CertificateRow({
         <CoverageChips dnsNames={certificate.dnsNames} hostnames={hostnames} />
       </DataTableCell>
     </DataTableRow>
-  )
-}
-
-function AttachmentEditor({
-  certificate,
-  hostnames,
-}: Readonly<{
-  certificate: UploadedCertificateRecord
-  hostnames: readonly InstanceHostnameRecord[]
-}>) {
-  const attach = useAttachInstanceCertificate()
-  const [selected, setSelected] = useState<readonly string[]>(certificate.hostnames)
-  const [error, setError] = useState<string | null>(null)
-
-  const onSave = async () => {
-    setError(null)
-    const result = await attach.run({
-      id: certificate.id,
-      hosts: [...selected],
-    })
-    if (!result.ok) {
-      setError(result.error ?? 'Failed to update attachments')
-    }
-  }
-
-  return (
-    <View style={styles.attachBlock}>
-      <Text style={styles.attachTitle}>Attach {certificate.label}</Text>
-      <Text style={panelStyles.muted}>
-        Saving replaces the full attachment set. A hostname you clear stays published with the
-        Platform CA leaf.
-      </Text>
-      {hostnames.length === 0 ? (
-        <Text style={panelStyles.muted}>
-          Add a hostname on the Hostnames page before attaching this pair.
-        </Text>
-      ) : (
-        hostnames.map((record) => (
-          <HostnameAttachRow
-            key={record.id}
-            record={record}
-            certificate={certificate}
-            checked={selected.includes(record.host)}
-            onToggle={() => {
-              setSelected((current) => toggleHost(current, record.host))
-              setError(null)
-            }}
-          />
-        ))
-      )}
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      <Button
-        label="Save attachments"
-        busyLabel="Saving…"
-        variant="primary"
-        busy={attach.isPending}
-        disabled={hostnames.length === 0}
-        onPress={() => {
-          void onSave()
-        }}
-      />
-    </View>
-  )
-}
-
-function HostnameAttachRow({
-  record,
-  certificate,
-  checked,
-  onToggle,
-}: Readonly<{
-  record: InstanceHostnameRecord
-  certificate: UploadedCertificateRecord
-  checked: boolean
-  onToggle: () => void
-}>) {
-  const name = hostnameOf(record.host)
-  const covered = coversHostname([...certificate.dnsNames], name)
-  const reason = covered ? null : 'This pair does not cover this hostname.'
-  return (
-    <View style={styles.attachRow}>
-      <Checkbox
-        checked={checked}
-        disabled={reason !== null}
-        label={record.host}
-        accessibilityLabel={`Attach ${record.host} to ${certificate.label}`}
-        onPress={onToggle}
-      />
-      {reason ? <Text style={styles.rowHint}>{reason}</Text> : null}
-    </View>
   )
 }
 
@@ -608,15 +520,6 @@ function certificateHasWildcard(dnsNames: readonly string[]): boolean {
   return dnsNames.some((name) => name.trim().toLowerCase().startsWith('*.'))
 }
 
-function hostnameOf(entry: string): string {
-  return parsePublicUrlEntry(entry)?.host ?? entry.trim().toLowerCase()
-}
-
-function toggleHost(current: readonly string[], host: string): string[] {
-  if (current.includes(host)) return current.filter((item) => item !== host)
-  return [...current, host]
-}
-
 const styles = StyleSheet.create({
   root: {
     width: '100%',
@@ -636,17 +539,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
   },
-  attachBlock: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
   attachTitle: {
     color: colors.text,
     fontSize: 14,
     fontWeight: '600',
-  },
-  attachRow: {
-    gap: spacing.xs,
   },
   rowHint: {
     color: colors.textFaint,
