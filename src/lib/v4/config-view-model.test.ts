@@ -348,7 +348,7 @@ describe('hostnames held by the panel', () => {
       ],
     })
     expect(merged.domains[0].certificate).toEqual({
-      label: 'Internal certificate (tunnel)',
+      label: 'Internal certificate',
       tone: 'neutral',
     })
     expect(merged.domains[1].certificate).toBeNull()

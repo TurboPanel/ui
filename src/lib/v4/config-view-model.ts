@@ -20,6 +20,7 @@ import type {
   HostingRecord,
 } from '@/lib/instance-api'
 import { describeCertificate, type CertificateTone } from '@/lib/hosting-certificate'
+import { INTERNAL_CERTIFICATE_LABEL, tunnelOnlyOf } from '@/lib/hosting-tunnel'
 import { onlyChangesLabel, relationText, sourceLabel, valueText } from './change-labels'
 import { accessText, RUNS_IN_CONTAINER, type RunsAs } from './linux-users'
 import { isDataStoreContainer, serviceKindLabel } from './service-roles'
@@ -349,18 +350,11 @@ function hostnamesOf(record: HostingRecord): string[] {
   return raw.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
 }
 
-/** The word beside a tunnel-only name; it never asks for a public certificate. */
-export const TUNNEL_CERTIFICATE_LABEL = 'Internal certificate (tunnel)'
-
-function isTunnelOnlyHost(record: HostingRecord, host: string): boolean {
-  const key = host.toLowerCase()
-  return (record.tunnels ?? []).some(
-    (path) => path.tunnelOnly && path.hostname.toLowerCase() === key
-  )
-}
-
 function certificateOf(record: HostingRecord, host: string): DomainRowModel['certificate'] {
-  if (isTunnelOnlyHost(record, host)) return { label: TUNNEL_CERTIFICATE_LABEL, tone: 'neutral' }
+  // A name that is also served directly keeps its Let's Encrypt state.
+  if (tunnelOnlyOf([host], new Map(), record) !== null) {
+    return { label: INTERNAL_CERTIFICATE_LABEL, tone: 'neutral' }
+  }
   if (!record.certificate) return null
   const view = describeCertificate(record.certificate)
   return { label: view.label, tone: view.tone }
