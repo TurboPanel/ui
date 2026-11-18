@@ -33,7 +33,7 @@ export function CloudflareTunnelSection() {
       <View style={styles.root}>
         <Text style={panelStyles.pageTitle}>Cloudflare Tunnel</Text>
         <InlineNotice
-          title="Not applicable on this runtime"
+          title="Not Applicable on This Runtime"
           body="TurboPanel High Availability is already served from a global edge network. There is no control plane host here to run a tunnel connector on."
         />
       </View>

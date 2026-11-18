@@ -109,6 +109,9 @@ const TABLE_MIN_WIDTH = 1370
 /** What the Connection Mode column needs: the modes, the edge gate and the accounts. */
 type IngressContext = {
   modes: readonly IngressCapabilities[]
+  /** True while the modes are loading or could not be read, so no verdict on them yet. */
+  modesPending: boolean
+  modesFailed: boolean
   gate: EdgeGate | null
   accounts: readonly IngressAccountRecord[]
   /** Unsaved edits elsewhere would be lost when a mode change refreshes the rows. */
@@ -162,6 +165,8 @@ function useIngressContext(
   const accounts = useIngressAccounts({ enabled })
   return {
     modes: capabilities.data?.modes ?? [],
+    modesPending: capabilities.isLoading,
+    modesFailed: capabilities.isError,
     gate: capabilities.data?.gate ?? null,
     accounts: accounts.data?.accounts ?? [],
     dirty: !sameDraft(stored, draft),
@@ -723,6 +728,8 @@ function HostnameRow({
         <ConnectionModeCell
           record={record}
           modes={ingress.modes}
+          modesPending={ingress.modesPending}
+          modesFailed={ingress.modesFailed}
           gate={ingress.gate}
           accounts={ingress.accounts}
           lockedReason={modeLockedReason(record, ingress.dirty)}

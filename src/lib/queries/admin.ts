@@ -871,6 +871,8 @@ export function useTrustedProxies(options?: Readonly<{ enabled?: boolean }>) {
 export function useSetInstanceTunnelToken() {
   return useApiMutation({
     mutationFn: setInstanceTunnelToken,
+    // The pasted run token must leave the mutation cache at once.
+    gcTime: 0,
   })
 }
 

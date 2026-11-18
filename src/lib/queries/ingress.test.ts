@@ -207,3 +207,18 @@ describe('ingress queries', () => {
     )
   })
 })
+
+describe('the add-account mutation', () => {
+  it('keeps nothing in the mutation cache once it settles', async () => {
+    const { client, wrapper } = setup()
+    api.addIngressAccount.mockResolvedValue({ ok: true })
+    const { result, unmount } = renderHook(() => useAddIngressAccount(), { wrapper })
+    await act(async () => {
+      await result.current.run({ provider: 'cloudflare', label: 'Main', token: 'fake-token' })
+    })
+    expect(client.getMutationCache().getAll()[0]?.gcTime).toBe(0)
+    // Once the form is gone, the token it sent is gone from the cache too.
+    unmount()
+    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0))
+  })
+})
