@@ -62,9 +62,6 @@ vi.mock('@/components/ui/fingerprint-line', () => ({
     </p>
   ),
 }))
-vi.mock('@/components/admin/access/sealed-secrets-panel', () => ({
-  SealedSecretsPanel: () => <section>Sealed Secrets</section>,
-}))
 vi.mock('@/components/ui/panel-styles', () => ({
   panelStyles: { pageTitle: {}, pageCopy: {}, muted: {}, error: {} },
 }))
@@ -182,16 +179,6 @@ describe('PanelIdentitySection', () => {
       })
     )
     expect(screen.queryByText(/Servers Pinned to Another Key/)).toBeNull()
-  })
-
-  it('shows the sealed-secrets list to a superadmin on both runtimes', () => {
-    setup(identity(), 'superadmin', 'workers')
-    expect(screen.getByText('Sealed Secrets')).toBeTruthy()
-  })
-
-  it('keeps the sealed-secrets list from another admin', () => {
-    setup(identity(), 'admin')
-    expect(screen.queryByText('Sealed Secrets')).toBeNull()
   })
 
   it('explains the off state when no identity key exists', () => {

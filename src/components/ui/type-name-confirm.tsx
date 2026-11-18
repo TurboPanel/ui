@@ -33,7 +33,7 @@ export type TypeNameConfirmProps = Readonly<{
   name: string
   /**
    * Whose name is typed, in book title case, when it is not `thing`'s own:
-   * clearing a "Sealing Key" asks for the "Server" name.
+   * removing an "Access Key" asks for the "Server" name.
    */
   nameOf?: string
   /** Verb for the title and button; "Delete" unless the action is a "Remove". */
