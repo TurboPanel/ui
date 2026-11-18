@@ -75,7 +75,6 @@ const issued = (expiresAt: string) => ({
     ticketId: 't',
     expiresAt,
     licenseToken: 'tok',
-    licenseArg: 'arg',
     installCommand: 'curl -fsSL https://example.test | TURBOPANEL_LICENSE=arg sh',
   },
 })
@@ -135,7 +134,6 @@ describe('ServerReenrollTokenPanel', () => {
         ticketId: 't',
         expiresAt: future(),
         licenseToken: 'tok',
-        licenseArg: 'arg',
         installCommand: 'curl -fsSL https://example.test | TURBOPANEL_LICENSE=arg sh',
       },
     })
@@ -180,7 +178,6 @@ describe('ServerReenrollTokenPanel', () => {
         joinId: 'j',
         joinExpiresAt: future(),
         licenseToken: 't',
-        licenseArg: 'newarg',
         installCommand: 'run TURBOPANEL_LICENSE=newarg sh',
       },
     })
@@ -258,7 +255,6 @@ describe('ServerReenrollTokenPanel', () => {
         joinId: 'j',
         joinExpiresAt: future(),
         licenseToken: 't',
-        licenseArg: 'newarg',
         installCommand: 'run TURBOPANEL_LICENSE=newarg sh',
       },
     })

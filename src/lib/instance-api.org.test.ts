@@ -200,8 +200,6 @@ describe('instance-api org wrappers', () => {
       nameScheme: null,
       effectiveNameScheme: 'partial',
       schemeLocked: false,
-      randomizedUsernames: null,
-      effectiveRandomizedUsernames: true,
     }
 
     fetchMock.mockResolvedValueOnce(jsonResponse(defaults))

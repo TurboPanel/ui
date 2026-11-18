@@ -38,7 +38,6 @@ import {
   isDelinquentSubscription,
   landsAtLabel,
   licenseSummaryLine,
-  licensesInUse,
   machineExamplesForTier,
   parseLicenseCount,
   removableAt,
@@ -54,6 +53,7 @@ import {
   BILLING_NOT_CONFIGURED_ERROR,
   formatShortDate,
   hasLiveBillingSubscription,
+  type BillingPendingChange,
   type BillingPreview,
   type BillingServerCoverage,
   type BillingSubscriptionSummary,
@@ -561,7 +561,7 @@ function LicensesPanel({
   const status = subscriptionStatusView(summary.subscription?.status)
   const licenses = summary.licenses
   const periodEnd = summary.subscription?.currentPeriodEnd
-  const inUse = licensesInUse(licenses)
+  const inUse = licenses.inUse
   const ending = licenses.ending ?? 0
   const endsShort = formatShortDate(licenses.endsAt)
   return (
@@ -656,13 +656,16 @@ const LICENSE_COLUMNS = [
 const [LC_TIER, LC_PRICE, LC_PURCHASED, LC_IN_USE, LC_ENDS, LC_AVAILABLE, LC_ACTIONS] =
   LICENSE_COLUMNS
 
-function dialogTier(tier: BillingTierSummary): LicenseDialogTier {
+function dialogTier(
+  tier: BillingTierSummary,
+  pendingChanges: readonly BillingPendingChange[]
+): LicenseDialogTier {
   return {
     tierId: tier.tierId,
     label: tier.label,
     ending: tier.ending,
     endsAt: tier.endsAt,
-    removable: removableAt(tier),
+    removable: removableAt(tier, pendingChanges),
     purchased: tier.purchased,
     priceCents: tier.priceCents,
     currency: tier.currency,
@@ -674,12 +677,14 @@ function TierLicensesRow({
   index,
   last,
   pastDue,
+  pendingChanges,
   onOpen,
 }: Readonly<{
   tier: BillingTierSummary
   index: number
   last: boolean
   pastDue: boolean
+  pendingChanges: readonly BillingPendingChange[]
   onOpen: (mode: LicenseDialogMode) => void
 }>) {
   const ends = endingLabel(tier.ending, tier.endsAt)
@@ -725,7 +730,7 @@ function TierLicensesRow({
             label="Remove"
             size="sm"
             variant="ghost"
-            disabled={removableAt(tier) === 0}
+            disabled={removableAt(tier, pendingChanges) === 0}
             accessibilityLabel={`Remove ${tier.label} licenses`}
             onPress={() => onOpen('remove')}
           />
@@ -803,7 +808,8 @@ function TierLicensesPanel({
             index={index}
             last={index === summary.tiers.length - 1}
             pastDue={pastDue}
-            onOpen={(mode) => setRequest({ mode, tier: dialogTier(tier) })}
+            pendingChanges={summary.pendingChanges}
+            onOpen={(mode) => setRequest({ mode, tier: dialogTier(tier, summary.pendingChanges) })}
           />
         ))}
       </DataTable>
@@ -942,10 +948,11 @@ function useTierMove(orgId: string, context: RefusalContext) {
 /** Tiers a license can move *from*: bought, and not already ending in full. */
 function fromTierOptions(
   owned: readonly BillingTierSummary[],
-  tiers: readonly BillingTier[]
+  tiers: readonly BillingTier[],
+  pendingChanges: readonly BillingPendingChange[]
 ): SelectOption[] {
   return owned
-    .filter((tier) => canReleaseAt(tier))
+    .filter((tier) => canReleaseAt(tier, pendingChanges))
     .map((tier) => {
       const catalogue = tiers.find((entry) => entry.id === tier.tierId)
       const detail = [`${tier.purchased} purchased`, `${tier.inUse} in use`]
@@ -1093,7 +1100,10 @@ function MoveLicensePanel({
   const router = useRouter()
   const tierMove = useTierMove(orgId, context)
   const purchasable = useMemo(() => purchasableTiers(tiers), [tiers])
-  const fromOptions = useMemo(() => fromTierOptions(summary.tiers, tiers), [summary.tiers, tiers])
+  const fromOptions = useMemo(
+    () => fromTierOptions(summary.tiers, tiers, summary.pendingChanges),
+    [summary.tiers, tiers, summary.pendingChanges]
+  )
   const [fromTierId, setFromTierId] = useState<string | null>(null)
   const [toTierId, setToTierId] = useState<string | null>(preselectedTierId)
 

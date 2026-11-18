@@ -68,11 +68,15 @@ describe('billing queries', () => {
   it('useBillingCatalog reads the catalogue with a long stale time', async () => {
     fetchBillingCatalog.mockResolvedValueOnce({ tiers: [] })
     const client = createAppQueryClient()
-    const { result } = renderHook(() => useBillingCatalog(orgId), { wrapper: createWrapper(client) })
+    const { result } = renderHook(() => useBillingCatalog(orgId), {
+      wrapper: createWrapper(client),
+    })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(fetchBillingCatalog).toHaveBeenCalledTimes(1)
     const query = client.getQueryCache().find({ queryKey: queryKeys.org(orgId).billing.catalog })
-    expect((query?.options as { staleTime?: number } | undefined)?.staleTime).toBe(BILLING_CATALOG_STALE_MS)
+    expect((query?.options as { staleTime?: number } | undefined)?.staleTime).toBe(
+      BILLING_CATALOG_STALE_MS
+    )
   })
 
   it('useBillingSubscription polls only when the caller asks (checkout confirmation)', async () => {
@@ -80,7 +84,7 @@ describe('billing queries', () => {
       payer: null,
       subscription: null,
       tiers: [],
-      licenses: { purchased: 0, releasing: 0, held: 0, bound: 0, available: 0 },
+      licenses: { purchased: 0, inUse: 0, bound: 0, available: 0 },
       servers: [],
       pendingChanges: [],
     })
@@ -103,7 +107,7 @@ describe('billing queries', () => {
       payer: null,
       subscription: null,
       tiers: [],
-      licenses: { purchased: 0, releasing: 0, held: 0, bound: 0, available: 0 },
+      licenses: { purchased: 0, inUse: 0, bound: 0, available: 0 },
       servers: [],
       pendingChanges: [],
     })
@@ -115,7 +119,9 @@ describe('billing queries', () => {
     const query = client.getQueryCache().find({
       queryKey: queryKeys.org(orgId).billing.subscription,
     })
-    expect((query?.options as { refetchInterval?: unknown } | undefined)?.refetchInterval).toBe(false)
+    expect((query?.options as { refetchInterval?: unknown } | undefined)?.refetchInterval).toBe(
+      false
+    )
   })
 
   it('stays disabled without an org id or when the caller opts out', () => {
@@ -132,14 +138,20 @@ describe('billing queries', () => {
   })
 
   it('useCreateBillingCheckout returns the hosted URL and refreshes the projection', async () => {
-    createBillingCheckout.mockResolvedValueOnce({ url: 'https://checkout.example/s', sessionId: 'cs_1' })
+    createBillingCheckout.mockResolvedValueOnce({
+      url: 'https://checkout.example/s',
+      sessionId: 'cs_1',
+    })
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
     const { result } = renderHook(() => useCreateBillingCheckout(orgId), {
       wrapper: createWrapper(client),
     })
     const outcome = await result.current.run({ tierId: 'tier-1', quantity: 2 })
-    expect(outcome).toEqual({ ok: true, value: { url: 'https://checkout.example/s', sessionId: 'cs_1' } })
+    expect(outcome).toEqual({
+      ok: true,
+      value: { url: 'https://checkout.example/s', sessionId: 'cs_1' },
+    })
     expect(createBillingCheckout).toHaveBeenCalledWith({ tierId: 'tier-1', quantity: 2 })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: queryKeys.org(orgId).billing.subscription,
@@ -148,7 +160,9 @@ describe('billing queries', () => {
 
   it('useCreateBillingPortalSession surfaces the error shape on failure', async () => {
     createBillingPortalSession.mockRejectedValueOnce(new Error('HTTP 404 — Not found'))
-    const { result } = renderHook(() => useCreateBillingPortalSession(), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useCreateBillingPortalSession(), {
+      wrapper: createWrapper(),
+    })
     const outcome = await result.current.run()
     expect(outcome.ok).toBe(false)
     if (!outcome.ok) expect(outcome.error).toContain('404')
@@ -166,10 +180,15 @@ describe('billing queries', () => {
     })
     const client = createAppQueryClient()
     const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-    const { result } = renderHook(() => usePreviewBillingChange(), { wrapper: createWrapper(client) })
+    const { result } = renderHook(() => usePreviewBillingChange(), {
+      wrapper: createWrapper(client),
+    })
     await result.current.run({ fromTierId: 'tier-1', toTierId: 'tier-2' })
     await result.current.run({ tierId: 'tier-1', delta: 1 })
-    expect(previewBillingChange).toHaveBeenNthCalledWith(1, { fromTierId: 'tier-1', toTierId: 'tier-2' })
+    expect(previewBillingChange).toHaveBeenNthCalledWith(1, {
+      fromTierId: 'tier-1',
+      toTierId: 'tier-2',
+    })
     expect(previewBillingChange).toHaveBeenNthCalledWith(2, { tierId: 'tier-1', delta: 1 })
     expect(invalidateSpy).not.toHaveBeenCalled()
   })
@@ -203,20 +222,23 @@ describe('billing queries', () => {
     },
   ]
 
-  it.each(mutationCases)('$name invalidates the subscription and the servers list', async ({ useHook, mock, body }) => {
-    mock.mockResolvedValueOnce({ ok: true })
-    const client = createAppQueryClient()
-    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
-    const { result } = renderHook(useHook, { wrapper: createWrapper(client) })
-    const outcome = await result.current.run(body as never)
-    expect(outcome).toEqual({ ok: true, value: { ok: true } })
-    expect(mock).toHaveBeenCalledWith(body)
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.org(orgId).billing.subscription,
-    })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).servers.list })
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: queryKeys.org(orgId).servers.licenses,
-    })
-  })
+  it.each(mutationCases)(
+    '$name invalidates the subscription and the servers list',
+    async ({ useHook, mock, body }) => {
+      mock.mockResolvedValueOnce({ ok: true })
+      const client = createAppQueryClient()
+      const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+      const { result } = renderHook(useHook, { wrapper: createWrapper(client) })
+      const outcome = await result.current.run(body as never)
+      expect(outcome).toEqual({ ok: true, value: { ok: true } })
+      expect(mock).toHaveBeenCalledWith(body)
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).billing.subscription,
+      })
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).servers.list })
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: queryKeys.org(orgId).servers.licenses,
+      })
+    }
+  )
 })

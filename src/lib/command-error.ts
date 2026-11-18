@@ -12,8 +12,6 @@
 export type CommandErrorSource = {
   errorLine?: string | null
   errorMessage?: string | null
-  /** Legacy alias of `errorMessage` on a full command record. */
-  error?: string | null
 }
 
 /** Marker the daemon puts in front of an error whose start it cut off. */
@@ -22,7 +20,7 @@ const TRUNCATION_MARKER = /^\[\.\.\.truncated\]\s*/
 const LINE_MAX_CHARS = 300
 
 function fullText(source: CommandErrorSource): string | null {
-  const text = source.errorMessage ?? source.error ?? null
+  const text = source.errorMessage ?? null
   return text !== null && text.trim().length > 0 ? text : null
 }
 
