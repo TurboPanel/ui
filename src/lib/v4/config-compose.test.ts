@@ -138,31 +138,6 @@ describe('setEnvironmentValue', () => {
     })
   })
 
-  it('writes the new value when the project still carries the previous one', () => {
-    const result = setEnvironmentValue({
-      projectCompose: project({
-        'x-turbopanel': {
-          ...web,
-          source: { sourceId: 's1', buildKind: 'railpack', branch: 'main' },
-        },
-      }),
-      environmentCompose: null,
-      target: web$,
-      path: ['x-turbopanel', 'source', 'branch'],
-      value: 'staging',
-    })
-    expect(data(result)).toEqual({
-      services: {
-        web: {
-          'x-turbopanel': {
-            serviceKind: 'node',
-            source: { sourceId: 's1', buildKind: 'image', branch: 'staging' },
-          },
-        },
-      },
-    })
-  })
-
   it('leaves a plain compose field without markers, and keeps other changes', () => {
     const env = doc({ services: { web: { command: 'old' }, worker: { image: 'x' } } })
     const result = setEnvironmentValue({

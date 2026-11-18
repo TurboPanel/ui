@@ -330,7 +330,7 @@ function serviceIsNativeApp(valueNode: YAMLMap): boolean {
 }
 
 /**
- * True when `x-turbopanel.source.buildKind` is `image` (or the previous value it replaced).
+ * True when `x-turbopanel.source.buildKind` is `image`.
  *
  * Deliberately a sibling of {@link serviceIsHostNative} rather than another
  * entry in {@link HOST_NATIVE_SERVICE_KINDS}: an image-built service *is* a Docker

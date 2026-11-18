@@ -64,19 +64,12 @@ export function nodeAppModeProblem(value: string): string | null {
  * directory release. `image` swaps that middle step for an automatic build in
  * an isolated environment, which emits an OCI image the daemon tags and feeds
  * back into runtime compose as `services.<name>.image`.
- *
- * Compose files written before the rename carry the previous value for
- * `image` ({@link PREVIOUS_IMAGE_BUILD_KIND}); it is still accepted on read and
- * shown as `image`, and only `image` is ever written.
  */
 export type ComposeSourceBuildKind = 'native' | 'image'
 
-/** The value `image` replaced; accepted when reading so existing files keep working. */
-export const PREVIOUS_IMAGE_BUILD_KIND = 'railpack'
-
-/** True for `image` and for the previous value it replaced (raw compose reads). */
+/** True for the `image` build kind (raw compose reads). */
 export function isImageBuildKind(value: unknown): boolean {
-  return typeof value === 'string' && ['image', PREVIOUS_IMAGE_BUILD_KIND].includes(value.trim())
+  return typeof value === 'string' && value.trim() === 'image'
 }
 
 /** Max length for operator-facing service description metadata. */
@@ -697,7 +690,7 @@ const SITE_ENGINES = new Set<SiteEngine>([
   'nginx+apache',
   'openlitespeed',
 ])
-const SOURCE_BUILD_KINDS = new Set<string>(['native', 'image', PREVIOUS_IMAGE_BUILD_KIND])
+const SOURCE_BUILD_KINDS = new Set<string>(['native', 'image'])
 const NODE_PACKAGE_MANAGERS = new Set<NodePackageManager>(['npm', 'yarn', 'pnpm'])
 
 /** Where a site's content comes from. Omitted means `release`. */
@@ -762,7 +755,7 @@ function readSourceBuildKind(value: unknown): ComposeSourceBuildKind | undefined
   if (typeof value !== 'string') return undefined
   const trimmed = value.trim()
   if (!SOURCE_BUILD_KINDS.has(trimmed)) return undefined
-  return isImageBuildKind(trimmed) ? 'image' : (trimmed as ComposeSourceBuildKind)
+  return trimmed as ComposeSourceBuildKind
 }
 
 function readNativeRuntime(value: unknown): NativeRuntime | undefined {
