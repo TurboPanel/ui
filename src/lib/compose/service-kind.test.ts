@@ -275,11 +275,11 @@ describe('x-turbopanel.source.buildKind', () => {
     expect(parsed?.source?.branch).toBe('main')
   })
 
-  it('reads the previous value as image', () => {
+  it('drops the previous value', () => {
     const parsed = parseServiceTurbopanelExtension({
       source: { sourceId: '11111111-2222-3333-4444-555555555555', buildKind: 'railpack' },
     })
-    expect(parsed?.source?.buildKind).toBe('image')
+    expect(parsed?.source?.buildKind).toBeUndefined()
   })
 
   it('omits the field entirely when the value is unknown', () => {

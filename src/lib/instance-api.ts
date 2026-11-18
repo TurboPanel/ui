@@ -8853,13 +8853,9 @@ export type ReleaseRecord = {
    * told apart in the list.
    */
   imageTag?: string
-  /** Build tool and plan versions; older instances send the `railpack*` names. */
+  /** Build tool and plan versions. */
   builderFrontendVersion?: string
   builderPlanVersion?: string
-  /** Previous name of {@link builderFrontendVersion}; still read from older instances. */
-  railpackFrontendVersion?: string
-  /** Previous name of {@link builderPlanVersion}; still read from older instances. */
-  railpackPlanVersion?: string
   /** Aggregate status across every host in {@link ReleaseRecord.attempts}. */
   status: CommandStatus
   queuedAt: string | null

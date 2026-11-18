@@ -333,10 +333,10 @@ describe('image-built services', () => {
     expect(blockingComposeLintIssues(issues)).toEqual([])
   })
 
-  it('accepts the previous value too', () => {
+  it('rejects the previous value', () => {
     const issues = lintComposeYaml(imageService.replace('buildKind: image', 'buildKind: railpack'))
-    expect(issues.some((issue) => issue.message.includes('must define "image"'))).toBe(false)
-    expect(blockingComposeLintIssues(issues)).toEqual([])
+    expect(issues.some((issue) => issue.message.includes('must define "image"'))).toBe(true)
+    expect(blockingComposeLintIssues(issues)).not.toEqual([])
   })
 
   it('still requires image or build for a native-built source', () => {
