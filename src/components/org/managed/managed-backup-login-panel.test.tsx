@@ -134,7 +134,15 @@ describe('backup login places', () => {
 describe('backup login help', () => {
   it('names the MySQL grants, the lock and why the password is admin-like', () => {
     const text = backupLoginHelp('mysql')
-    for (const word of ['SELECT', 'SHOW VIEW', 'TRIGGER', 'EVENT', 'FLUSH_TABLES', 'mysql.user']) {
+    for (const word of [
+      'SELECT',
+      'SHOW VIEW',
+      'TRIGGER',
+      'EVENT',
+      'SHOW_ROUTINE',
+      'FLUSH_TABLES',
+      'mysql.user',
+    ]) {
       expect(text).toContain(word)
     }
     expect(text).toContain('in every database')
@@ -156,7 +164,7 @@ describe('backup login help', () => {
     expect(text).toBe(BACKUP_LOGIN_HELP_POSTGRES)
     expect(text).toContain('pg_read_all_data')
     expect(text).toContain('BYPASSRLS')
-    for (const word of ['TRIGGER', 'EVENT', 'FLUSH_TABLES', 'mysql.user']) {
+    for (const word of ['TRIGGER', 'EVENT', 'SHOW_ROUTINE', 'FLUSH_TABLES', 'mysql.user']) {
       expect(text).not.toContain(word)
     }
   })

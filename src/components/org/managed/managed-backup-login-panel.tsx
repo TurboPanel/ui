@@ -21,8 +21,8 @@ const BACKUP_LOGIN_ADMIN_NOTE =
 /** Grants the daemon gives the backup login, per engine (turbopaneld src/managed/AGENTS.md). */
 export const BACKUP_LOGIN_HELP_MYSQL = [
   BACKUP_LOGIN_INTRO,
-  'It holds SELECT, SHOW VIEW, TRIGGER, EVENT and the global FLUSH_TABLES right, and it can read the system user table (mysql.user).',
-  'TRIGGER and EVENT also let it create triggers and events in every database.',
+  'It holds SELECT, SHOW VIEW, TRIGGER, EVENT, SHOW_ROUTINE and the global FLUSH_TABLES right, and it can read the system user table (mysql.user).',
+  'TRIGGER and EVENT also let it create and drop triggers and events in every database.',
   'FLUSH_TABLES lets it take the global read lock, which blocks every write on the server until it unlocks or disconnects.',
   BACKUP_LOGIN_ADMIN_NOTE,
   BACKUP_LOGIN_OUTRO,
@@ -32,7 +32,7 @@ export const BACKUP_LOGIN_HELP_MYSQL = [
 export const BACKUP_LOGIN_HELP_MARIADB = [
   BACKUP_LOGIN_INTRO,
   'It holds SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES and SHOW CREATE ROUTINE, and it can read the system user table (mysql.user).',
-  'TRIGGER and EVENT also let it create triggers and events in every database.',
+  'TRIGGER and EVENT also let it create and drop triggers and events in every database.',
   'LOCK TABLES lets it lock tables across the server and block writes until it unlocks or disconnects.',
   BACKUP_LOGIN_ADMIN_NOTE,
   BACKUP_LOGIN_OUTRO,
