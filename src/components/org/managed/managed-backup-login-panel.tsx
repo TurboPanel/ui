@@ -14,7 +14,7 @@ import {
 export const BACKUP_LOGIN_TITLE = 'Backup Login'
 
 export const BACKUP_LOGIN_HELP =
-  'A read-only login a backup tool uses to copy every database on this cluster. It sees every row, writes nothing, and always connects to the primary. A cluster has one.'
+  'A login a backup tool uses to copy every database on this cluster. It can read every row and the system user table (mysql.user), and it holds the TRIGGER and EVENT rights, so treat its password like an admin one. It always connects to the primary. A cluster has one.'
 
 export const BACKUP_PLACES_HELP =
   "Where the backup tool connects from, separated by commas: 'internal' (this server only: its own programs and containers), 'server:<id>' (one of this organization's servers) or 'address:<ip or range>'. 'any' is not allowed."

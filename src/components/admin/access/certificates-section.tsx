@@ -73,7 +73,7 @@ export function CertificatesSection() {
       <View style={styles.root}>
         <Text style={panelStyles.pageTitle}>Certificates</Text>
         <InlineNotice
-          title="Not applicable on this runtime"
+          title="Not Applicable on This Runtime"
           body="TurboPanel High Availability never installs or manages certificates — TLS for every hostname it serves is terminated at the Cloudflare edge, so there is nothing to upload or request here."
         />
       </View>

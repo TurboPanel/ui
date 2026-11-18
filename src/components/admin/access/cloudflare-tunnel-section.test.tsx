@@ -67,7 +67,7 @@ describe('Cloudflare Tunnel', () => {
   it('renders the not-applicable note on High Availability', () => {
     mocks.useAuth.mockReturnValue({ controlPlaneRuntime: 'workers' })
     render(<CloudflareTunnelSection />)
-    expect(screen.getByText(/Not applicable on this runtime/)).toBeTruthy()
+    expect(screen.getByText(/Not Applicable on This Runtime/)).toBeTruthy()
     expect(screen.queryByText('Accounts')).toBeNull()
   })
 

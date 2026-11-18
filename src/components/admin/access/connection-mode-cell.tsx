@@ -42,17 +42,19 @@ export const PASTED_TOKEN_HINT =
 /** The patch for a new mode: an edge mode picks the only matching account; others clear it. */
 export function modeChangePatch(
   mode: IngressMode,
-  record: Pick<InstanceHostnameRecord, 'publicPort'>,
+  record: Pick<InstanceHostnameRecord, 'publicPort' | 'ingressId'>,
   modes: readonly IngressCapabilities[],
   accounts: readonly IngressAccountRecord[]
 ): HostnameIngressPatch {
   const capability = capabilityFor(modes, mode)
   const provider = capability?.provider ?? null
   const matching = provider ? accounts.filter((account) => account.provider === provider) : []
-  const patch: HostnameIngressPatch = {
-    mode,
-    ingressId: matching.length === 1 ? matching[0].id : null,
-  }
+  // Two modes of one provider share the chosen account, so keep it.
+  const kept = matching.find((account) => account.id === record.ingressId)
+  let ingressId: string | null = null
+  if (kept) ingressId = kept.id
+  else if (matching.length === 1) ingressId = matching[0].id
+  const patch: HostnameIngressPatch = { mode, ingressId }
   const publicPort = portForModeChange(capability, record.publicPort)
   return publicPort === undefined ? patch : { ...patch, publicPort }
 }
@@ -60,6 +62,7 @@ export function modeChangePatch(
 export function ConnectionModeCell({
   record,
   modes,
+  modesPending = false,
   gate,
   accounts,
   lockedReason,
@@ -67,6 +70,8 @@ export function ConnectionModeCell({
 }: Readonly<{
   record: InstanceHostnameRecord | null
   modes: readonly IngressCapabilities[]
+  /** The modes are still loading or failed to load: say nothing about them yet. */
+  modesPending?: boolean
   gate: EdgeGate | null
   accounts: readonly IngressAccountRecord[]
   /** Why the mode cannot change right now (unsaved row or unsaved edits), or null. */
@@ -88,6 +93,7 @@ export function ConnectionModeCell({
   }
 
   if (modes.length === 0) {
+    if (modesPending) return null
     return <Text style={styles.muted}>{MODES_UNAVAILABLE}</Text>
   }
 

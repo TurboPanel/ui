@@ -207,3 +207,15 @@ describe('ingress queries', () => {
     )
   })
 })
+
+describe('the add-account mutation', () => {
+  it('keeps nothing in the mutation cache once it settles', async () => {
+    const { client, wrapper } = setup()
+    api.addIngressAccount.mockResolvedValue({ ok: true })
+    const { result } = renderHook(() => useAddIngressAccount(), { wrapper })
+    await act(async () => {
+      await result.current.run({ provider: 'cloudflare', label: 'Main', token: 'fake-token' })
+    })
+    expect(client.getMutationCache().getAll()[0]?.gcTime).toBe(0)
+  })
+})

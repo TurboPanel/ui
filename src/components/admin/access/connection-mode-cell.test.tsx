@@ -148,6 +148,21 @@ describe('ConnectionModeCell', () => {
     expect(screen.queryByRole('combobox')).toBeNull()
   })
 
+  it('says nothing about modes while they load or failed to load', () => {
+    render(
+      <ConnectionModeCell
+        record={RECORD}
+        modes={[]}
+        modesPending
+        gate={null}
+        accounts={[]}
+        lockedReason={null}
+        busy={false}
+      />
+    )
+    expect(screen.queryByText(MODES_UNAVAILABLE)).toBeNull()
+  })
+
   it('locks an unsaved row and says to save first', () => {
     render(
       <ConnectionModeCell
@@ -275,6 +290,35 @@ describe('modeChangePatch', () => {
       ingressId: null,
       publicPort: 8443,
     })
+  })
+})
+
+describe('modeChangePatch between two Cloudflare modes', () => {
+  const account = (id: string) => ({
+    id,
+    provider: 'cloudflare' as const,
+    label: id,
+    accountId: id,
+    zoneIds: [],
+    scopes: null,
+    lastVerifiedAt: null,
+    lastError: null,
+    createdAt: '2026-11-01T00:00:00Z',
+  })
+
+  it('keeps the chosen account when several are connected', () => {
+    const patch = modeChangePatch('cloudflare-proxy', { publicPort: 443, ingressId: 'a2' }, MODES, [
+      account('a1'),
+      account('a2'),
+    ])
+    expect(patch.ingressId).toBe('a2')
+  })
+
+  it('still clears an account that belongs to another provider', () => {
+    const patch = modeChangePatch('direct', { publicPort: 443, ingressId: 'a2' }, MODES, [
+      account('a2'),
+    ])
+    expect(patch.ingressId).toBeNull()
   })
 })
 

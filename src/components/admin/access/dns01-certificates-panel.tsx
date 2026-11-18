@@ -13,6 +13,7 @@ import {
   panelDnsCauseLabel,
   retryPausedUntil,
 } from '@/lib/panel-certificate-causes'
+import { useTickingNow } from '@/lib/use-ticking-now'
 import { useOrderPanelDnsCertificate, usePanelDnsCertificate } from '@/lib/queries/ingress'
 import { colors, spacing } from '@/lib/theme'
 
@@ -57,9 +58,7 @@ function Dns01Row({
       {query.isError ? (
         <Text style={panelStyles.error}>Failed to load the certificate state</Text>
       ) : null}
-      {query.data ? (
-        <Dns01State id={record.id} state={query.data} now={query.dataUpdatedAt} />
-      ) : null}
+      {query.data ? <Dns01State id={record.id} state={query.data} /> : null}
       {query.isLoading ? <LoadingState /> : null}
     </View>
   )
@@ -111,11 +110,11 @@ export function Dns01State({
 }: Readonly<{
   id: string
   state: PanelDnsCertificate
-  /** When the state was read; a pause is judged against it. */
-  now: number
+  /** A fixed clock for tests; otherwise a clock that ticks while a pause runs. */
+  now?: number
 }>) {
   const { order, error, run } = useDns01Order(id)
-  const pausedUntil = retryPausedUntil(state, now)
+  const pausedUntil = retryPausedUntil(state, useTickingNow(Boolean(state.stopUntil), now))
 
   return (
     <View style={styles.state}>
@@ -161,18 +160,18 @@ export function Dns01HostnameStatus({
 }: Readonly<{ hostnameId: string; enabled: boolean }>) {
   const query = usePanelDnsCertificate(hostnameId, { enabled })
   if (!query.data) return null
-  return <Dns01RowNote id={hostnameId} state={query.data} now={query.dataUpdatedAt} />
+  return <Dns01RowNote id={hostnameId} state={query.data} />
 }
 
 export function Dns01RowNote({
   id,
   state,
   now,
-}: Readonly<{ id: string; state: PanelDnsCertificate; now: number }>) {
+}: Readonly<{ id: string; state: PanelDnsCertificate; now?: number }>) {
   const { order, error, run } = useDns01Order(id)
   const working = dns01WorkingLabel(state.stage)
   const stopped = state.stage === 'failed' || state.stage === 'backoff'
-  const pausedUntil = retryPausedUntil(state, now)
+  const pausedUntil = retryPausedUntil(state, useTickingNow(Boolean(state.stopUntil), now))
   if (!working && !stopped && !error) return null
   return (
     <View style={styles.rowNote}>

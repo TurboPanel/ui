@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PanelDnsCertificate } from '@/lib/instance-api'
 import { formatLocalDateTime } from '@/lib/format-datetime'
@@ -67,6 +67,28 @@ describe('Dns01State', () => {
     expect(screen.getByText(/Retry is paused until/)).toBeTruthy()
     expect(screen.getByText('Back-off')).toBeTruthy()
     expect(screen.getByText('TXT Record Not Visible: The TXT record never appeared.')).toBeTruthy()
+  })
+
+  it('enables Order Now and Retry by itself once the pause ends', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(NOW)
+      render(
+        <Dns01State
+          id="h1"
+          state={state({ stage: 'backoff', stopUntil: '2026-11-01T12:00:03Z' })}
+        />
+      )
+      expect((screen.getByText('Retry') as HTMLButtonElement).disabled).toBe(true)
+      expect((screen.getByText('Order Now') as HTMLButtonElement).disabled).toBe(true)
+      act(() => {
+        vi.advanceTimersByTime(4000)
+      })
+      expect((screen.getByText('Retry') as HTMLButtonElement).disabled).toBe(false)
+      expect((screen.getByText('Order Now') as HTMLButtonElement).disabled).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('enables Retry once the pause has passed', () => {
