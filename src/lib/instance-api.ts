@@ -5822,7 +5822,6 @@ export type InstanceDaemonCapabilities = {
   connected?: boolean
   serverId?: string | null
   version?: string | null
-  capabilities?: Record<string, boolean>
 }
 
 export type PlatformCaInfo =
