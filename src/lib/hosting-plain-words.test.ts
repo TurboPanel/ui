@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
+import { CONTROL_PLANE_UNREACHABLE_COPY } from '@/lib/user-error'
 import {
   type ConfiguredHostingState,
   certificateChoiceText,
@@ -15,6 +16,7 @@ import {
   DEPLOY_RUNNING_MESSAGE,
   HOSTING_ACTION_FAILED_MESSAGE,
   hostingActionErrorMessage,
+  hostingSaveErrorMessage,
   HOSTNAME_IN_USE_MESSAGE,
   COMPOSE_HOSTNAME_HINT,
   COMPOSE_PROXY_NOTE,
@@ -210,6 +212,24 @@ describe('plain hosting words', () => {
     expect(manageHereInsteadPrompt('example.test', 'deployed')).toContain('not carried over')
     expect(manageHereInsteadPrompt('example.test', 'not-deployed')).toContain('certificate choice')
     expect(manageHereInsteadPrompt('example.test', 'held-by-panel')).toContain('Finish moving')
+  })
+
+  it('words a hostname save refused with 409 hostname_in_use, and keeps the fallback otherwise', () => {
+    expect(hostingSaveErrorMessage({ error: RAW_REFUSALS[1] }, 'Could not save.')).toBe(
+      HOSTNAME_IN_USE_MESSAGE
+    )
+    expect(
+      hostingSaveErrorMessage({ error: null, cause: undefined }, 'Could not save this hostname.')
+    ).toBe('Could not save this hostname.')
+  })
+
+  it('keeps the unreachable wording for a network failure that also fills error', () => {
+    expect(
+      hostingSaveErrorMessage(
+        { error: 'Failed to fetch', cause: new TypeError('Failed to fetch') },
+        'Could not save this hostname.'
+      )
+    ).toBe(CONTROL_PLANE_UNREACHABLE_COPY)
   })
 
   it('words a refused hosting action without paths or codes', () => {

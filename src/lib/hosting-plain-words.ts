@@ -11,7 +11,7 @@ import { stringify } from 'yaml'
 import type { ComposeHostingExtensionEntry } from '@/lib/compose/hosting-extension'
 import { wwwResultLines } from '@/lib/hosting-www'
 import type { TlsRecord } from '@/lib/instance-api'
-import { apiErrorCopy } from '@/lib/user-error'
+import { apiErrorCopy, failedRunMessage } from '@/lib/user-error'
 
 /** The Let's Encrypt choice, as every picker and summary names it. */
 export const LETS_ENCRYPT_CHOICE_TEXT = 'Let’s Encrypt (free, renews automatically)'
@@ -278,4 +278,21 @@ export function hostingActionErrorMessage(error: string | null | undefined): str
   const mapped = apiErrorCopy(text)
   if (mapped) return mapped
   return readableErrorText(text) || HOSTING_ACTION_FAILED_MESSAGE
+}
+
+/**
+ * The words for a failed hostname save: a refusal carrying a hosting code is
+ * worded by `hostingActionErrorMessage` (so a 409 `hostname_in_use` names the
+ * fix); every other failure keeps the shared wording (unreachable panel, the
+ * mapped code, the server's words, then the caller's fallback).
+ */
+export function hostingSaveErrorMessage(
+  result: Readonly<{ error: string | null; cause?: unknown }>,
+  fallback: string
+): string {
+  const error = result.error ?? ''
+  if (HOSTING_ERROR_COPY.some(([code]) => error.includes(code))) {
+    return hostingActionErrorMessage(error)
+  }
+  return failedRunMessage(result, fallback)
 }

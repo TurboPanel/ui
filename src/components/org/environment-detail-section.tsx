@@ -142,6 +142,7 @@ import {
   type ConfiguredHostingState,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
   hostingActionErrorMessage,
+  hostingSaveErrorMessage,
   missingCertificateMessage,
   panelCertificateHint,
   PENDING_REMOVAL_CERTIFICATE_HINT,
@@ -3035,7 +3036,8 @@ export function EnvironmentDetailBody({
       },
     })
     if (!result.ok) {
-      onError(failedRunMessage(result, 'Could not save this hostname.'))
+      // The panel's 409 carries only the code; the plain-words mapping words it.
+      onError(hostingSaveErrorMessage(result, 'Could not save this hostname.'))
       return false
     }
     const savedHostingId =
