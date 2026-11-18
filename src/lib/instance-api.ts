@@ -1938,8 +1938,6 @@ export async function updateOrganizationDockerNetworking(
  * (`null` = inheriting the platform default, `partial`); `effectiveNameScheme`
  * is what new principals get. `schemeLocked` forces that scheme for every new
  * principal (creators cannot choose). Existing principals are never renamed.
- * `randomizedUsernames` / `effectiveRandomizedUsernames` are the legacy toggle
- * the scheme replaces.
  */
 export type OrgPrincipalDefaults = {
   nameScheme: NameScheme | null

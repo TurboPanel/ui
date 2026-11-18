@@ -231,18 +231,35 @@ export function tierLicensesLine(tier: BillingTierSummary): string {
   return `Licenses at ${tier.label}: ${parts.join(', ')}`
 }
 
-/** True when one license at this tier can still move away, as far as the projection shows. */
-export function canReleaseAt(tier: BillingTierSummary): boolean {
-  return tier.purchased - tier.ending > 0
+type PendingChanges = readonly BillingPendingChange[] | undefined
+
+/** Licenses at this tier already leaving through a parked downgrade. */
+function downgradingFrom(tier: BillingTierSummary, pendingChanges: PendingChanges): number {
+  return (pendingChanges ?? []).filter(
+    (change) => change.kind === 'downgrade' && change.fromTierId === tier.tierId
+  ).length
+}
+
+/**
+ * True when one license at this tier can still move away, as far as the
+ * projection shows. A parked downgrade already claims a license, like an
+ * ending one. `pendingChanges` is optional: an older API omits it.
+ */
+export function canReleaseAt(tier: BillingTierSummary, pendingChanges?: PendingChanges): boolean {
+  return tier.purchased - tier.ending - downgradingFrom(tier, pendingChanges) > 0
 }
 
 /**
  * How many licenses at this tier Remove may offer: bought, not already
- * ending, and not covering a server. Advisory — the control plane refuses
- * a removal that would strand a server or a waiting key.
+ * ending or parked for a downgrade, and not covering a server. Advisory —
+ * the control plane refuses a removal that would strand a server or a
+ * waiting key.
  */
-export function removableAt(tier: BillingTierSummary): number {
-  return Math.max(0, tier.purchased - tier.ending - tier.inUse)
+export function removableAt(tier: BillingTierSummary, pendingChanges?: PendingChanges): number {
+  return Math.max(
+    0,
+    tier.purchased - tier.ending - downgradingFrom(tier, pendingChanges) - tier.inUse
+  )
 }
 
 /** A whole number of licenses, at least 1; `null` for anything else. */

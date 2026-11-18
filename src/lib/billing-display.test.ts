@@ -287,6 +287,24 @@ describe('removableAt / canReleaseAt', () => {
     expect(canReleaseAt(tierRow({ purchased: 2, ending: 2 }))).toBe(false)
     expect(canReleaseAt(tierRow({ purchased: 2, ending: 1 }))).toBe(true)
   })
+  it('counts a parked downgrade from the tier like an ending license', () => {
+    const downgrade = (fromTierId: string): BillingPendingChange => ({
+      id: `c-${fromTierId}`,
+      kind: 'downgrade',
+      fromTierId,
+      toTierId: 't0',
+      createdAt: OCT_26,
+      landsAt: OCT_26,
+    })
+    const tier = tierRow({ purchased: 6, ending: 1, inUse: 3 })
+    expect(removableAt(tier, [downgrade('t1')])).toBe(1)
+    expect(removableAt(tier, [downgrade('other')])).toBe(2)
+    expect(removableAt(tier, undefined)).toBe(2)
+    const full = tierRow({ purchased: 2, ending: 1 })
+    expect(canReleaseAt(full, [downgrade('t1')])).toBe(false)
+    expect(canReleaseAt(full, [downgrade('other')])).toBe(true)
+    expect(canReleaseAt(full)).toBe(true)
+  })
 })
 
 describe('endingLabel edge cases', () => {
