@@ -25,6 +25,9 @@ import {
 } from '@/components/ui'
 import {
   certificateSourceEligibility,
+  daemonCapabilitiesStatus,
+  daemonStatusReason,
+  type DaemonCapabilitiesStatus,
   hostnameStatusPresentation,
   http01PreflightPresentation,
   panelHostnameHttpsUrl,
@@ -39,6 +42,7 @@ import {
   useAttachInstanceCertificate,
   useInstanceAcmeSettings,
   useInstanceCertificates,
+  useInstanceDaemon,
   useInstanceHostnames,
   useSaveInstanceAcmeSettings,
   useUploadInstanceCertificate,
@@ -120,6 +124,7 @@ function UploadedPanel({
   hostnames: readonly InstanceHostnameRecord[]
 }>) {
   const wildcard = certificates.some((certificate) => certificateHasWildcard(certificate.dnsNames))
+  const capabilitiesStatus = daemonCapabilitiesStatus(useInstanceDaemon())
   return (
     <SectionPanel
       title="Uploaded certificates"
@@ -144,6 +149,7 @@ function UploadedPanel({
           key={attachmentKey(certificate)}
           certificate={certificate}
           hostnames={hostnames}
+          capabilitiesStatus={capabilitiesStatus}
         />
       ))}
       <UploadPairForm />
@@ -222,13 +228,16 @@ function CertificateRow({
   )
 }
 
-function AttachmentEditor({
+export function AttachmentEditor({
   certificate,
   hostnames,
+  capabilitiesStatus = 'ready',
 }: Readonly<{
   certificate: UploadedCertificateRecord
   hostnames: readonly InstanceHostnameRecord[]
+  capabilitiesStatus?: DaemonCapabilitiesStatus
 }>) {
+  const daemonReason = daemonStatusReason(capabilitiesStatus)
   const attach = useAttachInstanceCertificate()
   const [selected, setSelected] = useState<readonly string[]>(certificate.hostnames)
   const [error, setError] = useState<string | null>(null)
@@ -270,12 +279,13 @@ function AttachmentEditor({
         ))
       )}
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {daemonReason ? <Text style={panelStyles.muted}>{daemonReason}</Text> : null}
       <Button
         label="Save attachments"
         busyLabel="Saving…"
         variant="primary"
         busy={attach.isPending}
-        disabled={hostnames.length === 0}
+        disabled={hostnames.length === 0 || daemonReason !== null}
         onPress={() => {
           void onSave()
         }}
