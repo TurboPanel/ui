@@ -15,16 +15,5 @@ export function reenrollTokenIsLive(expiresAt: string, nowMs: number = Date.now(
   return Number.isFinite(at) && at > nowMs
 }
 
-/**
- * What to show as the command. A control plane that predates `installCommand`
- * returns only the installer value, so name it instead of guessing the rest.
- */
-export function reenrollCommandText(ticket: {
-  installCommand?: string
-  licenseArg: string
-}): string {
-  return ticket.installCommand ?? `TURBOPANEL_LICENSE=${ticket.licenseArg}`
-}
-
 export const REENROLL_TOKEN_HELP =
   'Use this when a server lost its key and cannot connect. Run the command as root on that server. It works once and stops working after one hour. Issuing a new token replaces any earlier unused one.'

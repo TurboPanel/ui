@@ -1945,8 +1945,6 @@ export type OrgPrincipalDefaults = {
   nameScheme: NameScheme | null
   effectiveNameScheme: NameScheme
   schemeLocked: boolean
-  randomizedUsernames: boolean | null
-  effectiveRandomizedUsernames: boolean
 }
 
 export type OrgPrincipalDefaultsUpdate = {
@@ -3134,9 +3132,6 @@ type LicenseCreateErrorBody = {
   tiers?: unknown
   provisioning?: number
   unusedKeys?: number
-  /** Deprecated aliases from before `inUse` / `ending`. */
-  releasing?: number
-  held?: number
 }
 
 function readLicenseTiers(raw: unknown): LicenseTierAvailability[] {
@@ -3160,11 +3155,11 @@ function readLicenseTiers(raw: unknown): LicenseTierAvailability[] {
   })
 }
 
-/** Normalises a `409 no_license_available` body, reading the deprecated aliases when the new fields are absent. */
+/** Normalises a `409 no_license_available` body. */
 export function licenseAvailabilityFromBody(body: LicenseCreateErrorBody): LicenseAvailability {
   return {
     purchased: readCount(body.purchased),
-    inUse: readCount(body.inUse ?? body.held),
+    inUse: readCount(body.inUse),
     ending: readCount(body.ending),
     endsAt: readText(body.endsAt),
     available: readCount(body.available),
@@ -3277,14 +3272,13 @@ export async function deleteLicense(id: string): Promise<{ ok: true }> {
 /**
  * A one-hour, single-use install ticket. The secret is shown once and stored
  * hashed, so it cannot be read again. `installCommand` is the whole command
- * the control plane built; an older control plane returns only `licenseArg`.
+ * the control plane built.
  */
 export type ReenrollTicket = {
   ticketId: string
   expiresAt: string
   licenseToken: string
-  licenseArg: string
-  installCommand?: string
+  installCommand: string
 }
 
 /** `POST /servers/:id/reenroll-ticket` (owner; step-up). Retires any earlier unused ticket. */
@@ -3324,8 +3318,7 @@ export type ReissuedLicenseTicket = {
   joinId: string
   joinExpiresAt: string
   licenseToken: string
-  licenseArg: string
-  installCommand?: string
+  installCommand: string
 }
 
 /** `POST /licenses/:id/ticket` (owner; step-up): burn an unused key's token and issue a fresh one-hour ticket. */
@@ -3402,8 +3395,6 @@ export type BillingTierSummary = {
   endsAt: string | null
   /** `purchased − ending − inUse`, floored at 0 (advisory; the mint gate is the org-wide total). */
   available: number
-  /** @deprecated Use `ending` — this also counts pending downgrades. */
-  releasing?: number
   priceCents: number | null
   currency: string | null
 }
@@ -3424,10 +3415,6 @@ export type BillingLicenseSummary = {
   unusedKeys?: number
   /** How many more servers can be added right now. */
   available: number
-  /** @deprecated Use `ending`. */
-  releasing?: number
-  /** @deprecated Use `inUse`. */
-  held?: number
 }
 
 /** Where each licensed server landed: the tier the control plane assigned it, or `null` when nothing bought covers it. */
@@ -8026,7 +8013,8 @@ export type CommandRecord = {
   status: CommandStatus
   payload: Record<string, unknown> | null
   result: Record<string, unknown> | null
-  error: string | null
+  /** Canonical human-readable error for terminal failures. */
+  errorMessage: string | null
   /** The one line of the error that says what went wrong; absent on an older control plane. */
   errorLine?: string | null
   attempts: number

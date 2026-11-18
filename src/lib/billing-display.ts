@@ -196,23 +196,6 @@ export function endingLabel(ending: number, endsAt: string | null | undefined): 
 }
 
 /**
- * The wire aliases an older control plane still sends instead of `inUse` /
- * `ending`. Typed here, apart from `BillingLicenseSummary` and
- * `BillingTierSummary` where they are marked deprecated, so the one place that
- * still has to read them is this pair of helpers.
- */
-type LegacyLicenseCounts = Readonly<{ inUse?: number; held?: number }>
-type LegacyTierCounts = Readonly<{ ending: number; releasing?: number }>
-
-/**
- * Licenses an org holds: `inUse` from a current control plane, `held` from an
- * older one. This is the only read of the deprecated `held` alias.
- */
-export function licensesInUse(licenses: LegacyLicenseCounts): number {
-  return licenses.inUse ?? licenses.held ?? 0
-}
-
-/**
  * `3 of 6 licenses in use (1 provisioning) · 1 held by an unused key · 3 end
  * Oct 26 · no room for another server` — the org-wide line under the
  * Licenses tiles. An ending license is never counted as in use; it is named
@@ -222,7 +205,7 @@ export function licensesInUse(licenses: LegacyLicenseCounts): number {
 export function licenseSummaryLine(licenses: BillingLicenseSummary): string {
   const provisioning = licenses.provisioning ?? 0
   const parts = [
-    `${licensesInUse(licenses)} of ${plural(licenses.purchased, 'license', 'licenses')} in use${
+    `${licenses.inUse} of ${plural(licenses.purchased, 'license', 'licenses')} in use${
       provisioning > 0 ? ` (${provisioning} provisioning)` : ''
     }`,
   ]
@@ -248,15 +231,9 @@ export function tierLicensesLine(tier: BillingTierSummary): string {
   return `Licenses at ${tier.label}: ${parts.join(', ')}`
 }
 
-/** Seats already on their way out at this tier: ending licenses, plus pending downgrades when the server still reports them. */
-function outgoingAt(tier: LegacyTierCounts): number {
-  // The only read of the deprecated `releasing` alias (an older control plane's ending + pending downgrades).
-  return Math.max(tier.ending, tier.releasing ?? 0)
-}
-
 /** True when one license at this tier can still move away, as far as the projection shows. */
 export function canReleaseAt(tier: BillingTierSummary): boolean {
-  return tier.purchased - outgoingAt(tier) > 0
+  return tier.purchased - tier.ending > 0
 }
 
 /**
@@ -265,7 +242,7 @@ export function canReleaseAt(tier: BillingTierSummary): boolean {
  * a removal that would strand a server or a waiting key.
  */
 export function removableAt(tier: BillingTierSummary): number {
-  return Math.max(0, tier.purchased - outgoingAt(tier) - tier.inUse)
+  return Math.max(0, tier.purchased - tier.ending - tier.inUse)
 }
 
 /** A whole number of licenses, at least 1; `null` for anything else. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reenrollCommandText, reenrollExpiryLabel, reenrollTokenIsLive } from './reenroll-token'
+import { reenrollExpiryLabel, reenrollTokenIsLive } from './reenroll-token'
 
 const NOW = Date.parse('2026-11-01T12:00:00Z')
 const at = (ms: number) => new Date(NOW + ms).toISOString()
@@ -22,14 +22,5 @@ describe('reenrollTokenIsLive', () => {
   it('is true only before the deadline', () => {
     expect(reenrollTokenIsLive(at(1000), NOW)).toBe(true)
     expect(reenrollTokenIsLive(at(0), NOW)).toBe(false)
-  })
-})
-
-describe('reenrollCommandText', () => {
-  it('prefers the full command and falls back to the installer value', () => {
-    expect(reenrollCommandText({ installCommand: 'curl x | sh', licenseArg: 'abc' })).toBe(
-      'curl x | sh'
-    )
-    expect(reenrollCommandText({ licenseArg: 'abc' })).toBe('TURBOPANEL_LICENSE=abc')
   })
 })

@@ -18,17 +18,17 @@ import {
   useRevokeServerReenrollTickets,
 } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
-import { reenrollCommandText, REENROLL_TOKEN_HELP } from '@/lib/reenroll-token'
+import { REENROLL_TOKEN_HELP } from '@/lib/reenroll-token'
 import { spacing } from '@/lib/theme'
 
 type ShownTicket = Readonly<{ command: string; expiresAt: string }>
 
 function toShown(ticket: ReenrollTicket): ShownTicket {
-  return { command: reenrollCommandText(ticket), expiresAt: ticket.expiresAt }
+  return { command: ticket.installCommand, expiresAt: ticket.expiresAt }
 }
 
 function reissuedToShown(ticket: ReissuedLicenseTicket): ShownTicket {
-  return { command: reenrollCommandText(ticket), expiresAt: ticket.joinExpiresAt }
+  return { command: ticket.installCommand, expiresAt: ticket.joinExpiresAt }
 }
 
 function ReenrollTokenCard({ serverId }: Readonly<{ serverId: string }>) {

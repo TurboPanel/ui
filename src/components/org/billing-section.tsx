@@ -38,7 +38,6 @@ import {
   isDelinquentSubscription,
   landsAtLabel,
   licenseSummaryLine,
-  licensesInUse,
   machineExamplesForTier,
   parseLicenseCount,
   removableAt,
@@ -561,7 +560,7 @@ function LicensesPanel({
   const status = subscriptionStatusView(summary.subscription?.status)
   const licenses = summary.licenses
   const periodEnd = summary.subscription?.currentPeriodEnd
-  const inUse = licensesInUse(licenses)
+  const inUse = licenses.inUse
   const ending = licenses.ending ?? 0
   const endsShort = formatShortDate(licenses.endsAt)
   return (

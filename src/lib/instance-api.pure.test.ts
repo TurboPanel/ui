@@ -873,8 +873,6 @@ describe('fetch wrappers (mocked fetch)', () => {
         },
         { label: 'no id — dropped' },
       ],
-      releasing: 3,
-      held: 3,
     }
     fetchMock.mockResolvedValueOnce(jsonResponse(body, 409))
     try {
@@ -908,22 +906,6 @@ describe('fetch wrappers (mocked fetch)', () => {
         ],
       })
     }
-  })
-
-  it('reads an older control plane that only sends held / releasing', () => {
-    expect(
-      licenseAvailabilityFromBody({ purchased: 3, releasing: 1, held: 2, available: 0 })
-    ).toEqual({
-      purchased: 3,
-      inUse: 2,
-      ending: 0,
-      endsAt: null,
-      available: 0,
-      provisioning: 0,
-      unusedKeys: 0,
-      tiers: [],
-      message: null,
-    })
   })
 
   it('reads the provisioning and unused-key counts when the control plane sends them', () => {
