@@ -185,9 +185,13 @@ const DAEMON_STATUS_REASONS: Readonly<Record<Exclude<DaemonCapabilitiesStatus, '
     disconnected: "This host's daemon isn't connected, so this source can't be chosen right now.",
   }
 
-function daemonCapabilityRefusal(options: CertificateSourceContext): string | null {
-  const status = options.capabilitiesStatus ?? 'ready'
+/** The sentence for a daemon read that isn't ready, or null once it is. */
+export function daemonStatusReason(status: DaemonCapabilitiesStatus): string | null {
   return status === 'ready' ? null : DAEMON_STATUS_REASONS[status]
+}
+
+function daemonCapabilityRefusal(options: CertificateSourceContext): string | null {
+  return daemonStatusReason(options.capabilitiesStatus ?? 'ready')
 }
 
 /** The daemon read's state, from the query and what it returned. */
