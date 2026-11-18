@@ -169,10 +169,7 @@ export type CertificateCoverage = Readonly<{
 
 export type CertificateSourceContext = Readonly<{
   certificates: readonly CertificateCoverage[]
-  /**
-   * How the daemon read went. Only a daemon that answered without the
-   * capability is "too old"; a read still in flight or one that failed says so.
-   */
+  /** How the daemon read went; a read still in flight or one that failed says so. */
   capabilitiesStatus?: DaemonCapabilitiesStatus
 }>
 
