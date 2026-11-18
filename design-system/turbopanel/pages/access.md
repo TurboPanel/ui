@@ -39,7 +39,7 @@
 
 - Uploaded pair table: label, parsed names, expiry, attached hostnames. Wildcard rows carry a **Wildcard** badge plus the one-label coverage sentence. Let's Encrypt cannot issue a wildcard here.
 - Upload form: label, certificate PEM, private key PEM. The key is sent once and never shown again.
-- Attach/detach is the full `hosts` set for that pair. A hostname the pair does not cover stays disabled. Clearing a hostname and saving leaves it on the Platform CA leaf. Disable attach while `instance-cert-sources-per-hostname` is absent, and keep the capability notice visible.
+- Attach/detach is the full `hosts` set for that pair. A hostname the pair does not cover stays disabled. Clearing a hostname and saving leaves it on the Platform CA leaf.
 - Let's Encrypt form: contact email, directory URL, terms checkbox, staging toggle. An env-sourced key is read-only (Environment badge).
 - Reachability sits under the form. Each row shows `https://<host>:8443`. A private, loopback, or wildcard name is refused before issuance. Port 80 is opened only while a certificate is being issued or renewed. A Let's Encrypt name then shows the HTTP-01 preflight: the daemon publishes a nonce and requires `http://<hostname>/.well-known/acme-challenge/<nonce>` to reach the instance ACME issuer. That result is `acmeLastError` when the apply failed the check (`did not reach the instance ACME issuer`), and a passed line once an attempt is recorded. A later issuance error is a separate line. Show the last attempt day and the leaf expiry when one is stored.
 
