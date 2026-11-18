@@ -29,8 +29,6 @@ const STATUS_PRESENTATION: Record<
   expired: { dot: 'offline', badge: 'danger', label: 'Expired' },
 }
 
-const OLD_DAEMON_REASON = "this host's daemon is too old to render per-hostname certificate sources"
-
 export const INSTANCE_ACME_TOS_SETTING_KEY = 'TURBOPANEL_INSTANCE_ACME__TOS_ACCEPTED' as const
 
 /** The sentence the control plane sends beside {@link INSTANCE_ACME_TOS_NOT_ACCEPTED_CODE}. */
@@ -171,7 +169,6 @@ export type CertificateCoverage = Readonly<{
 
 export type CertificateSourceContext = Readonly<{
   certificates: readonly CertificateCoverage[]
-  capabilities: Readonly<Record<string, boolean>> | null | undefined
   /**
    * How the daemon read went. Only a daemon that answered without the
    * capability is "too old"; a read still in flight or one that failed says so.
@@ -179,10 +176,7 @@ export type CertificateSourceContext = Readonly<{
   capabilitiesStatus?: DaemonCapabilitiesStatus
 }>
 
-/**
- * Where the daemon read stands. Only `ready` with the capability missing means
- * the daemon is too old; every other state has its own reason.
- */
+/** Where the daemon read stands; every state but `ready` has its own reason. */
 export type DaemonCapabilitiesStatus =
   'loading' | 'error' | 'not-applicable' | 'disconnected' | 'ready'
 
@@ -196,10 +190,7 @@ const DAEMON_STATUS_REASONS: Readonly<Record<Exclude<DaemonCapabilitiesStatus, '
 
 function daemonCapabilityRefusal(options: CertificateSourceContext): string | null {
   const status = options.capabilitiesStatus ?? 'ready'
-  if (status !== 'ready') return DAEMON_STATUS_REASONS[status]
-  return options.capabilities?.['instance-cert-sources-per-hostname'] === true
-    ? null
-    : OLD_DAEMON_REASON
+  return status === 'ready' ? null : DAEMON_STATUS_REASONS[status]
 }
 
 /** The daemon read's state, from the query and what it returned. */
