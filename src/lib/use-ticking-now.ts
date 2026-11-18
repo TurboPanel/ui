@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
  */
 export function useTickingNow(active: boolean, override?: number, stopAt?: number): number {
   const [now, setNow] = useState(() => Date.now())
-  const reached = stopAt !== undefined && now >= stopAt
+  const reached = stopAt !== undefined && (Number.isNaN(stopAt) || now >= stopAt)
   const ticking = active && override === undefined && !reached
   useEffect(() => {
     if (!ticking) return
