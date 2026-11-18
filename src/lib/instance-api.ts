@@ -7569,8 +7569,8 @@ export type DaemonSupport = {
   status: 'supported' | 'unsupported' | 'unknown'
   version: string | null
   minVersion: string
-  /** Set with `unsupported`; absent on control planes that predate it. */
-  code?: string
+  /** Set with `unsupported` by control planes that send it; absent otherwise. */
+  code?: 'daemon_update_required'
   /** Required wire features the daemon's hello does not list. */
   missingFeatures?: string[]
   /** The control plane's sentence for why commands are refused. */

@@ -149,14 +149,18 @@ describe('FabricLifecycleControls', () => {
     save.mockImplementation((_body, options: { onError: (err: unknown) => void }) => {
       options.onError(
         new Error(
-          '/api/client/v1/organizations/org-1/fabric failed: HTTP 409: fabric_paused — TurboFabric is paused: turn it back on first.'
+          '/api/client/v1/organizations/org-1/fabric failed: HTTP 503: fabric_teardown_not_queued — TurboFabric is still on: turning it off could not reach every server. Try turning it off again.'
         )
       )
     })
     render(<FabricLifecycleControls orgId="org-1" state="on" hasFabric disabled={false} />)
     fireEvent.click(screen.getByRole('switch'))
     fireEvent.click(screen.getByRole('button', { name: 'Turn Off TurboFabric' }))
-    expect(screen.getByText('TurboFabric is paused: turn it back on first.')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'TurboFabric is still on: turning it off could not reach every server. Try turning it off again.'
+      )
+    ).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 })
