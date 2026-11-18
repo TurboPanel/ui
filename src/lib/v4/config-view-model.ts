@@ -349,7 +349,18 @@ function hostnamesOf(record: HostingRecord): string[] {
   return raw.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
 }
 
-function certificateOf(record: HostingRecord): DomainRowModel['certificate'] {
+/** The word beside a tunnel-only name; it never asks for a public certificate. */
+export const TUNNEL_CERTIFICATE_LABEL = 'Internal certificate (tunnel)'
+
+function isTunnelOnlyHost(record: HostingRecord, host: string): boolean {
+  const key = host.toLowerCase()
+  return (record.tunnels ?? []).some(
+    (path) => path.tunnelOnly && path.hostname.toLowerCase() === key
+  )
+}
+
+function certificateOf(record: HostingRecord, host: string): DomainRowModel['certificate'] {
+  if (isTunnelOnlyHost(record, host)) return { label: TUNNEL_CERTIFICATE_LABEL, tone: 'neutral' }
   if (!record.certificate) return null
   const view = describeCertificate(record.certificate)
   return { label: view.label, tone: view.tone }
@@ -371,8 +382,8 @@ export function withHostingHostnames(
   for (const app of model.apps) {
     if (app.serviceId === null) continue
     for (const record of hostingsByService[app.serviceId] ?? []) {
-      const certificate = certificateOf(record)
       for (const host of hostnamesOf(record)) {
+        const certificate = certificateOf(record, host)
         const existing = rows.get(host.toLowerCase())
         rows.set(
           host.toLowerCase(),

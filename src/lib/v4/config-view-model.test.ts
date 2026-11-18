@@ -328,6 +328,32 @@ describe('hostnames held by the panel', () => {
     expect(merged.domains[2].tag).toEqual({ source: 'env', label: 'Staging change' })
   })
 
+  it('shows the internal certificate word for a tunnel-only name, even while the request is pending', () => {
+    const model = buildConfigViewModel({ envName: 'Staging', view: viewWithoutHostnames() })
+    const path = {
+      tunnelId: 't1',
+      tunnelName: 'Edge',
+      provider: 'cloudflare',
+      originVerified: false,
+      status: 'live',
+    }
+    const merged = withHostingHostnames(model, {
+      'id-web': [
+        hosting('h1', ['Tunnel.example.com', 'direct.example.com'], {
+          tunnels: [
+            { ...path, hostname: 'tunnel.example.com', tunnelOnly: true },
+            { ...path, hostname: 'direct.example.com', tunnelOnly: false },
+          ],
+        }),
+      ],
+    })
+    expect(merged.domains[0].certificate).toEqual({
+      label: 'Internal certificate (tunnel)',
+      tone: 'neutral',
+    })
+    expect(merged.domains[1].certificate).toBeNull()
+  })
+
   it('ignores a hosting without hostnames and an app the panel has no id for', () => {
     const model = buildConfigViewModel({ envName: 'Staging', view: viewWithoutHostnames() })
     const merged = withHostingHostnames(model, {
