@@ -86,17 +86,14 @@ describe('app login notes', () => {
   it('turns the server notes into plain words without API wording', () => {
     const server = [
       'These databases have no owner role yet, so there is none for a Database admin login to work through: app. Move a database onto an owner role (POST …/managed/databases/{name}/owner-role with confirm: true) to give it the full rights there.',
-      "This server's TurboPanel daemon is older than owner roles, so the login was added with read and write access.",
-      "This server's TurboPanel daemon is older than the Database admin login, so the login was added with read and write access.",
       'Something else about POST …/managed/x.',
       'A plain note.',
     ]
     const plain = plainAppLoginNotes(server)
-    expect(plain).toHaveLength(4)
+    expect(plain).toHaveLength(3)
     expect(plain[0]).toMatch(/^This database has no owner role yet/)
-    expect(plain[1]).toMatch(/older TurboPanel version/)
-    expect(plain[2]).toMatch(/did not get full ownership/)
-    expect(plain[3]).toBe('A plain note.')
+    expect(plain[1]).toMatch(/did not get full ownership/)
+    expect(plain[2]).toBe('A plain note.')
     expect(plain.join(' ')).not.toMatch(/POST|owner-role|confirm: true|daemon/)
     expect(plainAppLoginNotes(undefined)).toEqual([])
   })

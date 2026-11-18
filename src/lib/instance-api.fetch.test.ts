@@ -813,18 +813,6 @@ describe('instance-api fetch wrappers', () => {
     await expect(deleteProject('p1')).rejects.toThrow(PROJECT_HAS_RUNNING_SERVICES_ERROR)
   })
 
-  it('keeps the site name and adds friendly text for site_engine_feature_missing', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        { error: 'site_engine_feature_missing', message: 'Site "blog" needs a newer daemon.' },
-        422
-      )
-    )
-    await expect(deleteProject('p1')).rejects.toThrow(
-      /HTTP 422: site_engine_feature_missing — Site "blog" needs a newer daemon\. — This server's daemon is too old/
-    )
-  })
-
   it('replaces the server text for container_not_owned and stays out of 403 recovery', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ error: 'container_not_owned', message: 'forbidden for this user' }, 403)

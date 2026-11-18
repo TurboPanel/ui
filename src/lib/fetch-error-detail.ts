@@ -38,14 +38,9 @@ export function isServerPlacementRequiredError(err: unknown): boolean {
  * The code stays in the error text, so callers can still match on it.
  */
 const FRIENDLY_ERROR_MESSAGES: Readonly<Record<string, string>> = {
-  site_engine_feature_missing:
-    "This server's daemon is too old for the nginx+apache engine: update the server first.",
   container_not_owned:
     "This container isn't managed by TurboPanel on this server, so its logs can't be read. It is not a permission problem; refresh the page and check the container still belongs to this project.",
 }
-
-/** Codes whose friendly text goes after the server's own message (it names the site). */
-const APPEND_TO_SERVER_MESSAGE = new Set(['site_engine_feature_missing'])
 
 export function friendlyErrorMessage(code: string | undefined): string | undefined {
   return code ? FRIENDLY_ERROR_MESSAGES[code] : undefined
@@ -53,14 +48,12 @@ export function friendlyErrorMessage(code: string | undefined): string | undefin
 
 /**
  * The human text that follows an error code: the server's own message, the
- * friendly one for known codes (replacing the server's, or after it for codes
- * whose message names the site), or nothing.
+ * friendly one for known codes (replacing the server's), or nothing.
  */
 export function errorExplanation(code: string | undefined, message: unknown): string | undefined {
   const friendly = friendlyErrorMessage(code)
   const server =
     typeof message === 'string' && message.length > 0 && message !== code ? message : undefined
   if (!friendly) return server
-  if (server && code && APPEND_TO_SERVER_MESSAGE.has(code)) return `${server} — ${friendly}`
   return friendly
 }

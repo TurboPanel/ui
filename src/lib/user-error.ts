@@ -43,8 +43,6 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   deploy_too_late:
     'This deploy is already switching over, so it can no longer be stopped. It will finish.',
   daemon_unavailable: 'TurboPanel could not reach this server right now. Try again in a moment.',
-  cancel_unsupported:
-    "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
   lets_encrypt_not_enabled: LETS_ENCRYPT_OFF_COPY,
   acme_requires_public_bind:
     'Let\u2019s Encrypt needs this domain to be reachable from the internet.',

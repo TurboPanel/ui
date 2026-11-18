@@ -598,8 +598,6 @@ const MANAGED_ERROR_COPY: Record<string, string> = {
   managed_grant_mode_invalid_transition:
     'An older login cannot be switched back to its original permissions. Choose one of the two modes shown.',
   managed_login_not_editable: 'This login is kept by the panel and cannot be changed here.',
-  managed_login_limits_need_daemon_update:
-    'This server needs updating before it can limit where a login connects from or how many connections it holds. Update the server, then try again.',
   managed_login_sources_empty: 'Choose at least one place, or choose Anywhere to remove the limit.',
   managed_login_source_range_not_exact:
     'That range can’t be matched exactly. List the addresses one by one, or use a prefix such as 203.0.113.%.',

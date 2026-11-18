@@ -79,12 +79,6 @@ describe('isServerPlacementRequiredError', () => {
 })
 
 describe('friendlyErrorMessage', () => {
-  it('names the update step for an old daemon', () => {
-    expect(friendlyErrorMessage('site_engine_feature_missing')).toBe(
-      "This server's daemon is too old for the nginx+apache engine: update the server first.",
-    )
-  })
-
   it('does not read container_not_owned as a permission problem', () => {
     expect(friendlyErrorMessage('container_not_owned')).toContain('not a permission problem')
   })

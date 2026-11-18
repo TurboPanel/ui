@@ -279,13 +279,13 @@ describe('LoginLimitsEditor', () => {
 
   it('shows the control plane refusal and can be cancelled', async () => {
     const onUpdate = vi.fn(async () => {
-      throw new Error('HTTP 409: managed_login_limits_need_daemon_update')
+      throw new Error('HTTP 409: managed_login_not_editable')
     })
     setup({}, onUpdate)
     fireEvent.click(screen.getByText('Change where it connects from'))
     fireEvent.change(screen.getByLabelText(/^Most connections at once/), { target: { value: '5' } })
     fireEvent.click(screen.getByText('Review change'))
-    await screen.findByText(/needs updating before it can limit/)
+    await screen.findByText(/kept by the panel and cannot be changed/)
     fireEvent.click(screen.getByText('Cancel'))
     expect(screen.getByText('Change where it connects from')).toBeTruthy()
   })

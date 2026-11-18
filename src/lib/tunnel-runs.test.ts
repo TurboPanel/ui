@@ -514,15 +514,6 @@ describe('run token rotation', () => {
       rotationBlockedReason(
         {
           status: 'active',
-          runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: [B] },
-        },
-        names
-      )
-    ).toContain('Update the daemon on server-h')
-    expect(
-      rotationBlockedReason(
-        {
-          status: 'active',
           runTokenRotationBlock: { code: 'server_not_ready', message: 'x', serverIds: [A] },
         },
         names
@@ -537,15 +528,6 @@ describe('run token rotation', () => {
         names
       )
     ).toBe('server-b, server-h cannot be reached right now. Try again once they are back.')
-    expect(
-      rotationBlockedReason(
-        {
-          status: 'active',
-          runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: [A, B] },
-        },
-        names
-      )
-    ).toContain('they cannot move their connectors')
     expect(
       rotationBlockedReason(
         { status: 'active', runTokenRotationBlock: { code: 'tunnel_not_ready', message: 'x' } },
@@ -575,7 +557,7 @@ describe('run token rotation', () => {
     })
     expect(rotationResumable(tunnel(null))).toBe(true)
     expect(rotationResumable(tunnel('server_not_ready'))).toBe(true)
-    expect(rotationResumable(tunnel('tunnel_daemon_too_old'))).toBe(false)
+    expect(rotationResumable(tunnel('tunnel_not_ready'))).toBe(false)
     expect(rotationResumable(tunnel(null, 'removing'))).toBe(false)
     expect(rotationResumable({ ...tunnel(null), runTokenRotation: base })).toBe(false)
   })

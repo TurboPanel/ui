@@ -133,16 +133,6 @@ describe('plainAdminToolNotes', () => {
     ])
   })
 
-  it('turns both older daemon notes into one sentence', () => {
-    const older = plainAdminToolNotes([
-      "This server's TurboPanel daemon is older than owner roles, so the login was added with read and write access to the data instead of the full Database admin rights. Update the server and apply again to give it the full rights on databases that have an owner role.",
-      "This server's TurboPanel daemon is older than the Database admin login, so the login was added with read and write access instead of all rights on its databases. Update the server and apply again to give it the full rights.",
-    ])
-    expect(older).toEqual([
-      "This server's daemon is older, so the tool's login got read and write access only. Update the server, then apply again.",
-    ])
-  })
-
   it('passes other notes through, but never API wording', () => {
     expect(plainAdminToolNotes(['Something plain.'])).toEqual(['Something plain.'])
     expect(plainAdminToolNotes(['Call POST …/managed/x to fix it.'])[0]).not.toContain('POST')

@@ -549,8 +549,6 @@ export function rotationBlockedReason(
   const servers = ids.map((id) => nameOf(id, names)).join(', ')
   const one = ids.length === 1
   switch (block.code) {
-    case 'tunnel_daemon_too_old':
-      return `Update the daemon on ${servers} first: ${one ? 'it cannot move its connector' : 'they cannot move their connectors'} to a new run token.`
     case 'server_not_ready':
       return `${servers} cannot be reached right now. Try again once ${one ? 'it is' : 'they are'} back.`
     case 'tunnel_not_ready':

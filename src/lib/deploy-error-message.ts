@@ -41,8 +41,8 @@ export function deployErrorMessage(err: unknown): string {
       'This deploy uses host-level Compose features that this organization or your role does not allow.'
     )
   }
-  for (const code of ['tunnel_name_public_certificate', 'tunnel_daemon_too_old']) {
-    if (message.includes(code)) return tunnelDeployRefusalMessage(code) ?? message
+  if (message.includes('tunnel_name_public_certificate')) {
+    return tunnelDeployRefusalMessage('tunnel_name_public_certificate') ?? message
   }
   if (message.includes('principal_required_for_service_kind')) {
     return 'Add a Hosting Account under Bindings first.'
