@@ -188,11 +188,9 @@ describe('defaults', () => {
     expect(wwwChoiceFromComposeEntry({ www: 'root-to-www' })).toBe('root-to-www')
   })
 
-  it('reads the saved mode, including an older on/off redirect', () => {
+  it('reads the saved mode', () => {
     expect(readWwwMode({ www: 'root-to-www' })).toBe('root-to-www')
-    expect(readWwwMode({ wwwRedirect: true, hostnames: ['turbopanel.io'] })).toBe('www-to-root')
-    expect(readWwwMode({ wwwRedirect: true, hostnames: ['www.turbopanel.io'] })).toBe('root-to-www')
-    expect(readWwwMode({ wwwRedirect: true })).toBe('www-to-root')
+    expect(readWwwMode({ wwwRedirect: true, hostnames: ['turbopanel.io'] })).toBe('off')
     expect(readWwwMode({ www: 'nonsense' })).toBe('off')
     expect(readWwwMode([])).toBe('off')
   })
