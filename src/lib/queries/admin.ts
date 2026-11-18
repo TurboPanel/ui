@@ -4,7 +4,6 @@ import {
   applyPublicUrls,
   applyReencryptSecrets,
   attachInstanceCertificate,
-  clearServerSealingKey,
   fetchInstanceAcmeSettings,
   fetchInstanceCertificates,
   fetchInstanceDaemon,
@@ -31,7 +30,6 @@ import {
   type UpgradeRunServersQuery,
   fetchPlatformCa,
   fetchInstanceIdentity,
-  fetchSealedSecrets,
   approveKeysetStatement,
   cancelWaitingKeyChange,
   fetchKeyRotation,
@@ -840,26 +838,6 @@ export function useApproveKeysetStatement() {
         queryClient.invalidateQueries({ queryKey: queryKeys.admin.instanceIdentity }),
         queryClient.invalidateQueries({ queryKey: queryKeys.auth.twoFactor }),
       ])
-    },
-  })
-}
-
-export function useSealedSecrets(options?: Readonly<{ enabled?: boolean }>) {
-  return useQuery({
-    queryKey: queryKeys.admin.sealedSecrets,
-    queryFn: fetchSealedSecrets,
-    enabled: options?.enabled ?? true,
-    staleTime: 60 * 1000,
-  })
-}
-
-export function useClearServerSealingKey() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: ({ serverId, confirmName }: { serverId: string; confirmName: string }) =>
-      clearServerSealingKey(serverId, confirmName),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.sealedSecrets })
     },
   })
 }

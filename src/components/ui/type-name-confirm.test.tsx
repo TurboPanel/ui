@@ -80,7 +80,7 @@ describe('TypeNameConfirmModal', () => {
     const onConfirm = vi.fn()
     render(
       <TypeNameConfirmModal
-        thing="Sealing Key"
+        thing="Access Key"
         nameOf="Server"
         name="web-1"
         verb="Clear"
@@ -90,7 +90,7 @@ describe('TypeNameConfirmModal', () => {
         onConfirm={onConfirm}
       />
     )
-    expect(screen.getByRole('heading').textContent).toBe('Clear Sealing Key')
+    expect(screen.getByRole('heading').textContent).toBe('Clear Access Key')
     expect(screen.getByText('Type the name to confirm.')).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Server name'), { target: { value: 'web-1' } })
     expect(confirmButton('Clearing…')).toBeTruthy()
