@@ -8,7 +8,9 @@ import { AttachmentEditor } from './certificate-attachment-editor'
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('@/components/ui', async () => {
   const { accessUiStub } = await import('./access-ui-stub')
-  return { ...accessUiStub, Checkbox: (props: {
+  return {
+    ...accessUiStub,
+    Checkbox: (props: {
       checked: boolean
       disabled?: boolean
       label: string
@@ -110,6 +112,8 @@ describe('AttachmentEditor saving', () => {
   it('explains an empty hostname list and keeps Save disabled', () => {
     render(<AttachmentEditor certificate={certificate} hostnames={[]} />)
     expect(screen.getByText(/Add a hostname on the Hostnames page/)).toBeTruthy()
-    expect((screen.getByRole('button', { name: 'Save attachments' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      (screen.getByRole('button', { name: 'Save attachments' }) as HTMLButtonElement).disabled
+    ).toBe(true)
   })
 })
