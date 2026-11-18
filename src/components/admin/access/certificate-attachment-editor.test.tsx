@@ -74,9 +74,9 @@ describe('AttachmentEditor daemon gating', () => {
     ['loading', "Checking this host's daemon."],
     [
       'disconnected',
-      "This host's daemon isn't connected, so this source can't be chosen right now.",
+      "This host's daemon isn't connected, so attachments can't be saved right now.",
     ],
-    ['error', "Couldn't read this host's daemon, so this source can't be chosen right now."],
+    ['error', "Couldn't read this host's daemon, so attachments can't be saved right now."],
   ] as const)('disables Save attachments and explains while %s', (status, reason) => {
     expect(renderEditor(status).disabled).toBe(true)
     expect(screen.getByText(reason)).toBeTruthy()

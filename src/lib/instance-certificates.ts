@@ -190,6 +190,15 @@ export function daemonStatusReason(status: DaemonCapabilitiesStatus): string | n
   return status === 'ready' ? null : DAEMON_STATUS_REASONS[status]
 }
 
+/** The same, worded for saving attachments rather than choosing a source. */
+export function daemonAttachReason(status: DaemonCapabilitiesStatus): string | null {
+  if (status === 'error')
+    return "Couldn't read this host's daemon, so attachments can't be saved right now."
+  if (status === 'disconnected')
+    return "This host's daemon isn't connected, so attachments can't be saved right now."
+  return daemonStatusReason(status)
+}
+
 function daemonCapabilityRefusal(options: CertificateSourceContext): string | null {
   return daemonStatusReason(options.capabilitiesStatus ?? 'ready')
 }

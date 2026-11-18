@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { Button, Checkbox } from '@/components/ui'
 import type { InstanceHostnameRecord, UploadedCertificateRecord } from '@/lib/instance-api'
-import { daemonStatusReason, type DaemonCapabilitiesStatus } from '@/lib/instance-certificates'
+import { daemonAttachReason, type DaemonCapabilitiesStatus } from '@/lib/instance-certificates'
 import { parsePublicUrlEntry } from '@/lib/public-url-entry'
 import { useAttachInstanceCertificate } from '@/lib/queries/admin'
 import { coversHostname } from '@/lib/tls-match'
@@ -18,7 +18,7 @@ export function AttachmentEditor({
   hostnames: readonly InstanceHostnameRecord[]
   capabilitiesStatus?: DaemonCapabilitiesStatus
 }>) {
-  const daemonReason = daemonStatusReason(capabilitiesStatus)
+  const daemonReason = daemonAttachReason(capabilitiesStatus)
   const attach = useAttachInstanceCertificate()
   const [selected, setSelected] = useState<readonly string[]>(certificate.hostnames)
   const [error, setError] = useState<string | null>(null)

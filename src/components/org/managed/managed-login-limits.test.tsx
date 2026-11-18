@@ -334,7 +334,7 @@ describe('LoginLimitsEditor', () => {
 
   it('shows the control plane refusal and can be cancelled', async () => {
     const onUpdate = vi.fn(async () => {
-      throw new Error('HTTP 409: managed_login_not_editable')
+      throw new Error('HTTP 422: managed_login_not_editable')
     })
     setup({}, onUpdate)
     fireEvent.click(screen.getByText('Change where it connects from'))
