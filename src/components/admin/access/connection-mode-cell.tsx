@@ -34,6 +34,8 @@ import { colors, spacing } from '@/lib/theme'
 export const SAVE_FIRST_HINT = 'Save this hostname before choosing its connection mode.'
 /** An older control plane has no connection modes to offer. */
 export const MODES_UNAVAILABLE = 'Direct. Connection modes need a newer control plane.'
+export const MODES_LOAD_ERROR =
+  'Connection modes could not be loaded. Reload the page to try again.'
 export const SAVE_OTHERS_HINT = 'Save your other changes before changing a connection mode.'
 /** A tunnel row with no account: the tunnel runs from a pasted run token. */
 export const PASTED_TOKEN_HINT =
@@ -63,6 +65,7 @@ export function ConnectionModeCell({
   record,
   modes,
   modesPending = false,
+  modesFailed = false,
   gate,
   accounts,
   lockedReason,
@@ -70,8 +73,10 @@ export function ConnectionModeCell({
 }: Readonly<{
   record: InstanceHostnameRecord | null
   modes: readonly IngressCapabilities[]
-  /** The modes are still loading or failed to load: say nothing about them yet. */
+  /** The modes are still loading: say nothing about them yet. */
   modesPending?: boolean
+  /** The modes could not be loaded: say so instead of calling them unavailable. */
+  modesFailed?: boolean
   gate: EdgeGate | null
   accounts: readonly IngressAccountRecord[]
   /** Why the mode cannot change right now (unsaved row or unsaved edits), or null. */
@@ -93,6 +98,7 @@ export function ConnectionModeCell({
   }
 
   if (modes.length === 0) {
+    if (modesFailed) return <Text style={styles.error}>{MODES_LOAD_ERROR}</Text>
     if (modesPending) return null
     return <Text style={styles.muted}>{MODES_UNAVAILABLE}</Text>
   }

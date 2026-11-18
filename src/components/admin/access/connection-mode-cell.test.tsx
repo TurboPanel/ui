@@ -12,6 +12,7 @@ import {
   applyFeedback,
   ConnectionModeCell,
   modeChangePatch,
+  MODES_LOAD_ERROR,
   MODES_UNAVAILABLE,
   PASTED_TOKEN_HINT,
   SAVE_FIRST_HINT,
@@ -148,7 +149,7 @@ describe('ConnectionModeCell', () => {
     expect(screen.queryByRole('combobox')).toBeNull()
   })
 
-  it('says nothing about modes while they load or failed to load', () => {
+  it('says nothing about modes while they load', () => {
     render(
       <ConnectionModeCell
         record={RECORD}
@@ -160,6 +161,22 @@ describe('ConnectionModeCell', () => {
         busy={false}
       />
     )
+    expect(screen.queryByText(MODES_UNAVAILABLE)).toBeNull()
+  })
+
+  it('says plainly that the modes could not be loaded', () => {
+    render(
+      <ConnectionModeCell
+        record={RECORD}
+        modes={[]}
+        modesFailed
+        gate={null}
+        accounts={[]}
+        lockedReason={null}
+        busy={false}
+      />
+    )
+    expect(screen.getByText(MODES_LOAD_ERROR)).toBeTruthy()
     expect(screen.queryByText(MODES_UNAVAILABLE)).toBeNull()
   })
 

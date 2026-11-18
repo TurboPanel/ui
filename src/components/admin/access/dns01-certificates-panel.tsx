@@ -103,6 +103,11 @@ function PausedNote({ until }: Readonly<{ until: string | null }>) {
   return <Text style={styles.muted}>Retry is paused until {formatLocalDateTime(until)}.</Text>
 }
 
+/** When the retry pause ends, in milliseconds; undefined when there is no pause. */
+function stopAtOf(state: Pick<PanelDnsCertificate, 'stopUntil'>): number | undefined {
+  return state.stopUntil ? Date.parse(state.stopUntil) : undefined
+}
+
 export function Dns01State({
   id,
   state,
@@ -114,7 +119,10 @@ export function Dns01State({
   now?: number
 }>) {
   const { order, error, run } = useDns01Order(id)
-  const pausedUntil = retryPausedUntil(state, useTickingNow(Boolean(state.stopUntil), now))
+  const pausedUntil = retryPausedUntil(
+    state,
+    useTickingNow(Boolean(state.stopUntil), now, stopAtOf(state))
+  )
 
   return (
     <View style={styles.state}>
@@ -171,7 +179,10 @@ export function Dns01RowNote({
   const { order, error, run } = useDns01Order(id)
   const working = dns01WorkingLabel(state.stage)
   const stopped = state.stage === 'failed' || state.stage === 'backoff'
-  const pausedUntil = retryPausedUntil(state, useTickingNow(Boolean(state.stopUntil), now))
+  const pausedUntil = retryPausedUntil(
+    state,
+    useTickingNow(Boolean(state.stopUntil), now, stopAtOf(state))
+  )
   if (!working && !stopped && !error) return null
   return (
     <View style={styles.rowNote}>

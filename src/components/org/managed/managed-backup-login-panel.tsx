@@ -13,8 +13,51 @@ import {
 
 export const BACKUP_LOGIN_TITLE = 'Backup Login'
 
-export const BACKUP_LOGIN_HELP =
-  'A login a backup tool uses to copy every database on this cluster. It can read every row and the system user table (mysql.user), and it holds the TRIGGER and EVENT rights, so treat its password like an admin one. It always connects to the primary. A cluster has one.'
+const BACKUP_LOGIN_INTRO = 'A login a backup tool uses to copy every database on this cluster.'
+const BACKUP_LOGIN_OUTRO = 'It always connects to the primary. A cluster has one.'
+const BACKUP_LOGIN_ADMIN_NOTE =
+  'The rights are granted on the whole server, so treat its password like an admin one.'
+
+/** Grants the daemon gives the backup login, per engine (turbopaneld src/managed/AGENTS.md). */
+export const BACKUP_LOGIN_HELP_MYSQL = [
+  BACKUP_LOGIN_INTRO,
+  'It holds SELECT, SHOW VIEW, TRIGGER, EVENT and the global FLUSH_TABLES right, and it can read the system user table (mysql.user).',
+  'TRIGGER and EVENT also let it create triggers and events in every database.',
+  'FLUSH_TABLES lets it take the global read lock, which blocks every write on the server until it unlocks or disconnects.',
+  BACKUP_LOGIN_ADMIN_NOTE,
+  BACKUP_LOGIN_OUTRO,
+].join(' ')
+
+/** MariaDB has no FLUSH_TABLES grant; the dump takes its table locks with LOCK TABLES. */
+export const BACKUP_LOGIN_HELP_MARIADB = [
+  BACKUP_LOGIN_INTRO,
+  'It holds SELECT, SHOW VIEW, TRIGGER, EVENT, LOCK TABLES and SHOW CREATE ROUTINE, and it can read the system user table (mysql.user).',
+  'TRIGGER and EVENT also let it create triggers and events in every database.',
+  'LOCK TABLES lets it lock tables across the server and block writes until it unlocks or disconnects.',
+  BACKUP_LOGIN_ADMIN_NOTE,
+  BACKUP_LOGIN_OUTRO,
+].join(' ')
+
+export const BACKUP_LOGIN_HELP_POSTGRES = [
+  BACKUP_LOGIN_INTRO,
+  'It holds pg_read_all_data and BYPASSRLS, so it reads every row of every table, whatever row-level security says. It cannot write or change anything.',
+  'Treat its password like an admin one.',
+  BACKUP_LOGIN_OUTRO,
+].join(' ')
+
+const BACKUP_LOGIN_HELP_GENERIC = [
+  BACKUP_LOGIN_INTRO,
+  'It can read everything on the cluster, so treat its password like an admin one.',
+  BACKUP_LOGIN_OUTRO,
+].join(' ')
+
+/** What the backup login can do, in the words of the engine the cluster runs. */
+export function backupLoginHelp(engine: string | null | undefined): string {
+  if (engine === 'mysql') return BACKUP_LOGIN_HELP_MYSQL
+  if (engine === 'mariadb') return BACKUP_LOGIN_HELP_MARIADB
+  if (engine === 'postgres') return BACKUP_LOGIN_HELP_POSTGRES
+  return BACKUP_LOGIN_HELP_GENERIC
+}
 
 export const BACKUP_PLACES_HELP =
   "Where the backup tool connects from, separated by commas: 'internal' (this server only: its own programs and containers), 'server:<id>' (one of this organization's servers) or 'address:<ip or range>'. 'any' is not allowed."
@@ -41,12 +84,14 @@ export function describeBackupPlaces(sources: readonly string[] | undefined): st
  * one (with Delete), or a short form to add it. The password shows once.
  */
 export function ManagedBackupLoginPanel({
+  engine,
   login,
   canManage,
   busy,
   onCreate,
   onDelete,
 }: Readonly<{
+  engine: string | null
   login: ManagedUserRecord | null
   canManage: boolean
   busy: boolean
@@ -112,7 +157,7 @@ export function ManagedBackupLoginPanel({
   return (
     <SectionPanel title={BACKUP_LOGIN_TITLE} hint="One per cluster">
       <View style={panelStyles.detailCard}>
-        <Text style={panelStyles.muted}>{BACKUP_LOGIN_HELP}</Text>
+        <Text style={panelStyles.muted}>{backupLoginHelp(engine)}</Text>
         {login ? (
           <>
             <Text style={panelStyles.detailLine}>
@@ -177,12 +222,14 @@ export function ManagedBackupLoginPanel({
 
 /** {@link ManagedBackupLoginPanel} wired to the backup login queries. */
 export function ManagedBackupLoginSection({
+  engine,
   orgId,
   environmentId,
   canManage,
   busy,
   registerCommand,
 }: Readonly<{
+  engine: string | null
   orgId: string
   environmentId: string
   canManage: boolean
@@ -204,6 +251,7 @@ export function ManagedBackupLoginSection({
   if (query.data === null) return null
   return (
     <ManagedBackupLoginPanel
+      engine={engine}
       login={query.data.login}
       canManage={canManage}
       busy={busy}
