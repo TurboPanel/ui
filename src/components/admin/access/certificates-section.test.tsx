@@ -66,6 +66,7 @@ describe('CertificatesSection daemon state', () => {
   it.each([
     ['loading', { data: undefined, isError: false }],
     ['error', { data: undefined, isError: true }],
+    ['not-applicable', { data: { applicable: false }, isError: false }],
     ['disconnected', { data: { applicable: true, connected: false }, isError: false }],
     ['ready', { data: { applicable: true, connected: true }, isError: false }],
   ] as const)('hands the attachment editor a %s daemon state', (status, query) => {

@@ -196,6 +196,8 @@ export function daemonAttachReason(status: DaemonCapabilitiesStatus): string | n
     return "Couldn't read this host's daemon, so attachments can't be saved right now."
   if (status === 'disconnected')
     return "This host's daemon isn't connected, so attachments can't be saved right now."
+  if (status === 'not-applicable')
+    return 'Certificates are only attached on a self-hosted control plane, so attachments are not available here.'
   return daemonStatusReason(status)
 }
 
