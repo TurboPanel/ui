@@ -114,6 +114,29 @@ describe('auth-accent', () => {
       })
     })
 
+    it('ignores a stored install-mode answer, a null value and an undefined status', async () => {
+      const { readStoredInstallStatus, rememberInstallStatus } = await loadAuthAccent()
+      localStorageMock.setItem(
+        'tp.statusSnapshot',
+        JSON.stringify({ isSignupEnabled: true, needsInstall: true })
+      )
+      expect(readStoredInstallStatus()).toBeUndefined()
+      localStorageMock.setItem(
+        'tp.statusSnapshot',
+        JSON.stringify({ isSignupEnabled: true, isInstallMode: true })
+      )
+      expect(readStoredInstallStatus()).toBeUndefined()
+      localStorageMock.setItem('tp.statusSnapshot', 'null')
+      expect(readStoredInstallStatus()).toBeUndefined()
+      localStorageMock.setItem(
+        'tp.statusSnapshot',
+        JSON.stringify({ isSignupEnabled: true, authProviders: 'github' })
+      )
+      expect(readStoredInstallStatus()?.authProviders).toEqual([])
+      rememberInstallStatus(undefined)
+      expect(readStoredInstallStatus()?.isSignupEnabled).toBe(true)
+    })
+
     it('does nothing on native or when storage throws', async () => {
       const { readStoredInstallStatus, rememberInstallStatus } = await loadAuthAccent()
       rememberInstallStatus(status)

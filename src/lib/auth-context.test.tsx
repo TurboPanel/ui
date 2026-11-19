@@ -5,16 +5,17 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '@/lib/query-client'
 
-const { fetchSession, fetchInstallStatus } = vi.hoisted(() => ({
+const { fetchSession, fetchInstallStatus, fetchOrganizations } = vi.hoisted(() => ({
   fetchSession: vi.fn(),
   fetchInstallStatus: vi.fn(),
+  fetchOrganizations: vi.fn(),
 }))
 
 vi.mock('react-native', () => ({ Platform: { OS: 'web' } }))
 
 vi.mock('@/lib/instance-api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/instance-api')>()
-  return { ...actual, fetchSession, fetchInstallStatus }
+  return { ...actual, fetchSession, fetchInstallStatus, fetchOrganizations }
 })
 
 vi.mock('@/lib/control-plane-accounts', async (importOriginal) => {
@@ -49,6 +50,7 @@ describe('AuthProvider first load', () => {
   beforeEach(() => {
     fetchSession.mockReset()
     fetchInstallStatus.mockReset()
+    fetchOrganizations.mockReset()
     Object.defineProperty(globalThis, 'localStorage', {
       configurable: true,
       value: memoryStorage(),
@@ -117,5 +119,50 @@ describe('AuthProvider first load', () => {
     fetchSession.mockResolvedValue(null)
     renderAuth()
     await waitFor(() => expect(localStorage.getItem('tp.statusSnapshot')).toContain('google'))
+  })
+
+  it('reports a failed read as a bootstrap error', async () => {
+    fetchInstallStatus.mockRejectedValue(new Error('status down'))
+    fetchSession.mockResolvedValue(null)
+    const { result } = renderAuth()
+    await waitFor(() => expect(result.current.bootstrapError).toBe('status down'))
+  })
+
+  it('sends a signed-out visitor to sign-in and an installed one to their organization', async () => {
+    fetchInstallStatus.mockResolvedValue(status)
+    fetchSession.mockResolvedValue(null)
+    const out = renderAuth()
+    await waitFor(() => expect(out.result.current.isLoading).toBe(false))
+    await expect(out.result.current.resolveDashboardHref()).resolves.toBe('/sign-in')
+    out.unmount()
+
+    fetchSession.mockResolvedValue({ user: { id: 'u1' } })
+    fetchOrganizations.mockResolvedValue({ organizations: [{ id: 'org1' }] })
+    const inn = renderAuth()
+    await waitFor(() => expect(inn.result.current.session).not.toBeNull())
+    await expect(inn.result.current.resolveDashboardHref()).resolves.toMatch(/^\//)
+  })
+
+  it('falls back to the organization list when discovery fails', async () => {
+    fetchInstallStatus.mockResolvedValue(status)
+    fetchSession.mockResolvedValue({ user: { id: 'u1' } })
+    fetchOrganizations.mockRejectedValue(new Error('nope'))
+    const { result } = renderAuth()
+    await waitFor(() => expect(result.current.session).not.toBeNull())
+    await expect(result.current.resolveDashboardHref()).resolves.toBe('/organizations')
+  })
+
+  it('refreshes status and session, clears the session and handles a 401', async () => {
+    fetchInstallStatus.mockResolvedValue(status)
+    fetchSession.mockResolvedValue({ user: { id: 'u1' } })
+    const { result } = renderAuth()
+    await waitFor(() => expect(result.current.session).not.toBeNull())
+    await expect(result.current.refreshInstallStatus()).resolves.toBe(false)
+    await expect(result.current.refreshSession()).resolves.toEqual({ user: { id: 'u1' } })
+    fetchSession.mockResolvedValue(null)
+    await result.current.handleUnauthorized()
+    await waitFor(() => expect(result.current.session).toBeNull())
+    result.current.clearSession()
+    expect(result.current.session).toBeNull()
   })
 })
