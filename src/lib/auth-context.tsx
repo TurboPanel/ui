@@ -128,7 +128,13 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const needsControlPlane =
     isStandaloneExpoWeb() || (isRemoteCookieClient() && !canQueryControlPlane())
 
-  const isLoading = bootstrapEnabled && (statusQuery.isLoading || sessionQuery.isLoading)
+  // A stored status answer (seeded with updatedAt 0) only paints the sign-in
+  // options. Until the live answer arrives we are still loading, so the guard
+  // never acts on a stale needsInstall (a reinstalled host would loop).
+  const statusIsSeed =
+    statusQuery.data !== undefined && statusQuery.dataUpdatedAt === 0 && !statusQuery.isError
+  const isLoading =
+    bootstrapEnabled && (statusQuery.isLoading || statusIsSeed || sessionQuery.isLoading)
 
   let bootstrapError: string | null = null
   if (statusQuery.error instanceof Error) {

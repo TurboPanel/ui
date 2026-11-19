@@ -14,10 +14,3 @@
   Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3QruYNU/7fnRkI8='; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https: wss:; object-src 'none'; base-uri 'self'; form-action 'self' https:; frame-ancestors 'none'
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
-# Built files carry a content hash in their name, so a cached copy can never be stale: cache them for
-# a year. The pages themselves (and everything else) keep the default, so they revalidate every load.
-# After a web update, stale-bundle-recover.js reloads once if an old page asks for a file that is gone.
-/_expo/static/*
-  Cache-Control: public, max-age=31536000, immutable
-/assets/*
-  Cache-Control: public, max-age=31536000, immutable

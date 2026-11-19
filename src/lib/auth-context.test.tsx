@@ -102,6 +102,26 @@ describe('AuthProvider first load', () => {
     await waitFor(() => expect(result.current.isSignupEnabled).toBe(false))
   })
 
+  it('keeps loading until the live status answers, so a stored answer never decides a redirect', async () => {
+    localStorage.setItem('tp.statusSnapshot', JSON.stringify({ isSignupEnabled: true }))
+    let answer: (value: unknown) => void = () => {}
+    fetchInstallStatus.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve
+      })
+    )
+    fetchSession.mockResolvedValue(null)
+    const { result } = renderAuth()
+    await waitFor(() => expect(result.current.isSignupEnabled).toBe(true))
+    await waitFor(() => expect(fetchSession).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.needsInstall).toBe(false)
+    answer({ isSignupEnabled: false, needsInstall: true })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.needsInstall).toBe(true)
+  })
+
   it('remembers a signed-in browser and forgets it after a 401', async () => {
     fetchInstallStatus.mockResolvedValue(status)
     fetchSession.mockResolvedValue({ user: { id: 'u1' } })

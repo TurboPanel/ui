@@ -13,19 +13,6 @@ describe('hosted UI security headers', () => {
     expect(headers).toMatch(/^\/\*$/m)
   })
 
-  it('caches hashed build files for a year and leaves pages revalidating', () => {
-    for (const prefix of ['/_expo/static/*', '/assets/*']) {
-      const block = headers.split('\n').findIndex((line) => line === prefix)
-      expect(block).toBeGreaterThan(-1)
-      expect(headers.split('\n')[block + 1]).toBe(
-        '  Cache-Control: public, max-age=31536000, immutable'
-      )
-    }
-    // The catch-all block must not set a Cache-Control of its own.
-    const catchAll = headers.slice(0, headers.indexOf('/_expo/static/*'))
-    expect(catchAll).not.toMatch(/Cache-Control/i)
-  })
-
   it('refuses framing and content sniffing and limits referrers', () => {
     expect(headers).toContain('X-Content-Type-Options: nosniff')
     expect(headers).toContain('X-Frame-Options: DENY')

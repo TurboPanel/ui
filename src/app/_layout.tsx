@@ -9,7 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { focusManager } from '@tanstack/react-query'
 import { AppProviders } from '@/components/app-providers'
-import { authSpinnerColor, readSessionHint } from '@/lib/auth-accent'
+import { authSpinnerColor, useSessionHint } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import { isPrerenderedAuthRoute, resolveAuthGuardHref } from '@/lib/auth-guard'
 import { isRemoteCookieClient, usesSameOriginApi } from '@/lib/control-plane'
@@ -77,12 +77,13 @@ function AuthGuard() {
   const params = useLocalSearchParams<{ redirectTo?: string | string[] }>()
   const topSegment = (segments as readonly string[])[0]
   const subSegment = (segments as readonly string[])[1]
+  const hadSession = useSessionHint()
 
   // The sign-in family paints at once (the static export pre-renders the real
   // form) and only the redirect waits for the session. A browser that had a
   // session keeps the spinner instead, so a signed-in person never sees the form flash.
   const holdRedirectOnly =
-    isLoading && Platform.OS === 'web' && isPrerenderedAuthRoute(topSegment) && !readSessionHint()
+    isLoading && Platform.OS === 'web' && isPrerenderedAuthRoute(topSegment) && !hadSession
 
   if (isLoading && !holdRedirectOnly) {
     return (

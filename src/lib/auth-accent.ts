@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import { Platform } from 'react-native'
 import type { ControlPlaneRuntime } from '@/lib/control-plane-runtime'
 import type { InstallStatus, OAuthProvider } from '@/lib/instance-api'
@@ -51,6 +52,17 @@ const OAUTH_PROVIDERS: ReadonlySet<string> = new Set(['github', 'google'])
  */
 export function readSessionHint(): boolean {
   return readLocal(SESSION_HINT_STORAGE_KEY) === '1'
+}
+
+const subscribeNothing = () => () => {}
+
+/**
+ * `readSessionHint` for render: false while hydrating (the static page was
+ * built without it), then the stored value, so the first client render always
+ * matches the pre-rendered page.
+ */
+export function useSessionHint(): boolean {
+  return useSyncExternalStore(subscribeNothing, readSessionHint, () => false)
 }
 
 export function rememberSessionHint(signedIn: boolean): void {
