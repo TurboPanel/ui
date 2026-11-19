@@ -174,7 +174,7 @@ export function restoreDashboardCache(
   now: number = Date.now()
 ): number {
   const snapshot = readSnapshot(storage, now)
-  if (!snapshot || snapshot.userId !== userId || userId.length === 0) {
+  if (snapshot?.userId !== userId || userId.length === 0) {
     clearDashboardCache(storage)
     return 0
   }
