@@ -149,7 +149,7 @@ describe('FabricLifecycleControls', () => {
     save.mockImplementation((_body, options: { onError: (err: unknown) => void }) => {
       options.onError(
         new Error(
-          '/api/client/v1/organizations/org-1/fabric failed: HTTP 503: fabric_teardown_not_queued — TurboFabric is still on: turning it off could not reach every server. Try turning it off again.'
+          '/api/client/v1/organizations/org-1/fabric failed: HTTP 503: fabric_teardown_not_queued — TurboFabric is still on: turning it off could not reach every server. Servers that were reached have dropped their tunnel and get it back on the next apply. Try turning it off again.'
         )
       )
     })
@@ -158,7 +158,7 @@ describe('FabricLifecycleControls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Turn Off TurboFabric' }))
     expect(
       screen.getByText(
-        'TurboFabric is still on: turning it off could not reach every server. Try turning it off again.'
+        'TurboFabric is still on: turning it off could not reach every server. Servers that were reached have dropped their tunnel and get it back on the next apply. Try turning it off again.'
       )
     ).toBeTruthy()
     expect(screen.queryByRole('dialog')).toBeNull()

@@ -77,6 +77,10 @@ describe('AttachmentEditor daemon gating', () => {
       "This host's daemon isn't connected, so attachments can't be saved right now.",
     ],
     ['error', "Couldn't read this host's daemon, so attachments can't be saved right now."],
+    [
+      'not-applicable',
+      'Certificates are only attached on a self-hosted control plane, so attachments are not available here.',
+    ],
   ] as const)('disables Save attachments and explains while %s', (status, reason) => {
     expect(renderEditor(status).disabled).toBe(true)
     expect(screen.getByText(reason)).toBeTruthy()
