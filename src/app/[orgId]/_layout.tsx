@@ -5,6 +5,7 @@ import { AcmeTermsPrompt } from '@/components/org/acme-terms-prompt'
 import { OrgShell } from '@/components/org/org-shell'
 import { OrgShellSkeleton } from '@/components/org/org-shell-skeleton'
 import { useAuth } from '@/lib/auth-context'
+import { RESTORED_UPDATED_AT } from '@/lib/dashboard-cache'
 import { getActiveOrganizationId, setActiveOrganizationId } from '@/lib/org-context'
 import { isOrgTabOverviewRouteName, organizationsHref } from '@/lib/org-navigation'
 import { orgMembership, orgRouteGate } from '@/lib/org-route-gate'
@@ -45,9 +46,17 @@ export default function OrganizationLayout() {
         hasSession: Boolean(session),
         isPending: orgsQuery.isPending,
         isError: orgsQuery.isError,
+        isRestored: orgsQuery.dataUpdatedAt <= RESTORED_UPDATED_AT,
         organizations: orgsQuery.data?.organizations,
       }),
-    [orgId, session, orgsQuery.isPending, orgsQuery.isError, orgsQuery.data]
+    [
+      orgId,
+      session,
+      orgsQuery.isPending,
+      orgsQuery.isError,
+      orgsQuery.dataUpdatedAt,
+      orgsQuery.data,
+    ]
   )
   const gate = orgRouteGate({
     isLoading,

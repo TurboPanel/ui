@@ -3,7 +3,9 @@ import { useEffect, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { fetchOrganizations } from '@/lib/instance-api'
 import {
+  DASHBOARD_CACHE_STORAGE_KEY,
   clearDashboardCache,
+  isPersistableQueryKey,
   restoreDashboardCache,
   saveDashboardCache,
 } from '@/lib/dashboard-cache'
@@ -40,15 +42,30 @@ export function DashboardWarmup() {
     if (!userId) return
 
     let timer: ReturnType<typeof setTimeout> | null = null
-    const unsubscribe = queryClient.getQueryCache().subscribe(() => {
+    let stopped = false
+    // Only a successful update of a kept list changes the snapshot.
+    const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+      if (stopped || event.type !== 'updated' || event.action.type !== 'success') return
+      if (!isPersistableQueryKey(event.query.queryKey)) return
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
         saveDashboardCache(queryClient, userId)
       }, SAVE_DELAY_MS)
     })
+    // The snapshot was removed in another tab (sign-out there): drop what this
+    // tab holds of it and stop writing it back.
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== DASHBOARD_CACHE_STORAGE_KEY || event.newValue !== null) return
+      stopped = true
+      if (timer) clearTimeout(timer)
+      queryClient.removeQueries({ predicate: (query) => isPersistableQueryKey(query.queryKey) })
+    }
+    const canListen = typeof window !== 'undefined' && typeof window.addEventListener === 'function'
+    if (canListen) window.addEventListener('storage', onStorage)
     return () => {
       unsubscribe()
       if (timer) clearTimeout(timer)
+      if (canListen) window.removeEventListener('storage', onStorage)
     }
   }, [queryClient, hasSession, userId, isLoading])
 

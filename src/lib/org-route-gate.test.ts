@@ -57,6 +57,16 @@ describe('orgMembership', () => {
     expect(orgMembership({ ...input, orgId: 'org-9' })).toBe(false)
   })
 
+  it('does not trust a list restored from storage until a live answer replaces it', () => {
+    expect(orgMembership({ ...input, isRestored: true })).toBeNull()
+    expect(orgMembership({ ...input, isRestored: true, orgId: 'org-9' })).toBeNull()
+    expect(orgMembership({ ...input, isRestored: false })).toBe(true)
+  })
+
+  it('still refuses when the live read of a restored list fails', () => {
+    expect(orgMembership({ ...input, isRestored: true, isError: true })).toBe(false)
+  })
+
   it('treats a failed read (403 or 404) as not a member', () => {
     expect(orgMembership({ ...input, isError: true, organizations: undefined })).toBe(false)
     expect(orgMembership({ ...input, organizations: undefined })).toBe(false)

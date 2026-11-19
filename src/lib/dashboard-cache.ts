@@ -5,18 +5,20 @@ import { queryKeys } from '@/lib/query-keys'
  * A returning person sees the last dashboard at once: the lists the home
  * screen draws are kept in browser storage and revalidated in the background.
  *
- * Only an allow-listed set of non-sensitive lists is kept (organizations,
- * projects, environments, container summaries), only for one signed-in user,
- * and fields that can carry configuration (compose documents, options, free
- * metadata) are dropped. Anything restored is marked stale, so it is always
- * refetched on first use.
+ * Only a fixed set of non-sensitive lists is kept (organizations, and the
+ * org-wide project, environment and container-summary lists), only for one
+ * signed-in user. Every row is rebuilt from an explicit per-entity field list,
+ * so a column the API adds later is never written to storage, and nothing that
+ * can carry configuration (compose documents, options, free metadata) is kept.
+ * Anything restored is marked stale and unconfirmed: it is always refetched on
+ * first use, and the organization route waits for the live answer.
  */
 
 export const DASHBOARD_CACHE_STORAGE_KEY = 'turbopanel.dashboardCache.v1'
 export const DASHBOARD_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const MAX_SERIALIZED_LENGTH = 750_000
 /** Older than any real fetch, so a restored list is stale and revalidates. */
-const RESTORED_UPDATED_AT = 1
+export const RESTORED_UPDATED_AT = 1
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 
@@ -60,40 +62,107 @@ export function isPersistableQueryKey(queryKey: QueryKey): boolean {
   if (queryKey.length !== 4 || queryKey[0] !== 'org') return false
   if (typeof queryKey[1] !== 'string' || typeof queryKey[2] !== 'string') return false
   if (!ORG_LISTS.has(queryKey[2])) return false
-  // Containers are kept only as the unfiltered org-wide list.
-  return queryKey[2] !== 'containers' || isEmptyFilter(queryKey[3])
+  // Only the org-wide lists the home cards read. A per-project or filtered
+  // list is read by detail screens that expect full records.
+  return queryKey[2] === 'containers' ? isEmptyFilter(queryKey[3]) : queryKey[3] === 'all'
 }
 
-function stripFields(rows: unknown, fields: readonly string[]): unknown {
-  if (!Array.isArray(rows)) return []
-  return rows.map((row) => {
-    if (typeof row !== 'object' || row === null) return row
-    const copy: Record<string, unknown> = { ...(row as Record<string, unknown>) }
-    for (const field of fields) delete copy[field]
-    return copy
-  })
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** The list with configuration-bearing fields removed, or null when the shape is unknown. */
+const ORGANIZATION_FIELDS = ['id', 'name', 'createdAt', 'icon', 'isEmojiIconAllowed'] as const
+const PROJECT_FIELDS = [
+  'id',
+  'name',
+  'description',
+  'workspaceId',
+  'repositoryId',
+  'kind',
+  'icon',
+  'createdAt',
+  'updatedAt',
+] as const
+const PROJECT_METADATA_FIELDS = ['code', 'component'] as const
+const ENVIRONMENT_FIELDS = [
+  'id',
+  'name',
+  'description',
+  'projectId',
+  'serverId',
+  'isPrimary',
+  'pinned',
+  'createdAt',
+  'updatedAt',
+] as const
+const CONTAINER_FIELDS = [
+  'id',
+  'serviceId',
+  'environmentId',
+  'serverId',
+  'containerId',
+  'containerName',
+  'status',
+  'role',
+  'composeServiceName',
+  'createdAt',
+  'updatedAt',
+] as const
+
+function pick(
+  row: Record<string, unknown>,
+  fields: readonly string[],
+  nulled: readonly string[] = []
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const field of fields) {
+    if (row[field] !== undefined) out[field] = row[field]
+  }
+  // Fields the types call required but that are not kept read as empty.
+  for (const field of nulled) out[field] = null
+  return out
+}
+
+function rebuildRows(
+  rows: unknown,
+  rebuild: (row: Record<string, unknown>) => Record<string, unknown>
+): Record<string, unknown>[] {
+  return Array.isArray(rows) ? rows.filter(isRecord).map(rebuild) : []
+}
+
+function rebuildProject(row: Record<string, unknown>): Record<string, unknown> {
+  const out = pick(row, PROJECT_FIELDS, ['options'])
+  out.metadata = isRecord(row.metadata) ? pick(row.metadata, PROJECT_METADATA_FIELDS) : null
+  return out
+}
+
+/** Each kept row is rebuilt from its field list; null when the shape is unknown. */
 export function sanitizeForPersist(queryKey: QueryKey, data: unknown): unknown {
-  if (typeof data !== 'object' || data === null) return null
-  const record = data as Record<string, unknown>
+  if (!isRecord(data)) return null
   if (queryKey[0] === 'auth') {
-    return Array.isArray(record.organizations) ? { organizations: record.organizations } : null
+    if (!Array.isArray(data.organizations)) return null
+    return {
+      organizations: rebuildRows(data.organizations, (row) => pick(row, ORGANIZATION_FIELDS)),
+    }
   }
   switch (queryKey[2]) {
     case 'projects':
-      return Array.isArray(record.projects)
-        ? { projects: stripFields(record.projects, ['options']) }
-        : null
+      if (!Array.isArray(data.projects)) return null
+      return { projects: rebuildRows(data.projects, rebuildProject) }
     case 'environments':
-      return Array.isArray(record.environments)
-        ? { environments: stripFields(record.environments, ['options', 'metadata']) }
-        : null
+      if (!Array.isArray(data.environments)) return null
+      return {
+        environments: rebuildRows(data.environments, (row) =>
+          pick(row, ENVIRONMENT_FIELDS, ['options', 'metadata'])
+        ),
+      }
     case 'containers':
-      return Array.isArray(record.containers)
-        ? { containers: stripFields(record.containers, ['options', 'metadata']) }
-        : null
+      if (!Array.isArray(data.containers)) return null
+      return {
+        containers: rebuildRows(data.containers, (row) =>
+          pick(row, CONTAINER_FIELDS, ['options', 'metadata'])
+        ),
+      }
     default:
       return null
   }

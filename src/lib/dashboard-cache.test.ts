@@ -54,6 +54,8 @@ describe('dashboard cache', () => {
     expect(isPersistableQueryKey(queryKeys.org('o').containers.list({ serviceId: 's' }))).toBe(
       false
     )
+    expect(isPersistableQueryKey(queryKeys.org('o').environments.list('p1'))).toBe(false)
+    expect(isPersistableQueryKey(queryKeys.org('o').projects.list('w1'))).toBe(false)
     expect(isPersistableQueryKey(['auth', 'session'])).toBe(false)
     expect(isPersistableQueryKey(['org', 'o', 'variables', 'all'])).toBe(false)
   })
@@ -68,6 +70,7 @@ describe('dashboard cache', () => {
     expect(raw).not.toContain('token')
     expect(raw).not.toContain('a@example.net')
     expect(JSON.parse(raw).entries).toHaveLength(4)
+    expect(raw).not.toContain('"value"')
   })
 
   it('restores the same user as stale data and leaves live data alone', () => {
@@ -146,6 +149,42 @@ describe('dashboard cache', () => {
     expect(storage.map.get(DASHBOARD_CACHE_STORAGE_KEY)).toBe(before)
   })
 
+  it('rebuilds rows from field lists so unknown fields are dropped', () => {
+    const org = queryKeys.org('o')
+    expect(
+      sanitizeForPersist(queryKeys.auth.organizations, {
+        organizations: [{ id: 'o', name: 'N', createdAt: 'x', billingToken: 'b' }],
+      })
+    ).toEqual({ organizations: [{ id: 'o', name: 'N', createdAt: 'x' }] })
+    expect(
+      sanitizeForPersist(org.projects.list(), {
+        projects: [
+          {
+            id: 'p',
+            name: 'P',
+            newColumn: 'leak',
+            options: { compose: 1 },
+            metadata: { code: 'postgres', component: 'c', secret: 's' },
+          },
+        ],
+      })
+    ).toEqual({
+      projects: [
+        { id: 'p', name: 'P', options: null, metadata: { code: 'postgres', component: 'c' } },
+      ],
+    })
+    expect(
+      sanitizeForPersist(org.environments.list(), {
+        environments: [{ id: 'e', projectId: 'p', newColumn: 'leak', options: { a: 1 } }],
+      })
+    ).toEqual({ environments: [{ id: 'e', projectId: 'p', options: null, metadata: null }] })
+    expect(
+      sanitizeForPersist(org.containers.list(), {
+        containers: [{ id: 'c', status: 'running', newColumn: 'leak', options: { env: 'x' } }],
+      })
+    ).toEqual({ containers: [{ id: 'c', status: 'running', options: null, metadata: null }] })
+  })
+
   it('refuses unknown shapes when sanitizing', () => {
     expect(sanitizeForPersist(queryKeys.auth.organizations, null)).toBeNull()
     expect(sanitizeForPersist(queryKeys.auth.organizations, { organizations: 1 })).toBeNull()
@@ -155,6 +194,6 @@ describe('dashboard cache', () => {
     expect(sanitizeForPersist(['org', 'o', 'other', 'x'], { a: 1 })).toBeNull()
     expect(
       sanitizeForPersist(queryKeys.org('o').projects.list(), { projects: [1, { id: 'p' }] })
-    ).toEqual({ projects: [1, { id: 'p' }] })
+    ).toEqual({ projects: [{ id: 'p', options: null, metadata: null }] })
   })
 })

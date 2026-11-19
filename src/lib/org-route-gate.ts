@@ -36,12 +36,18 @@ export function orgMembership(
     hasSession: boolean
     isPending: boolean
     isError: boolean
+    /**
+     * The list came from browser storage and no live answer has replaced it.
+     * It is never proof of membership.
+     */
+    isRestored?: boolean
     organizations: readonly { id: string }[] | undefined
   }>
 ): boolean | null {
-  const { orgId, hasSession, isPending, isError, organizations } = input
+  const { orgId, hasSession, isPending, isError, isRestored = false, organizations } = input
   if (!orgId || !hasSession) return null
-  if (isPending) return null
-  if (isError || !organizations) return false
+  if (isError) return false
+  if (isPending || isRestored) return null
+  if (!organizations) return false
   return organizations.some((org) => org.id === orgId)
 }
