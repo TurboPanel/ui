@@ -8,6 +8,7 @@ import { AuthProvider } from '@/lib/auth-context'
 import { isRemoteCookieClient } from '@/lib/control-plane'
 import { hydrateControlPlaneStore } from '@/lib/control-plane-accounts'
 import { createAppQueryClient } from '@/lib/query-client'
+import { DashboardWarmup } from '@/components/dashboard-warmup'
 import { ReauthSheet } from '@/components/auth/reauth-sheet'
 import { ControlPlaneUpdatingOverlay } from '@/components/admin/control-plane-updating-overlay'
 import { colors } from '@/lib/theme'
@@ -45,6 +46,7 @@ export function AppProviders({ children }: AppProvidersProps) {
     <QueryClientProvider client={queryClient}>
       <ControlPlaneGate>
         <AuthProvider>
+          <DashboardWarmup />
           {children}
           <ControlPlaneUpdatingOverlay />
           <ReauthSheet />
