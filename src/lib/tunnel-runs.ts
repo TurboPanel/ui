@@ -11,6 +11,7 @@ import type {
   TunnelPlacement,
   TunnelPlacementBody,
   TunnelPeerHop,
+  TunnelStatusPorts,
   TunnelPortal,
   TunnelRecord,
   TunnelRunTokenRotation,
@@ -313,6 +314,25 @@ export function portalState(portal: Pick<TunnelPortal, 'wanted' | 'reported'>): 
     default:
       return { label: 'Not Reported Yet', tone: 'pending' }
   }
+}
+
+/** A server's status port lock, as a badge, with the reason when the ports are open. Null is never shown as locked. */
+export function statusPortsState(ports: Pick<TunnelStatusPorts, 'locked' | 'reason'>): {
+  label: string
+  tone: BadgeTone
+  note: string
+} {
+  if (ports.locked === true) {
+    return { label: 'Locked', tone: 'ok', note: 'Status ports locked' }
+  }
+  if (ports.locked === false) {
+    return {
+      label: 'Open',
+      tone: 'danger',
+      note: ports.reason ? `Status ports open: ${ports.reason}` : 'Status ports open',
+    }
+  }
+  return { label: 'Not Reported Yet', tone: 'pending', note: 'Not reported yet' }
 }
 
 /** A server's peer hop mode, as a badge, with a plain line saying what it means. */

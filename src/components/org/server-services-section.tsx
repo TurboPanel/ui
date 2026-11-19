@@ -150,6 +150,7 @@ function AppBlock({ app }: Readonly<{ app: ServerServicesApp }>) {
         <Text style={panelStyles.muted}>{app.domains.items.join(', ')}</Text>
       ) : null}
       <MoreLine more={app.domains.more} />
+      {app.phpShared ? <Text style={panelStyles.muted}>Shared PHP pool</Text> : null}
       {app.containers.items.map((container) => (
         <View key={container.name} style={styles.wrapRow}>
           <Text style={panelStyles.muted}>{container.name}</Text>

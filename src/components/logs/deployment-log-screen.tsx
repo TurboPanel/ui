@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Link, useLocalSearchParams, type Href } from 'expo-router'
+import { Link, useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import { LogViewer } from '@/components/logs/log-viewer'
@@ -7,7 +7,9 @@ import { ManagedFocusTab } from '@/components/org/project/managed-focus-tab'
 import { RunningDeployNotice } from '@/components/org/project/environment-deployment-history-panel'
 import { useProjectContext } from '@/components/org/project/project-context'
 import {
+  Button,
   EmptyState,
+  InlineNotice,
   LoadingState,
   SegmentedControl,
   StatusDot,
@@ -31,9 +33,13 @@ import {
   stalledDeploymentHint,
   type DeploymentGroup,
 } from '@/lib/deployment-history'
-import type { DeploymentHistoryRecord } from '@/lib/instance-api'
+import type { DeploymentHistoryRecord, DeploymentPostDeployFailure } from '@/lib/instance-api'
 import { liveState, nextLivePaused, shouldPollLog } from '@/lib/log-viewer'
-import { isManagedProject, projectEnvironmentDeploymentsHref } from '@/lib/project-navigation'
+import {
+  isManagedProject,
+  projectEnvironmentDeploymentsHref,
+  projectEnvironmentServicesHref,
+} from '@/lib/project-navigation'
 import { isTerminalCommandStatus, useCommandsBatch } from '@/lib/queries/commands'
 import { useCommandLog, useEnvironmentDeployments } from '@/lib/queries/execution-logs'
 import { queryKeys } from '@/lib/query-keys'
@@ -93,11 +99,47 @@ function FailureDetail({ text }: Readonly<{ text: string }>) {
   )
 }
 
+/**
+ * A post-deploy command failed after the new release went live: say so plainly.
+ * When a previous release is named, Roll Back is offered by opening the
+ * service's Releases list, which has the existing Roll Back action.
+ */
+function PostDeployFailureNotice({
+  failure,
+  servicesHref,
+  canManage,
+}: Readonly<{
+  failure: DeploymentPostDeployFailure
+  servicesHref: string
+  canManage: boolean
+}>) {
+  const router = useRouter()
+  return (
+    <InlineNotice
+      tone="warning"
+      title="The new release is live, but a post-deploy command failed"
+      body={failure.message}
+      actions={
+        failure.rollBackAvailable && canManage ? (
+          <Button label="Roll Back" onPress={() => router.push(servicesHref as Href)} />
+        ) : null
+      }
+    />
+  )
+}
+
 /** Notes about how this host's attempt ended: the failure, a cancel, a stall. */
 function DeploymentNotes({
   group,
   row,
-}: Readonly<{ group: DeploymentGroup; row: DeploymentHistoryRecord }>) {
+  servicesHref,
+  canManage,
+}: Readonly<{
+  group: DeploymentGroup
+  row: DeploymentHistoryRecord
+  servicesHref: string
+  canManage: boolean
+}>) {
   const cancelledNote = cancelledDeploymentNote(group)
   // A cancelled deploy is not an error: say what happened in plain words.
   const failure = cancelledNote ? null : failureLine(row)
@@ -108,6 +150,13 @@ function DeploymentNotes({
   const strategy = deploymentStrategyLabel(row.strategy)
   return (
     <>
+      {row.postDeployFailure ? (
+        <PostDeployFailureNotice
+          failure={row.postDeployFailure}
+          servicesHref={servicesHref}
+          canManage={canManage}
+        />
+      ) : null}
       {failure ? (
         <Text style={panelStyles.error} accessibilityRole="alert">
           {failure}
@@ -226,12 +275,14 @@ function DeploymentHeader({ group }: Readonly<{ group: DeploymentGroup }>) {
 
 function DeploymentLog({
   orgId,
+  projectId,
   environmentId,
   group,
   initialCommandId,
   canManage,
 }: Readonly<{
   orgId: string
+  projectId: string
   environmentId: string
   group: DeploymentGroup
   initialCommandId: string
@@ -244,6 +295,7 @@ function DeploymentLog({
       ''
   )
   const active = group.commands.find((row) => row.serverId === serverId) ?? group.commands[0]
+  const servicesHref = projectEnvironmentServicesHref(orgId, projectId, environmentId)
   return (
     <View style={styles.body}>
       <DeploymentHeader group={group} />
@@ -266,7 +318,14 @@ function DeploymentLog({
           accessibilityLabel="Server"
         />
       ) : null}
-      {active ? <DeploymentNotes group={group} row={active} /> : null}
+      {active ? (
+        <DeploymentNotes
+          group={group}
+          row={active}
+          servicesHref={servicesHref}
+          canManage={canManage}
+        />
+      ) : null}
       {active ? (
         <DeploymentHostLog
           key={active.commandId}
@@ -339,6 +398,7 @@ export function DeploymentLogScreen() {
       <DeploymentLog
         key={group.id}
         orgId={orgId}
+        projectId={projectId}
         environmentId={environmentId}
         group={group}
         initialCommandId={deploymentId}

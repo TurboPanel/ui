@@ -75,6 +75,22 @@ vi.mock('@/components/header-chevron', () => ({
   HeaderChevron: () => null,
 }))
 vi.mock('@/components/ui', () => ({
+  Button: ({ label, onPress }: Readonly<{ label: string; onPress: () => void }>) => (
+    <button type="button" onClick={onPress}>
+      {label}
+    </button>
+  ),
+  InlineNotice: ({
+    title,
+    body,
+    actions,
+  }: Readonly<{ title: string; body?: string; actions?: ReactNode }>) => (
+    <div role="note">
+      <p>{title}</p>
+      <p>{body}</p>
+      {actions}
+    </div>
+  ),
   EmptyState: ({ title }: Readonly<{ title: string }>) => <p>{title}</p>,
   LoadingState: ({ label }: Readonly<{ label: string }>) => <p>{label}</p>,
   SegmentedControl: () => null,
@@ -191,5 +207,52 @@ describe('DeploymentLogScreen on a direct link', () => {
     render(coldDeployLink(newClient()))
     expect(await screen.findByText('Deploy not found')).toBeTruthy()
     expect(state.redirects).toEqual([])
+  })
+
+  it('says a post-deploy command failed after the release went live and offers Roll Back', async () => {
+    state.deployments = [
+      {
+        ...DEPLOY,
+        status: 'failed',
+        errorCode: 'deploy_post_deploy_failed_after_switch',
+        postDeployFailure: {
+          program: '/usr/bin/migrate',
+          message:
+            'The post-deploy command /usr/bin/migrate failed after the new release went live.',
+          rollBackAvailable: true,
+        },
+      },
+    ]
+    render(coldDeployLink(newClient()))
+    expect(
+      await screen.findByText(/The new release is live, but a post-deploy command failed/)
+    ).toBeTruthy()
+    expect(
+      screen.getByText(/\/usr\/bin\/migrate failed after the new release went live/)
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Roll Back' })).toBeTruthy()
+  })
+
+  it('shows the failure without Roll Back when no previous release is named', async () => {
+    state.deployments = [
+      {
+        ...DEPLOY,
+        status: 'failed',
+        postDeployFailure: {
+          program: null,
+          message: 'A post-deploy command failed after the new release went live.',
+          rollBackAvailable: false,
+        },
+      },
+    ]
+    render(coldDeployLink(newClient()))
+    expect(await screen.findByText(/post-deploy command failed after the new release/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Roll Back' })).toBeNull()
+  })
+
+  it('shows nothing extra when the deploy carries no post-deploy failure', async () => {
+    render(coldDeployLink(newClient()))
+    await screen.findByTestId('log')
+    expect(screen.queryByRole('note')).toBeNull()
   })
 })
