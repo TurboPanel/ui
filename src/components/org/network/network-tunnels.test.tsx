@@ -210,12 +210,11 @@ describe('a tunnel card', () => {
       />
     )
     expect(screen.getByText('Status Ports')).toBeTruthy()
-    const rowOf = (name: string) =>
-      within(screen.getByText(name).parentElement?.parentElement as HTMLElement)
+    const rowOf = (id: string) => within(screen.getByTestId(`status-ports-${id}`))
     expect(rowOf('s1').getByText('Status ports locked')).toBeTruthy()
     expect(rowOf('s1').getByText(/^Reported /)).toBeTruthy()
     expect(rowOf('s2').getByText('Status ports open: nft failed')).toBeTruthy()
-    expect(rowOf('s3').getByTestId('badge').textContent).toBe('Not Reported Yet')
+    expect(rowOf('s3').getByText('Not reported yet')).toBeTruthy()
     expect(rowOf('s3').queryByText('Status ports locked')).toBeNull()
   })
   it('renders without status port data from an older control plane', () => {

@@ -101,8 +101,8 @@ function FailureDetail({ text }: Readonly<{ text: string }>) {
 
 /**
  * A post-deploy command failed after the new release went live: say so plainly.
- * When a previous release is named, Roll Back is offered by opening the
- * service's Releases list, which has the existing Roll Back action.
+ * When a previous release is named, the button opens the services page, whose
+ * Releases list has the existing Roll Back action.
  */
 function PostDeployFailureNotice({
   failure,
@@ -121,7 +121,7 @@ function PostDeployFailureNotice({
       body={failure.message}
       actions={
         failure.rollBackAvailable && canManage ? (
-          <Button label="Roll Back" onPress={() => router.push(servicesHref as Href)} />
+          <Button label="Open Releases to Roll Back" onPress={() => router.push(servicesHref as Href)} />
         ) : null
       }
     />
@@ -142,9 +142,10 @@ function DeploymentNotes({
 }>) {
   const cancelledNote = cancelledDeploymentNote(group)
   // A cancelled deploy is not an error: say what happened in plain words.
-  const failure = cancelledNote ? null : failureLine(row)
-  const failureDetail =
-    !cancelledNote && !row.strategyOutcomeReason ? commandErrorDetail(row) : null
+  // A post-deploy failure has its own notice; the daemon's raw text would repeat it.
+  const quiet = cancelledNote !== null || Boolean(row.postDeployFailure)
+  const failure = quiet ? null : failureLine(row)
+  const failureDetail = !quiet && !row.strategyOutcomeReason ? commandErrorDetail(row) : null
   const tooLate = cancelTooLateNote(group)
   const stalledHint = stalledDeploymentHint(row.errorCode ?? null)
   const strategy = deploymentStrategyLabel(row.strategy)
@@ -364,7 +365,8 @@ function BackToDeployments({ href }: Readonly<{ href: string }>) {
 export function DeploymentLogScreen() {
   const params = useLocalSearchParams<{ deploymentId: string | string[] }>()
   const deploymentId = firstParam(params.deploymentId)
-  const { orgId, projectId, project, pathEnvironmentId, canManage } = useProjectContext()
+  const { orgId, projectId, project, pathEnvironmentId, canManage, projectAllowsMutations } =
+    useProjectContext()
   const environmentId = pathEnvironmentId ?? ''
   const managed = project != null && isManagedProject(project)
   const deployments = useEnvironmentDeployments(orgId, environmentId, {
@@ -402,7 +404,7 @@ export function DeploymentLogScreen() {
         environmentId={environmentId}
         group={group}
         initialCommandId={deploymentId}
-        canManage={canManage}
+        canManage={canManage && projectAllowsMutations}
       />
     )
   } else {

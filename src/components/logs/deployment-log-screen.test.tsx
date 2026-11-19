@@ -215,6 +215,10 @@ describe('DeploymentLogScreen on a direct link', () => {
         ...DEPLOY,
         status: 'failed',
         errorCode: 'deploy_post_deploy_failed_after_switch',
+        errorMessage:
+          'post_deploy_failed_after_switch: The post-deploy command /usr/bin/migrate failed after the new release rel-123 went live.',
+        errorLine:
+          'post_deploy_failed_after_switch: The post-deploy command /usr/bin/migrate failed after the new release rel-123 went live.',
         postDeployFailure: {
           program: '/usr/bin/migrate',
           message:
@@ -230,7 +234,10 @@ describe('DeploymentLogScreen on a direct link', () => {
     expect(
       screen.getByText(/\/usr\/bin\/migrate failed after the new release went live/)
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Roll Back' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Open Releases to Roll Back' })).toBeTruthy()
+    expect(screen.queryByText(/post_deploy_failed_after_switch/)).toBeNull()
+    expect(screen.queryByText(/rel-123/)).toBeNull()
+    expect(screen.queryByText('Show full error')).toBeNull()
   })
 
   it('shows the failure without Roll Back when no previous release is named', async () => {
@@ -247,7 +254,7 @@ describe('DeploymentLogScreen on a direct link', () => {
     ]
     render(coldDeployLink(newClient()))
     expect(await screen.findByText(/post-deploy command failed after the new release/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Roll Back' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Open Releases to Roll Back' })).toBeNull()
   })
 
   it('shows nothing extra when the deploy carries no post-deploy failure', async () => {

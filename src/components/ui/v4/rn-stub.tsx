@@ -76,6 +76,7 @@ function aria(props: Props) {
     'aria-expanded': (props['aria-expanded'] as boolean | undefined) ?? state.expanded,
     'aria-live': props.accessibilityLiveRegion as string | undefined,
     'aria-hidden': props.accessibilityElementsHidden ? true : undefined,
+    'data-testid': props.testID as string | undefined,
     'data-style': JSON.stringify(flatten(props.style)),
   }
 }

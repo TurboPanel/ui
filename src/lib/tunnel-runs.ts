@@ -316,23 +316,19 @@ export function portalState(portal: Pick<TunnelPortal, 'wanted' | 'reported'>): 
   }
 }
 
-/** A server's status port lock, as a badge, with the reason when the ports are open. Null is never shown as locked. */
+/** A server's status port lock in plain words. Null is never shown as locked. */
 export function statusPortsState(ports: Pick<TunnelStatusPorts, 'locked' | 'reason'>): {
   label: string
-  tone: BadgeTone
-  note: string
+  open: boolean
 } {
-  if (ports.locked === true) {
-    return { label: 'Locked', tone: 'ok', note: 'Status ports locked' }
-  }
+  if (ports.locked === true) return { label: 'Status ports locked', open: false }
   if (ports.locked === false) {
     return {
-      label: 'Open',
-      tone: 'danger',
-      note: ports.reason ? `Status ports open: ${ports.reason}` : 'Status ports open',
+      label: ports.reason ? `Status ports open: ${ports.reason}` : 'Status ports open',
+      open: true,
     }
   }
-  return { label: 'Not Reported Yet', tone: 'pending', note: 'Not reported yet' }
+  return { label: 'Not reported yet', open: false }
 }
 
 /** A server's peer hop mode, as a badge, with a plain line saying what it means. */

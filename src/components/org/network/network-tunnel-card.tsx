@@ -80,14 +80,9 @@ function StatusPortsRow({
   const state = statusPortsState(ports)
   const checked = reportedLabel(ports.checkedAt)
   return (
-    <View style={panelStyles.detailCard}>
-      <View style={styles.titleRow}>
-        <Text style={panelStyles.detailTitle}>{serverName}</Text>
-        <Badge label={state.label} tone={state.tone} />
-      </View>
-      <Text style={ports.locked === false ? panelStyles.error : panelStyles.muted}>
-        {state.note}
-      </Text>
+    <View style={panelStyles.detailCard} testID={`status-ports-${ports.serverId}`}>
+      <Text style={panelStyles.detailTitle}>{serverName}</Text>
+      <Text style={state.open ? panelStyles.error : panelStyles.muted}>{state.label}</Text>
       {checked ? <Text style={panelStyles.muted}>{checked}</Text> : null}
     </View>
   )

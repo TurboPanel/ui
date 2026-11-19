@@ -315,19 +315,18 @@ describe('words for status', () => {
     expect(down.note).toContain('cannot be used as a client certificate')
   })
   it('describes the status port lock and never reads unknown as locked', () => {
-    expect(statusPortsState({ locked: true, reason: null })).toMatchObject({
-      label: 'Locked',
-      note: 'Status ports locked',
+    expect(statusPortsState({ locked: true, reason: null })).toEqual({
+      label: 'Status ports locked',
+      open: false,
     })
-    expect(statusPortsState({ locked: false, reason: 'nft failed' })).toMatchObject({
-      label: 'Open',
-      tone: 'danger',
-      note: 'Status ports open: nft failed',
+    expect(statusPortsState({ locked: false, reason: 'nft failed' })).toEqual({
+      label: 'Status ports open: nft failed',
+      open: true,
     })
-    expect(statusPortsState({ locked: false, reason: null }).note).toBe('Status ports open')
-    expect(statusPortsState({ locked: null, reason: null })).toMatchObject({
-      label: 'Not Reported Yet',
-      note: 'Not reported yet',
+    expect(statusPortsState({ locked: false, reason: null }).label).toBe('Status ports open')
+    expect(statusPortsState({ locked: null, reason: null })).toEqual({
+      label: 'Not reported yet',
+      open: false,
     })
   })
   it('words when a peer hop mode was reported', () => {
