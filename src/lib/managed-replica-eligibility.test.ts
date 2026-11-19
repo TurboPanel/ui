@@ -41,11 +41,13 @@ const BASE_SERVERS = [
   },
 ] as const
 
+const TRUSTED_DC_1 = new Map([['dc-1', { priority: 100, trusted: true }]])
+
 const DATACENTERS = [
-  { id: 'dc-1', privateCidrs: ['10.0.0.0/24'] },
-  { id: 'dc-empty', privateCidrs: [] as string[] },
-  { id: 'dc-2', privateCidrs: ['10.0.1.0/24'] },
-  { id: 'dc-3', privateCidrs: ['10.0.2.0/24'] },
+  { id: 'dc-1', privateCidrs: ['10.0.0.0/24'], trusted: true },
+  { id: 'dc-empty', privateCidrs: [] as string[], trusted: true },
+  { id: 'dc-2', privateCidrs: ['10.0.1.0/24'], trusted: true },
+  { id: 'dc-3', privateCidrs: ['10.0.2.0/24'], trusted: true },
 ]
 
 function eligibility(partial: Partial<ReplicaEligibilityInput> = {}) {
@@ -100,8 +102,8 @@ describe('resolveReplicaEligibility', () => {
   it('flags failover servers whose shared site has no private CIDR', () => {
     const result = eligibility({
       datacenters: [
-        { id: 'dc-1', privateCidrs: [] as string[] },
-        { id: 'dc-empty', privateCidrs: [] as string[] },
+        { id: 'dc-1', privateCidrs: [] as string[], trusted: true },
+        { id: 'dc-empty', privateCidrs: [] as string[], trusted: true },
       ],
     })
     const row = result.servers.find((s) => s.serverId === 'srv-ok')
@@ -146,8 +148,8 @@ describe('resolveReplicaEligibility', () => {
   it('treats a datacenter with two private CIDRs as eligible', () => {
     const result = eligibility({
       datacenters: [
-        { id: 'dc-1', privateCidrs: ['10.0.0.0/24', '2001:db8::/64'] },
-        { id: 'dc-empty', privateCidrs: [] },
+        { id: 'dc-1', privateCidrs: ['10.0.0.0/24', '2001:db8::/64'], trusted: true },
+        { id: 'dc-empty', privateCidrs: [], trusted: true },
       ],
     })
     const row = result.servers.find((s) => s.serverId === 'srv-ok')
@@ -471,8 +473,8 @@ describe('datacenter routing policy', () => {
     const byId = eligibility({
       servers,
       datacenters: [
-        { id: 'dc-a', privateCidrs: ['10.0.0.0/24'] },
-        { id: 'dc-b', privateCidrs: ['10.1.0.0/24'] },
+        { id: 'dc-a', privateCidrs: ['10.0.0.0/24'], trusted: true },
+        { id: 'dc-b', privateCidrs: ['10.1.0.0/24'], trusted: true },
       ],
     })
     expect(byId.servers[1]?.predictedTransport).toBe('datacenter')
@@ -481,8 +483,8 @@ describe('datacenter routing policy', () => {
     const byPriority = eligibility({
       servers,
       datacenters: [
-        { id: 'dc-a', privateCidrs: ['10.0.0.0/24'], priority: 200 },
-        { id: 'dc-b', privateCidrs: ['10.1.0.0/24'], priority: 10 },
+        { id: 'dc-a', privateCidrs: ['10.0.0.0/24'], priority: 200, trusted: true },
+        { id: 'dc-b', privateCidrs: ['10.1.0.0/24'], priority: 10, trusted: true },
       ],
     })
     expect(byPriority.servers[1]?.predictedTransport).toBe('datacenter')
@@ -494,6 +496,7 @@ describe('datacenter routing policy', () => {
         ['dc-a', 'dc-z', 'dc-u'],
         new Map([
           ['dc-z', { priority: 5, trusted: true }],
+          ['dc-a', { priority: 100, trusted: true }],
           ['dc-u', { priority: 1, trusted: false }],
         ])
       )
@@ -534,6 +537,7 @@ describe('predictReplicaTransport', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
+        policyByDatacenter: TRUSTED_DC_1,
       })
     ).toBe('local')
     expect(
@@ -543,6 +547,7 @@ describe('predictReplicaTransport', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
+        policyByDatacenter: TRUSTED_DC_1,
       })
     ).toBe('datacenter')
     expect(
@@ -575,6 +580,7 @@ describe('hasPrivatePathToPrimary', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
+        policyByDatacenter: TRUSTED_DC_1,
       })
     ).toBe(true)
   })
@@ -587,6 +593,7 @@ describe('hasPrivatePathToPrimary', () => {
         primaryServerId: 'srv-p',
         primaryDatacenterIds: ['dc-1'],
         fabricRelays: [],
+        policyByDatacenter: TRUSTED_DC_1,
       })
     ).toBe(true)
   })

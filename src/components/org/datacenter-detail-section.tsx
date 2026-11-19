@@ -37,6 +37,7 @@ import {
   DATACENTER_HAS_MEMBERS_ERROR,
   DATACENTER_HAS_NETWORKS_ERROR,
   DEFAULT_DATACENTER_PRIORITY,
+  DEFAULT_DATACENTER_TRUSTED,
   INVALID_CIDR_ERROR,
   SUBNET_HAS_MEMBERS_ERROR,
 } from '@/lib/instance-api'
@@ -84,7 +85,7 @@ import {
   formatDatacenterServerCount,
   listServersWithCandidateAddresses,
   memberAssignEmptyCopy,
-  mergeDatacenterOptions,
+  mergeDatacenterOptionsForSave,
   serverIsDatacenterMember,
   sortDatacenterSubnets,
   STALE_PIN_COPY,
@@ -534,7 +535,7 @@ function RoutingPanel({
 
       <SettingRow
         label={trusted ? 'Trusted' : 'Untrusted'}
-        description={`Trusted: servers on this network talk over the LAN with no tunnel, even with ${TURBOFABRIC_PRODUCT_NAME} off. Untrusted: ${TURBOFABRIC_PRODUCT_NAME} runs over it, encrypted, and database failover replicas are refused. Mark a network you share with others untrusted. Marking it untrusted is refused while it carries a container network that spans servers and ${TURBOFABRIC_PRODUCT_NAME} is off.`}
+        description={`Trusted: you control this network's layer 2, so server-to-server traffic, including HA and Raft placement (which only uses trusted networks), may go over it directly. Untrusted: that traffic stays on the encrypted ${TURBOFABRIC_PRODUCT_NAME} fabric. Marking it untrusted is refused while it carries a container network that spans servers and ${TURBOFABRIC_PRODUCT_NAME} is off.`}
         align="start"
       >
         <Toggle
@@ -1316,7 +1317,7 @@ export function DatacenterDetailSection({
     draftPreference ?? datacenter?.options?.addressPreference ?? 'ipv6'
   // Effective values — the API already applied the defaults on the top level.
   const priorityText = draftPriority ?? (datacenter ? String(datacenter.priority) : '')
-  const trusted = draftTrusted ?? datacenter?.trusted ?? true
+  const trusted = draftTrusted ?? datacenter?.trusted ?? DEFAULT_DATACENTER_TRUSTED
   const policies = useMemo(
     () =>
       buildDatacenterPolicyMap(
@@ -1377,7 +1378,7 @@ export function DatacenterDetailSection({
     (datacenterQuery.isLoading ? 'Datacenter Network' : 'Unnamed datacenter network')
 
   const saveMergedOptions = (
-    patch: Parameters<typeof mergeDatacenterOptions>[1],
+    patch: Parameters<typeof mergeDatacenterOptionsForSave>[1],
     onSuccess: () => void,
     fallback: string
   ) => {
@@ -1388,7 +1389,7 @@ export function DatacenterDetailSection({
     setError(null)
     updateMutation.mutate(
       {
-        options: mergeDatacenterOptions(datacenter.options, patch),
+        options: mergeDatacenterOptionsForSave(datacenter, patch),
       },
       {
         onSuccess,

@@ -19,6 +19,7 @@ import {
   listServersWithoutMembership,
   memberAssignEmptyCopy,
   mergeDatacenterOptions,
+  mergeDatacenterOptionsForSave,
   pruneSelectedIds,
   reportedCidrForAddress,
   reportedPrivateAddresses,
@@ -454,6 +455,23 @@ describe('mergeDatacenterOptions', () => {
       ntp: { enabled: true, servers: ['time.cloudflare.com'] },
       addressPreference: 'ipv4',
     })
+  })
+})
+
+describe('mergeDatacenterOptionsForSave', () => {
+  it('keeps a trusted network trusted when options omit trusted', () => {
+    expect(
+      mergeDatacenterOptionsForSave(
+        { options: null, trusted: true },
+        { defaultServerTimezone: 'UTC' }
+      )
+    ).toEqual({ trusted: true, defaultServerTimezone: 'UTC' })
+  })
+
+  it('lets an explicit trusted patch win', () => {
+    expect(
+      mergeDatacenterOptionsForSave({ options: { priority: 5 }, trusted: true }, { trusted: false })
+    ).toEqual({ priority: 5, trusted: false })
   })
 })
 
