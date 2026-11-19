@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveAuthGuardHref } from '@/lib/auth-guard'
+import { isPrerenderedAuthRoute, resolveAuthGuardHref } from '@/lib/auth-guard'
 import type { SessionInfo } from '@/lib/instance-api'
 import { dashboardHref } from '@/lib/auth-session'
 
@@ -575,5 +575,19 @@ describe('resolveAuthGuardHref', () => {
         developerDevBypass: false,
       })
     ).toBe('/install')
+  })
+})
+
+describe('isPrerenderedAuthRoute', () => {
+  it('covers the signed-out forms the export pre-renders', () => {
+    for (const route of ['sign-in', 'sign-up', 'forgot-password', 'reset-password']) {
+      expect(isPrerenderedAuthRoute(route)).toBe(true)
+    }
+  })
+
+  it('leaves everything else on the spinner', () => {
+    for (const route of ['welcome', 'organizations', 'install', 'connect', 'about', undefined]) {
+      expect(isPrerenderedAuthRoute(route)).toBe(false)
+    }
   })
 })

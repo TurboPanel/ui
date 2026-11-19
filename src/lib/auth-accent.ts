@@ -1,5 +1,6 @@
 import { Platform } from 'react-native'
 import type { ControlPlaneRuntime } from '@/lib/control-plane-runtime'
+import type { InstallStatus, OAuthProvider } from '@/lib/instance-api'
 import { navyPalette } from '@/lib/theme-palettes'
 
 export { type ControlPlaneRuntime, resolveControlPlaneRuntime } from '@/lib/control-plane-runtime'
@@ -16,6 +17,86 @@ export type AuthAccentTheme = {
 }
 
 const RUNTIME_STORAGE_KEY = 'tp.controlPlaneRuntime'
+const STATUS_STORAGE_KEY = 'tp.statusSnapshot'
+const SESSION_HINT_STORAGE_KEY = 'tp.hadSession'
+
+function readLocal(key: string): string | null {
+  if (Platform.OS !== 'web') return null
+  try {
+    if (typeof localStorage === 'undefined') return null
+    return localStorage.getItem(key)
+  } catch {
+    // Private mode / blocked storage: ignore.
+    return null
+  }
+}
+
+function writeLocal(key: string, value: string | null): void {
+  if (Platform.OS !== 'web') return
+  try {
+    if (typeof localStorage === 'undefined') return
+    if (value === null) localStorage.removeItem(key)
+    else localStorage.setItem(key, value)
+  } catch {
+    // Private mode / blocked storage: ignore.
+  }
+}
+
+const OAUTH_PROVIDERS: ReadonlySet<string> = new Set(['github', 'google'])
+
+/**
+ * Whether this browser last saw a signed-in session. A non-secret hint only
+ * (never a token): the sign-in page keeps its loading screen for these
+ * visitors so a signed-in person never sees a flash of the form.
+ */
+export function readSessionHint(): boolean {
+  return readLocal(SESSION_HINT_STORAGE_KEY) === '1'
+}
+
+export function rememberSessionHint(signedIn: boolean): void {
+  writeLocal(SESSION_HINT_STORAGE_KEY, signedIn ? '1' : null)
+}
+
+/**
+ * The public parts of the last `GET /status` answer (web only), used to paint
+ * the sign-in options before the live answer arrives. An install-mode answer
+ * is never kept: a stale one would send a finished install back to the wizard.
+ */
+export function readStoredInstallStatus(): InstallStatus | undefined {
+  const raw = readLocal(STATUS_STORAGE_KEY)
+  if (!raw) return undefined
+  try {
+    const value = JSON.parse(raw) as Partial<InstallStatus> | null
+    if (!value || typeof value !== 'object' || typeof value.isSignupEnabled !== 'boolean') {
+      return undefined
+    }
+    if (value.needsInstall === true || value.isInstallMode === true) return undefined
+    return {
+      isSignupEnabled: value.isSignupEnabled,
+      billingEnabled: value.billingEnabled === true,
+      authProviders: Array.isArray(value.authProviders)
+        ? value.authProviders.filter((p): p is OAuthProvider => OAUTH_PROVIDERS.has(p))
+        : [],
+      ...(value.runtime === 'deno' || value.runtime === 'workers'
+        ? { runtime: value.runtime }
+        : {}),
+      ...(typeof value.isSignupEmailVerificationEnabled === 'boolean'
+        ? { isSignupEmailVerificationEnabled: value.isSignupEmailVerificationEnabled }
+        : {}),
+    }
+  } catch {
+    return undefined
+  }
+}
+
+export function rememberInstallStatus(status: InstallStatus | undefined): void {
+  if (!status) return
+  if (status.needsInstall === true || status.isInstallMode === true) {
+    writeLocal(STATUS_STORAGE_KEY, null)
+    return
+  }
+  writeLocal(STATUS_STORAGE_KEY, JSON.stringify(status))
+}
 
 /**
  * Last-known runtime from this browser tab (web), so a refresh knows it before

@@ -25,6 +25,7 @@ function createSessionStorage() {
 
 describe('auth-accent', () => {
   let sessionStorageMock: ReturnType<typeof createSessionStorage>
+  let localStorageMock: ReturnType<typeof createSessionStorage>
 
   beforeEach(() => {
     platform.OS = 'web'
@@ -33,10 +34,16 @@ describe('auth-accent', () => {
       configurable: true,
       value: sessionStorageMock,
     })
+    localStorageMock = createSessionStorage()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: localStorageMock,
+    })
   })
 
   afterEach(() => {
     Reflect.deleteProperty(globalThis, 'sessionStorage')
+    Reflect.deleteProperty(globalThis, 'localStorage')
     vi.resetModules()
   })
 
@@ -65,6 +72,90 @@ describe('auth-accent', () => {
     it('returns real hex values, safe for colour maths', async () => {
       const { authAccentForRuntime } = await loadAuthAccent()
       expect(authAccentForRuntime('deno').accent).toMatch(/^#[0-9a-f]{6}$/i)
+    })
+  })
+
+  describe('stored install status', () => {
+    const status = {
+      runtime: 'workers' as const,
+      isSignupEnabled: true,
+      isSignupEmailVerificationEnabled: false,
+      billingEnabled: true,
+      authProviders: ['github' as const],
+    }
+
+    it('round-trips the public status answer through localStorage', async () => {
+      const { readStoredInstallStatus, rememberInstallStatus } = await loadAuthAccent()
+      rememberInstallStatus(status)
+      expect(readStoredInstallStatus()).toEqual(status)
+    })
+
+    it('never keeps an install-mode answer, and drops an earlier one', async () => {
+      const { readStoredInstallStatus, rememberInstallStatus } = await loadAuthAccent()
+      rememberInstallStatus(status)
+      rememberInstallStatus({ ...status, needsInstall: true, isInstallMode: true })
+      expect(readStoredInstallStatus()).toBeUndefined()
+    })
+
+    it('ignores malformed, unknown-provider and hand-edited values', async () => {
+      const { readStoredInstallStatus } = await loadAuthAccent()
+      localStorageMock.setItem('tp.statusSnapshot', '{not json')
+      expect(readStoredInstallStatus()).toBeUndefined()
+      localStorageMock.setItem('tp.statusSnapshot', JSON.stringify({ runtime: 'deno' }))
+      expect(readStoredInstallStatus()).toBeUndefined()
+      localStorageMock.setItem(
+        'tp.statusSnapshot',
+        JSON.stringify({ isSignupEnabled: false, authProviders: ['github', 'other', 3] })
+      )
+      expect(readStoredInstallStatus()).toEqual({
+        isSignupEnabled: false,
+        billingEnabled: false,
+        authProviders: ['github'],
+      })
+    })
+
+    it('does nothing on native or when storage throws', async () => {
+      const { readStoredInstallStatus, rememberInstallStatus } = await loadAuthAccent()
+      rememberInstallStatus(status)
+      platform.OS = 'ios'
+      expect(readStoredInstallStatus()).toBeUndefined()
+      rememberInstallStatus(status)
+      platform.OS = 'web'
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: {
+          getItem: () => {
+            throw new Error('blocked')
+          },
+          setItem: () => {
+            throw new Error('blocked')
+          },
+        },
+      })
+      expect(readStoredInstallStatus()).toBeUndefined()
+      expect(() => rememberInstallStatus(status)).not.toThrow()
+    })
+  })
+
+  describe('session hint', () => {
+    it('remembers and forgets a signed-in browser', async () => {
+      const { readSessionHint, rememberSessionHint } = await loadAuthAccent()
+      expect(readSessionHint()).toBe(false)
+      rememberSessionHint(true)
+      expect(readSessionHint()).toBe(true)
+      rememberSessionHint(false)
+      expect(readSessionHint()).toBe(false)
+    })
+
+    it('is false on native and when storage is blocked', async () => {
+      const { readSessionHint, rememberSessionHint } = await loadAuthAccent()
+      rememberSessionHint(true)
+      platform.OS = 'ios'
+      expect(readSessionHint()).toBe(false)
+      platform.OS = 'web'
+      Reflect.deleteProperty(globalThis, 'localStorage')
+      expect(readSessionHint()).toBe(false)
+      expect(() => rememberSessionHint(true)).not.toThrow()
     })
   })
 
