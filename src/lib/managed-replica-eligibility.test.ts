@@ -503,6 +503,19 @@ describe('datacenter routing policy', () => {
     ).toEqual({ trusted: ['dc-z', 'dc-a'], untrusted: ['dc-u'] })
   })
 
+  it('treats a datacenter with no policy entry as untrusted', () => {
+    expect(
+      hasPrivatePathToPrimary({
+        candidateServerId: 'srv-a',
+        candidateDatacenterIds: ['dc-1'],
+        primaryServerId: 'srv-p',
+        primaryDatacenterIds: ['dc-1'],
+        fabricRelays: [],
+        policyByDatacenter: new Map(),
+      })
+    ).toBe(false)
+  })
+
   it('does not count an untrusted datacenter as a private path', () => {
     const policies = new Map([['dc-shared', { priority: 100, trusted: false }]])
     expect(

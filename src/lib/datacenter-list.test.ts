@@ -468,6 +468,15 @@ describe('mergeDatacenterOptionsForSave', () => {
     ).toEqual({ trusted: true, defaultServerTimezone: 'UTC' })
   })
 
+  it('keeps trusted false from existing options', () => {
+    expect(
+      mergeDatacenterOptionsForSave(
+        { options: { trusted: false, priority: 5 }, trusted: false },
+        { priority: 7 }
+      )
+    ).toEqual({ trusted: false, priority: 7 })
+  })
+
   it('lets an explicit trusted patch win', () => {
     expect(
       mergeDatacenterOptionsForSave({ options: { priority: 5 }, trusted: true }, { trusted: false })
