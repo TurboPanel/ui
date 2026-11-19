@@ -1,41 +1,24 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  type ReactNode,
-} from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  rememberControlPlaneRuntime,
   readStoredControlPlaneRuntime,
+  readStoredInstallStatus,
+  rememberControlPlaneRuntime,
+  rememberInstallStatus,
+  rememberSessionHint,
   resolveControlPlaneRuntime,
   type ControlPlaneRuntime,
 } from '@/lib/auth-accent'
-import {
-  isRemoteCookieClient,
-  isStandaloneExpoWeb,
-} from '@/lib/control-plane'
-import {
-  canQueryControlPlane,
-  useControlPlaneStore,
-} from '@/lib/control-plane-accounts'
+import { isRemoteCookieClient, isStandaloneExpoWeb } from '@/lib/control-plane'
+import { canQueryControlPlane, useControlPlaneStore } from '@/lib/control-plane-accounts'
 import {
   fetchOrganizations,
   type SessionInfo,
   type SignInResult,
   type TwoFactorCodeKind,
 } from '@/lib/instance-api'
-import {
-  resolvePreferredOrganizationId,
-  setActiveOrganizationId,
-} from '@/lib/org-context'
-import {
-  isVisibilityQuery,
-  queryKeys,
-  setForbiddenHandler,
-} from '@/lib/query-client'
+import { resolvePreferredOrganizationId, setActiveOrganizationId } from '@/lib/org-context'
+import { isVisibilityQuery, queryKeys, setForbiddenHandler } from '@/lib/query-client'
 import {
   useInstallStatusQuery,
   useSessionQuery,
@@ -71,7 +54,7 @@ type AuthContextValue = {
   completeTwoFactor: (
     challenge: string,
     code: string,
-    kind?: TwoFactorCodeKind,
+    kind?: TwoFactorCodeKind
   ) => Promise<SessionInfo>
   /** Web-only WebAuthn sign-in; rejects with the web-only note on native. */
   signInWithPasskey: () => Promise<SessionInfo>
@@ -82,12 +65,7 @@ type AuthContextValue = {
   refreshInstallStatus: () => Promise<boolean>
   handleUnauthorized: () => Promise<void>
   resolveDashboardHref: () => Promise<
-    | '/connect'
-    | '/install'
-    | '/sign-in'
-    | '/welcome'
-    | '/organizations'
-    | `/${string}/overview`
+    '/connect' | '/install' | '/sign-in' | '/welcome' | '/organizations' | `/${string}/overview`
   >
 }
 
@@ -98,9 +76,8 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   useControlPlaneStore()
   const bootstrapEnabled = canQueryControlPlane()
   const statusQuery = useInstallStatusQuery({ enabled: bootstrapEnabled })
-  const sessionQuery = useSessionQuery({
-    enabled: bootstrapEnabled && (statusQuery.isSuccess || statusQuery.isError),
-  })
+  // The session read does not depend on the status read, so both start together.
+  const sessionQuery = useSessionQuery({ enabled: bootstrapEnabled })
   const signInMutation = useSignInMutation()
   const signInTwoFactorMutation = useSignInTwoFactorMutation()
   const signInWithPasskeyMutation = useSignInWithPasskeyMutation()
@@ -114,13 +91,31 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
 
   const controlPlaneRuntime = useMemo(() => {
     if (statusQuery.data) {
-      return (
-        resolveControlPlaneRuntime(statusQuery.data) ??
-        readStoredControlPlaneRuntime()
-      )
+      return resolveControlPlaneRuntime(statusQuery.data) ?? readStoredControlPlaneRuntime()
     }
     return readStoredControlPlaneRuntime()
   }, [statusQuery.data])
+
+  // Paint the last known sign-in options at once; the live answer replaces
+  // them. Done after mount so the first client render matches the pre-rendered page.
+  useEffect(() => {
+    if (!bootstrapEnabled) return
+    if (queryClient.getQueryData(queryKeys.auth.status) !== undefined) return
+    const stored = readStoredInstallStatus()
+    if (stored) {
+      queryClient.setQueryData(queryKeys.auth.status, stored, { updatedAt: 0 })
+    }
+  }, [bootstrapEnabled, queryClient])
+
+  useEffect(() => {
+    if (!statusQuery.isSuccess) return
+    rememberInstallStatus(statusQuery.data)
+  }, [statusQuery.isSuccess, statusQuery.data])
+
+  useEffect(() => {
+    if (!sessionQuery.isSuccess) return
+    rememberSessionHint(sessionQuery.data !== null)
+  }, [sessionQuery.isSuccess, sessionQuery.data])
 
   useEffect(() => {
     if (!statusQuery.data) return
@@ -131,13 +126,15 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   }, [statusQuery.data])
 
   const needsControlPlane =
-    isStandaloneExpoWeb() ||
-    (isRemoteCookieClient() && !canQueryControlPlane())
+    isStandaloneExpoWeb() || (isRemoteCookieClient() && !canQueryControlPlane())
 
+  // A stored status answer (seeded with updatedAt 0) only paints the sign-in
+  // options. Until the live answer arrives we are still loading, so the guard
+  // never acts on a stale needsInstall (a reinstalled host would loop).
+  const statusIsSeed =
+    statusQuery.data !== undefined && statusQuery.dataUpdatedAt === 0 && !statusQuery.isError
   const isLoading =
-    bootstrapEnabled &&
-    (statusQuery.isLoading ||
-      (statusQuery.isSuccess && sessionQuery.isLoading))
+    bootstrapEnabled && (statusQuery.isLoading || statusIsSeed || sessionQuery.isLoading)
 
   let bootstrapError: string | null = null
   if (statusQuery.error instanceof Error) {
@@ -217,7 +214,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     async (email: string, password: string) => {
       return await signInMutation.mutateAsync({ email, password })
     },
-    [signInMutation],
+    [signInMutation]
   )
 
   const completeTwoFactor = useCallback(
@@ -228,7 +225,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
         kind,
       })
     },
-    [signInTwoFactorMutation],
+    [signInTwoFactorMutation]
   )
 
   const signInWithPasskey = useCallback(async () => {
@@ -239,7 +236,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     async (email: string, password: string) => {
       await signUpMutation.mutateAsync({ email, password })
     },
-    [signUpMutation],
+    [signUpMutation]
   )
 
   const signOut = useCallback(async () => {
@@ -286,7 +283,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       refreshInstallStatus,
       handleUnauthorized,
       resolveDashboardHref,
-    ],
+    ]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

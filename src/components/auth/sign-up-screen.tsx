@@ -1,21 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native'
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Link, useLocalSearchParams, useRouter, type Href } from 'expo-router'
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
 import { AuthNewPasswordField } from '@/components/auth/auth-new-password-field'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
-import {
-  authAccentStyles,
-  authFormStyles,
-  webPointer,
-} from '@/components/auth/auth-form-styles'
+import { authAccentStyles, authFormStyles, webPointer } from '@/components/auth/auth-form-styles'
 import {
   authAccentForRuntime,
   resolveControlPlaneRuntime,
@@ -74,14 +64,13 @@ function SignupSuccess({
         <>
           <Text style={styles.successTitle}>Check your inbox to continue.</Text>
           <Text style={styles.successCopy}>
-            If this email can be used for a new account, we sent a verification link.
-            You can also try signing in if you already have an account.
+            If this email can be used for a new account, we sent a verification link. You can also
+            try signing in if you already have an account.
           </Text>
         </>
       ) : (
         <Text style={styles.successTitle}>
-          You can sign in now. If this email was already registered, use your existing
-          password.
+          You can sign in now. If this email was already registered, use your existing password.
         </Text>
       )}
       <AuthPrimaryButton
@@ -125,7 +114,7 @@ export function SignUpScreenContent() {
 
   const accent = useMemo(
     () => authAccentForRuntime(resolveControlPlaneRuntime(instanceInfo)),
-    [instanceInfo],
+    [instanceInfo]
   )
   const tint = useMemo(() => authAccentStyles(accent), [accent])
 
@@ -144,18 +133,15 @@ export function SignUpScreenContent() {
     compromised: '',
   }[meterStatus]
   const isInstallMode = instanceInfo?.isInstallMode === true
-  const isSignupDisabled =
-    instanceInfo?.isSignupEnabled === false && invitationId.length === 0
+  const isSignupDisabled = instanceInfo?.isSignupEnabled === false && invitationId.length === 0
   /** Workers omit install fields — sign-up is the bootstrap path when enabled. */
   const instanceInfoWarning =
-    instanceInfoErrored || !instanceInfo
+    instanceInfoErrored || (!instanceInfo && !instanceInfoLoading)
       ? 'Could not verify signup availability right now. You can still try signing up.'
       : ''
 
   const onSignupSuccessContinue = useCallback(() => {
-    router.replace(
-      (invitationId ? signInForInvitationHref(invitationId) : '/sign-in') as Href,
-    )
+    router.replace((invitationId ? signInForInvitationHref(invitationId) : '/sign-in') as Href)
   }, [invitationId, router])
 
   const onEmailChange = useCallback((text: string) => {
@@ -211,7 +197,7 @@ export function SignUpScreenContent() {
     setError('')
     try {
       await signUpMutation.mutateAsync(
-        invitationId ? { email, password, invitationId } : { email, password },
+        invitationId ? { email, password, invitationId } : { email, password }
       )
       setSuccess(true)
     } catch (err) {
@@ -237,12 +223,11 @@ export function SignUpScreenContent() {
     }
   }, [instanceInfoLoading, isInstallMode, isSignupDisabled, router])
 
-  if (instanceInfoLoading || isSignupDisabled || isInstallMode) {
+  if (isSignupDisabled || isInstallMode) {
     return null
   }
 
-  const isEmailVerificationEnabled =
-    instanceInfo?.isSignupEmailVerificationEnabled ?? true
+  const isEmailVerificationEnabled = instanceInfo?.isSignupEmailVerificationEnabled ?? true
 
   if (success) {
     return (
@@ -266,23 +251,15 @@ export function SignUpScreenContent() {
       >
         <Text style={authFormStyles.footerLink}>
           Already have an account?{' '}
-          <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>
-            Sign In
-          </Text>
+          <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>Sign In</Text>
         </Text>
       </Pressable>
     </Link>
   )
 
   return (
-    <AuthScreenShell
-      title="Sign Up"
-      footer={signInFooter}
-      accentColor={accent.accent}
-    >
-      {instanceInfoWarning ? (
-        <Text style={styles.warning}>{instanceInfoWarning}</Text>
-      ) : null}
+    <AuthScreenShell title="Sign Up" footer={signInFooter} accentColor={accent.accent}>
+      {instanceInfoWarning ? <Text style={styles.warning}>{instanceInfoWarning}</Text> : null}
 
       <View style={authFormStyles.field}>
         <AuthFloatingField
@@ -325,16 +302,10 @@ export function SignUpScreenContent() {
         <Text style={styles.warning} accessibilityRole="alert">
           {pwnedWarning}{' '}
           <Text
-            style={[
-              styles.warningLink,
-              { color: accent.accent },
-              webPointer,
-            ]}
+            style={[styles.warningLink, { color: accent.accent }, webPointer]}
             accessibilityRole="link"
             onPress={() => {
-              Linking.openURL(
-                'https://turbopanel.io/docs/security/password-safety',
-              ).catch(() => {
+              Linking.openURL('https://turbopanel.io/docs/security/password-safety').catch(() => {
                 // Ignore failures opening the external docs link.
               })
             }}
