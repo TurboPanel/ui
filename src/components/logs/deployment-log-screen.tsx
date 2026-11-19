@@ -121,7 +121,10 @@ function PostDeployFailureNotice({
       body={failure.message}
       actions={
         failure.rollBackAvailable && canManage ? (
-          <Button label="Open Releases to Roll Back" onPress={() => router.push(servicesHref as Href)} />
+          <Button
+            label="Open Releases to Roll Back"
+            onPress={() => router.push(servicesHref as Href)}
+          />
         ) : null
       }
     />
