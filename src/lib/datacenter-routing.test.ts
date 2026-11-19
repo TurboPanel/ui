@@ -57,7 +57,7 @@ const SERVERS = [
 describe('buildDatacenterPolicyMap', () => {
   it('applies the documented defaults to absent fields', () => {
     const map = buildDatacenterPolicyMap([{ id: 'a' }, { id: 'b', priority: 3, trusted: false }])
-    expect(map.get('a')).toEqual({ priority: DEFAULT_DATACENTER_PRIORITY, trusted: true })
+    expect(map.get('a')).toEqual({ priority: DEFAULT_DATACENTER_PRIORITY, trusted: false })
     expect(map.get('b')).toEqual({ priority: 3, trusted: false })
   })
 })
@@ -151,7 +151,10 @@ describe('findDatacenterWinnerHint', () => {
           ],
         },
       ],
-      buildDatacenterPolicyMap([{ id: 'dc-lan', priority: 50 }])
+      buildDatacenterPolicyMap([
+        { id: 'dc-lan', priority: 50, trusted: true },
+        { id: 'dc-x', trusted: true },
+      ])
     )
     expect(hint).toEqual({
       winnerId: 'dc-lan',

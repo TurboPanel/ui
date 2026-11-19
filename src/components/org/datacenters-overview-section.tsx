@@ -306,8 +306,8 @@ export function DatacentersOverviewSection({ orgId }: Readonly<{ orgId: string }
         A datacenter network is a network inside a datacenter, not the building: a routing domain of
         private subnets that can all reach each other. A server can be on more than one. When
         servers share more than one trusted network, the lower priority number wins. Servers on a
-        shared trusted network talk over the LAN with no tunnel; over an untrusted one,{' '}
-        {TURBOFABRIC_PRODUCT_NAME} runs encrypted.
+        shared trusted network may talk over it directly; traffic over an untrusted one stays on the
+        encrypted {TURBOFABRIC_PRODUCT_NAME} fabric. New networks start untrusted.
       </Text>
 
       {error && datacenters.length === 0 ? <Text style={panelStyles.error}>{error}</Text> : null}

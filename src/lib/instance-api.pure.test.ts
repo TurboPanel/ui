@@ -776,7 +776,7 @@ describe('fetch wrappers (mocked fetch)', () => {
     expect(body.datacenter.privateCidrs).toEqual([])
     expect(body.datacenter.subnets).toEqual([])
     expect(body.datacenter.priority).toBe(100)
-    expect(body.datacenter.trusted).toBe(true)
+    expect(body.datacenter.trusted).toBe(false)
     expect(body.members[0]).toEqual({
       serverId: 'srv-1',
       address: '192.0.2.10',

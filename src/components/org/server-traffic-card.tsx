@@ -10,6 +10,7 @@ import {
   TextField,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { mergeDatacenterOptionsForSave } from '@/lib/datacenter-list'
 import { parseDatacenterPriorityDraft, sharedServerNetworks } from '@/lib/datacenter-routing'
 import type {
   DatacenterRecord,
@@ -84,7 +85,9 @@ function PriorityEditor({
       return
     }
     setError(null)
-    const result = await update.run({ options: { ...dc.options, priority: parsed.priority } })
+    const result = await update.run({
+      options: mergeDatacenterOptionsForSave(dc, { priority: parsed.priority }),
+    })
     if (result.ok) setDraft(null)
   }
   const makeFirst = async () => {

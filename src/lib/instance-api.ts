@@ -4442,15 +4442,15 @@ export type DatacenterOptions = {
   priority?: number
   /**
    * Whether the datacenter's L2 is under the operator's control. Absent means
-   * `true`; `false` marks a shared / provider-owned segment.
+   * `false` (untrusted); `true` marks a network the operator controls.
    */
   trusted?: boolean
 }
 
 /** Default `DatacenterOptions.priority` when absent (mirrors the instance). */
 export const DEFAULT_DATACENTER_PRIORITY = 100
-/** Default `DatacenterOptions.trusted` when absent (mirrors the instance). */
-export const DEFAULT_DATACENTER_TRUSTED = true
+/** Default `DatacenterOptions.trusted` when absent (mirrors the instance: new networks start untrusted). */
+export const DEFAULT_DATACENTER_TRUSTED = false
 
 export type DatacenterNameSuggestion = {
   name: string
@@ -4471,7 +4471,7 @@ export type DatacenterRecord = {
   options: DatacenterOptions | null
   /** Effective `options.priority` with the default (`100`) applied; lower wins. */
   priority: number
-  /** Effective `options.trusted` with the default (`true`) applied. */
+  /** Effective `options.trusted` with the default (`false`) applied. */
   trusted: boolean
   /** Effective (override ?? detected) location; absent on older control planes. */
   location?: ResolvedLocation | null
