@@ -38,6 +38,9 @@ function overlayDocuments(options: unknown): unknown[] {
 /** The project's Base could not be loaded; the save stays blocked. */
 export type EnvironmentBaseFailure = { error: string }
 
+/** What an environment's changes are checked against; `null` while the project loads. */
+export type EnvironmentBase = EnvironmentBaseLayers | EnvironmentBaseFailure | null
+
 /** Collect the layers around an environment's own `options.compose`. */
 export function environmentBaseLayers(
   projectOptions: unknown,
@@ -71,7 +74,7 @@ export function environmentBaseLayers(
 export function lintEnvironmentLayer(
   layerSource: string,
   layerDocument: unknown,
-  base: EnvironmentBaseLayers | EnvironmentBaseFailure | null,
+  base: EnvironmentBase,
   options?: ComposeLintOptions
 ): ComposeLintIssue[] {
   const layerIssues = lintComposeYaml(layerSource, { ...options, requireImageOrBuild: false })

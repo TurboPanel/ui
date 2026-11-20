@@ -34,11 +34,7 @@ import {
   HostingCertificateActionsContext,
   HostingCertificatePanel,
 } from '@/components/org/hosting-certificate-panel'
-import {
-  environmentBaseLayers,
-  type EnvironmentBaseFailure,
-  type EnvironmentBaseLayers,
-} from '@/lib/compose/layer-lint'
+import { environmentBaseLayers, type EnvironmentBase } from '@/lib/compose/layer-lint'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import {
@@ -1838,7 +1834,7 @@ function EnvironmentComposeOverlayPanel({
 }: Readonly<{
   environment: EnvironmentRecord
   /** The layers these changes are checked against before saving; `null` while the project loads. */
-  baseLayers: EnvironmentBaseLayers | EnvironmentBaseFailure | null
+  baseLayers: EnvironmentBase
   onSaveCompose: (compose: ComposeDocument) => Promise<void>
   savingCompose: boolean
 }>) {
@@ -2316,7 +2312,7 @@ function EnvironmentLoadedPanels({
   orgId: string
   mergedCompose: ComposeDocument
   /** Layers around the environment's changes; `null` while the project loads. */
-  baseLayers: EnvironmentBaseLayers | EnvironmentBaseFailure | null
+  baseLayers: EnvironmentBase
   serviceNames: string[]
   allServers: OrgServerRecord[]
   sortedServers: OrgServerRecord[]
@@ -2687,7 +2683,7 @@ export function EnvironmentDetailBody({
 
   const environment = environmentQuery.data?.environment ?? null
   const projectCompose = projectQuery.data?.project.options?.compose ?? null
-  let baseLayers: EnvironmentBaseLayers | EnvironmentBaseFailure | null = null
+  let baseLayers: EnvironmentBase = null
   if (projectQuery.data) {
     baseLayers = environmentBaseLayers(projectQuery.data.project.options, environment?.options)
   } else if (projectQuery.error) {

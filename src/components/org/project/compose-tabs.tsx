@@ -47,8 +47,7 @@ import { composePrincipalAliases } from '@/lib/compose/principals-document'
 import {
   environmentBaseLayers,
   lintEnvironmentLayer,
-  type EnvironmentBaseFailure,
-  type EnvironmentBaseLayers,
+  type EnvironmentBase,
 } from '@/lib/compose/layer-lint'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import type {
@@ -267,7 +266,7 @@ function ComposeEditorPanel({
   /** Aliases from the layer above; `[]` on the base, the base's on an overlay. */
   extraPrincipalAliases?: readonly string[]
   /** The Base the document is changes to; set only for an environment's compose. */
-  baseDocument?: EnvironmentBaseLayers | EnvironmentBaseFailure | null
+  baseDocument?: EnvironmentBase
   /** Leave out the helper port fields: an overlay lacks the Base's kinds and accounts. */
   hideReach?: boolean
   /**
