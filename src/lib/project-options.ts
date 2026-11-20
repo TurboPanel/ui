@@ -1,6 +1,7 @@
 import type {
   ComposeDocument,
   EnvironmentRecord,
+  ProjectComposeSource,
   ProjectRecord,
 } from '@/lib/instance-api'
 
@@ -8,6 +9,7 @@ export type ProjectOptionsPatch = {
   compose?: ComposeDocument
   containerNaming?: 'uuid' | 'custom'
   defaultServerId?: string | null
+  composeSource?: ProjectComposeSource
 }
 
 /**
@@ -16,15 +18,13 @@ export type ProjectOptionsPatch = {
  */
 export function buildProjectOptionsPatch(
   project: ProjectRecord,
-  patch: ProjectOptionsPatch,
+  patch: ProjectOptionsPatch
 ): ProjectOptionsPatch {
   const compose = patch.compose ?? project.options?.compose
-  const containerNaming =
-    patch.containerNaming ?? project.options?.containerNaming
+  const containerNaming = patch.containerNaming ?? project.options?.containerNaming
 
   // Not `??`: an explicit `null` in the patch clears the pin and must not fall back.
-  let defaultServerId: ProjectOptionsPatch['defaultServerId'] =
-    project.options?.defaultServerId
+  let defaultServerId: ProjectOptionsPatch['defaultServerId'] = project.options?.defaultServerId
   if (patch.defaultServerId !== undefined) defaultServerId = patch.defaultServerId
 
   const options: ProjectOptionsPatch = {}
@@ -33,17 +33,18 @@ export function buildProjectOptionsPatch(
   if (defaultServerId !== undefined) {
     options.defaultServerId = defaultServerId
   }
+  // Replaced wholesale on save: leaving it out would end the link to the repository.
+  const composeSource = patch.composeSource ?? project.options?.composeSource
+  if (composeSource) options.composeSource = composeSource
   return options
 }
 
 /** Apply a PATCH-shaped options object onto local project.options state. */
 export function mergeProjectOptionsLocal(
   current: ProjectRecord['options'],
-  patch: ProjectOptionsPatch,
+  patch: ProjectOptionsPatch
 ): NonNullable<ProjectRecord['options']> {
-  const next: NonNullable<ProjectRecord['options']> = current
-    ? { ...current }
-    : {}
+  const next: NonNullable<ProjectRecord['options']> = current ? { ...current } : {}
   if (patch.compose !== undefined) next.compose = patch.compose
   if (patch.containerNaming !== undefined) {
     next.containerNaming = patch.containerNaming
@@ -59,7 +60,7 @@ export function mergeProjectOptionsLocal(
 /** Effective placement: environment pin wins, else project default. */
 export function resolveEffectiveServerId(
   environmentServerId: string | null | undefined,
-  projectDefaultServerId: string | null | undefined,
+  projectDefaultServerId: string | null | undefined
 ): string | null {
   if (environmentServerId) return environmentServerId
   return projectDefaultServerId ?? null
@@ -73,13 +74,13 @@ export function resolveEffectiveServerId(
  */
 export function countDistinctProjectServers(
   project: ProjectRecord,
-  environments: readonly EnvironmentRecord[],
+  environments: readonly EnvironmentRecord[]
 ): number {
   const ids = new Set<string>()
   for (const environment of environments) {
     const effective = resolveEffectiveServerId(
       environment.serverId,
-      project.options?.defaultServerId,
+      project.options?.defaultServerId
     )
     if (effective) ids.add(effective)
   }

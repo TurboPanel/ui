@@ -67,6 +67,7 @@ import {
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useOrgProjectFormDefaults } from '@/lib/org-project-settings'
 import type { RepositoryInspection, RepositoryRecord } from '@/lib/instance-api'
+import { composeSourceForCreate, type CreateComposeSource } from '@/lib/v4/compose-source'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { createIconField } from '@/lib/icons'
 import { spacing } from '@/lib/theme'
@@ -182,6 +183,29 @@ function seedForRepositoryLane(
       subdirectory: simple.buildRoot,
       nodeVersion: simple.nodeVersion,
     },
+  })
+}
+
+/**
+ * The compose file the project will follow, when the repository has one the
+ * wizard could read and parse. `undefined` for any other lane or file.
+ */
+function composeSourceFromInspection(
+  source: RepositoryRecord,
+  branch: string,
+  lane: RepositoryLane,
+  inspection: RepositoryInspection | undefined
+): CreateComposeSource | undefined {
+  if (lane !== 'compose' || !inspection) return undefined
+  const path = detectedComposePath(inspection.files)
+  const file = inspection.files.find((candidate) => candidate.path === path && candidate.found)
+  if (!path || !file?.content || !parseRepositoryCompose(file.content)) return undefined
+  return composeSourceForCreate({
+    sourceId: source.id,
+    branch,
+    path,
+    commitSha: inspection.commitSha,
+    content: file.content,
   })
 }
 
@@ -527,7 +551,7 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
    * editor's draft, or the repository seed); catalog types pass nothing and
    * create straight from the pick.
    */
-  const create = async (drafted?: ComposeDocument) => {
+  const create = async (drafted?: ComposeDocument, composeSource?: CreateComposeSource) => {
     if (!selectedOption) return
     const selectedType = selectedOption.type
     setApiError(null)
@@ -558,7 +582,8 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
       ...createIconField(projectIcon.icon, selectedType),
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
       ...(selectedCode ? { code: selectedCode } : {}),
-      ...(compose ? { options: { compose } } : {}),
+      // Only a repository's own compose file is followed; the editor's draft never is.
+      ...(compose ? { options: { compose, ...(composeSource ? { composeSource } : {}) } } : {}),
     })
     if (!result.ok) {
       setApiError(createErrorMessage(result.error))
@@ -597,7 +622,8 @@ function ProjectCreateWizard({ orgId }: Readonly<{ orgId: string }>) {
         inspection.data,
         simpleConfig,
         trimmedProjectName
-      )
+      ),
+      composeSourceFromInspection(selectedSource, repositoryBranch, lane, inspection.data)
     )
   }
 

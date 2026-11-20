@@ -15,6 +15,7 @@ import {
 import { colors, spacing } from '@/lib/theme'
 import { nativeAppVariableLine, preparedPerServerCompose } from '@/lib/deploy-preview-display'
 import { userErrorMessage } from '@/lib/user-error'
+import { baseUsedLine } from '@/lib/v4/compose-source'
 
 function formatWarningLine(warning: DeployPreviewResponse['warnings'][number]): string {
   if (warning.code === 'health_check_missing') {
@@ -227,6 +228,9 @@ export function DeployPreviewBody({
       {preview ? (
         <>
           <PreviewWarnings warnings={preview.warnings} />
+          {preview.composeBase ? (
+            <Text style={panelStyles.muted}>{baseUsedLine(preview.composeBase)}</Text>
+          ) : null}
           <PreparedComposeSnapshot preview={preview} />
         </>
       ) : null}

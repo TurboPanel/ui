@@ -7,9 +7,7 @@ import {
 } from './project-options'
 import type { EnvironmentRecord, ProjectRecord } from './instance-api'
 
-function project(
-  options: ProjectRecord['options'],
-): ProjectRecord {
+function project(options: ProjectRecord['options']): ProjectRecord {
   return {
     id: 'p1',
     name: 'Demo',
@@ -39,9 +37,9 @@ describe('buildProjectOptionsPatch', () => {
 
   it('clears defaultServerId when patch sets null', () => {
     const current = project({ defaultServerId: 'srv-1' })
-    expect(
-      buildProjectOptionsPatch(current, { defaultServerId: null }),
-    ).toEqual({ defaultServerId: null })
+    expect(buildProjectOptionsPatch(current, { defaultServerId: null })).toEqual({
+      defaultServerId: null,
+    })
   })
 
   it('replaces defaultServerId when patch sets a new one', () => {
@@ -49,6 +47,30 @@ describe('buildProjectOptionsPatch', () => {
     expect(buildProjectOptionsPatch(current, { defaultServerId: 'srv-2' })).toEqual({
       defaultServerId: 'srv-2',
     })
+  })
+})
+
+describe('composeSource on an options patch', () => {
+  const source = {
+    sourceId: 'src-1',
+    path: 'compose.yaml',
+    seededCommitSha: 'a'.repeat(40),
+    seededDigest: 'b'.repeat(64),
+    mode: 'seed' as const,
+  }
+
+  it('sends the stored source back so a save does not end the link', () => {
+    const current = project({ containerNaming: 'custom', composeSource: source })
+    expect(buildProjectOptionsPatch(current, { containerNaming: 'uuid' })).toEqual({
+      containerNaming: 'uuid',
+      composeSource: source,
+    })
+  })
+
+  it('adds nothing for a project without one', () => {
+    expect(
+      'composeSource' in buildProjectOptionsPatch(project({}), { containerNaming: 'uuid' })
+    ).toBe(false)
   })
 })
 
@@ -66,7 +88,7 @@ describe('mergeProjectOptionsLocal', () => {
       mergeProjectOptionsLocal(null, {
         containerNaming: 'custom',
         defaultServerId: 'srv-1',
-      }),
+      })
     ).toEqual({
       containerNaming: 'custom',
       defaultServerId: 'srv-1',
@@ -74,15 +96,13 @@ describe('mergeProjectOptionsLocal', () => {
     expect(
       mergeProjectOptionsLocal(
         { containerNaming: 'uuid', defaultServerId: 'srv-1' },
-        { defaultServerId: null },
-      ),
+        { defaultServerId: null }
+      )
     ).toEqual({ containerNaming: 'uuid' })
   })
 })
 
-function environment(
-  overrides: Partial<EnvironmentRecord> = {},
-): EnvironmentRecord {
+function environment(overrides: Partial<EnvironmentRecord> = {}): EnvironmentRecord {
   return {
     id: 'e1',
     name: 'Production',

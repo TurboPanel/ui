@@ -4,6 +4,7 @@ import { useProjectContext } from '@/components/org/project/project-context'
 import type { OrgServerRecord } from '@/lib/instance-api'
 import { useOrgServers, useUpdateProject } from '@/lib/queries'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
+import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
 import { colors, webPointer } from '@/lib/theme'
 
 function serverLabel(server: OrgServerRecord): string {
@@ -51,6 +52,11 @@ export function ProjectServerHeaderControl() {
   const busy = updateProject.isPending
 
   const save = async (serverId: string | null) => {
+    const blocked = settingsSaveBlockedMessage(project)
+    if (blocked) {
+      setError(blocked)
+      return
+    }
     setError(null)
     const nextOptions = buildProjectOptionsPatch(project, {
       defaultServerId: serverId,

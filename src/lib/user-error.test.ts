@@ -37,6 +37,15 @@ describe('apiErrorCopy', () => {
     )
   })
 
+  it('explains the two refusals of a project that follows its repository', () => {
+    expect(apiErrorCopy(new Error('HTTP 409: base_tracks_repository \u2014 x'))).toContain(
+      'cannot be edited here'
+    )
+    expect(apiErrorCopy(new Error('HTTP 409: rollback_base_unrecorded \u2014 x'))).toContain(
+      'Stop following the file'
+    )
+  })
+
   it('maps upgrade_run_active and environment_running', () => {
     expect(apiErrorCopy(new Error('x failed: HTTP 409: upgrade_run_active'))).toBe(
       UPDATE_ALREADY_ACTIVE_COPY

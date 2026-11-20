@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectCreateSection } from './project-create-section'
+import { sha256Hex } from '@/lib/v4/sha256'
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
@@ -319,7 +320,36 @@ describe('ProjectCreateSection', () => {
     const [body] = mocks.createProject.mock.calls[0] as [Record<string, unknown>]
     expect(body.type).toBe('docker-compose')
     expect(body.options).toBeTruthy()
+    expect((body.options as Record<string, unknown>).composeSource).toBeUndefined()
     expect(mocks.replace).toHaveBeenCalledWith('/o/projects/p1/setup/environment')
+  })
+
+  it('makes a repository compose project follow the file, and an app project not', async () => {
+    const compose = 'services:\n  web:\n    image: nginx\n'
+    const { rerender } = render(<ProjectCreateSection orgId="o" />)
+    name('Site')
+    await press('From a Git repository')
+    await press('Pick acme/site')
+    mocks.inspection.current = {
+      data: {
+        commitSha: 'abc1234'.padEnd(40, '0'),
+        files: [{ path: 'compose.yaml', found: true, content: compose }],
+        entries: [],
+      },
+      isPending: false,
+      isSuccess: true,
+      error: null,
+    }
+    rerender(<ProjectCreateSection orgId="o" />)
+    expect(screen.getByText('Lane compose')).toBeTruthy()
+    await press('Continue')
+    const [body] = mocks.createProject.mock.calls[0] as [{ options: Record<string, unknown> }]
+    expect(body.options.composeSource).toEqual({
+      sourceId: 'r1',
+      path: 'compose.yaml',
+      seededCommitSha: 'abc1234'.padEnd(40, '0'),
+      seededDigest: sha256Hex(compose),
+    })
   })
 
   it('picks the managed database card from the Projects list link', () => {

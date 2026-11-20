@@ -3928,9 +3928,40 @@ export type ProjectRecord = {
     compose?: ComposeDocument
     containerNaming?: 'uuid' | 'custom'
     defaultServerId?: string
+    /** Set on a project created from a Git repository's compose file. */
+    composeSource?: ProjectComposeSource
   } | null
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * How a Git project's Base relates to the repository's compose file.
+ * `track`: every deploy reads `path` at the commit it deploys and uses it as
+ * the Base, which cannot be edited. `seed`: the file was copied once and the
+ * Base is the operator's to edit. Absent `mode` means `seed`. `lastRead*` is
+ * what the latest deploy read; only a deploy writes them.
+ */
+export type ProjectComposeSource = {
+  sourceId: string
+  /** The branch the file is read on; the repository's default branch when absent. */
+  ref?: string
+  path: string
+  seededCommitSha: string
+  seededDigest: string
+  mode?: 'seed' | 'track'
+  lastReadCommitSha?: string
+  lastReadDigest?: string
+}
+
+/** The compose file a deploy used as the Base (`composeBase` on deploys and previews). */
+export type ComposeBaseRecord = {
+  sourceId: string
+  ref: string
+  path: string
+  commitSha: string
+  /** SHA-256 of the file's bytes. */
+  digest: string
 }
 
 export type CatalogSummary = {
@@ -4058,7 +4089,15 @@ export type CreateProjectBody = {
    * the compose it drafted so a compose project lands with its YAML already
    * saved instead of needing a follow-up PATCH.
    */
-  options?: { compose?: ComposeDocument }
+  options?: {
+    compose?: ComposeDocument
+    /**
+     * Send with the repository's compose file as `compose` to make the project
+     * follow it. The control plane starts it in `track` mode with the seeded
+     * commit and digest as the last read.
+     */
+    composeSource?: Omit<ProjectComposeSource, 'mode' | 'lastReadCommitSha' | 'lastReadDigest'>
+  }
   /**
    * Pins the scaffolded primary environment (org primary name, else `production`)
    * when creating a managed project.
@@ -4773,6 +4812,11 @@ export async function updateProject(
       containerNaming?: 'uuid' | 'custom'
       /** Optional default placement; `null` clears it. */
       defaultServerId?: string | null
+      /**
+       * Options replace wholesale, so send the stored source back on every
+       * save. The control plane ignores `mode` and `lastRead*` here.
+       */
+      composeSource?: ProjectComposeSource
     }
     workspaceId?: string
     /**
@@ -4787,6 +4831,21 @@ export async function updateProject(
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
+  })
+}
+
+/**
+ * Follow (`track`) or stop following (`seed`) the repository's compose file.
+ * 409 `compose_source_missing` when the project was not made from one. Seed
+ * keeps the last-read content as an editable Base.
+ */
+export async function setProjectComposeSource(
+  id: string,
+  mode: 'seed' | 'track'
+): Promise<{ ok: true; composeSource: ProjectComposeSource }> {
+  return await apiFetch(`${CLIENT_API}/projects/${id}/compose-source`, {
+    method: 'PATCH',
+    body: JSON.stringify({ mode }),
   })
 }
 
@@ -8345,6 +8404,8 @@ export type DeploymentHistoryRecord = {
   commandId: string
   generation: number | null
   desiredHash: string | null
+  /** The repository compose file this attempt used as the Base; null when the project does not follow one, or for older rows. */
+  composeBase?: ComposeBaseRecord | null
   /** Per-service replica counts captured at enqueue; null for older rows. */
   replicaCounts: Record<string, number> | null
   serverId: string
@@ -8423,6 +8484,7 @@ export type DeploymentDetailRecord = {
   environmentId: string
   generation: number | null
   desiredHash: string | null
+  composeBase?: ComposeBaseRecord | null
   replicaCounts: Record<string, number>
   totalReplicas: number
   commands: DeploymentHistoryRecord[]
@@ -9145,6 +9207,7 @@ export type DeployPreviewWarning = {
     | 'fabric_reconcile_failed'
     | 'fabric_reconcile_pending'
     | 'site_principal_ambiguous'
+    | 'compose_base_unreadable'
   message: string
   details?: Record<string, unknown>
 }
@@ -9291,6 +9354,8 @@ export type DeployPreviewResponse = {
     volumeName: string
   }[]
   warnings: DeployPreviewWarning[]
+  /** The repository compose file the preview used as the Base; null or absent when the project does not follow one. */
+  composeBase?: ComposeBaseRecord | null
   /** Non-secret Compose project `.env` (real values; secrets are omitted). */
   envFile?: string
   /** Host/container secret file plan — no envelopes or plaintext. */

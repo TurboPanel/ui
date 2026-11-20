@@ -16,6 +16,8 @@ import {
   useProjectRepositoryId,
   type ProjectDraft,
 } from '@/components/org/project/project-context'
+import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
+import { ComposeSourceGate } from '@/components/org/project/compose-source-panel'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import { ComposeInheritedPanel } from '@/components/org/project/compose-inherited-panel'
 import {
@@ -108,7 +110,7 @@ import { useStorage } from '@/lib/queries/storage'
 import { isActiveContainerStatus, serviceStatusTone } from '@/lib/container-status'
 import { countDistinctProjectServers, resolveEffectiveServerId } from '@/lib/project-options'
 import { spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 /** Stable empty list so the facts memo does not thrash on every render. */
 const EMPTY_STORAGE: readonly StorageRecord[] = []
@@ -443,12 +445,13 @@ function EnvironmentOverviewCompose({
   )
 }
 
-function ServicesPanelBody({
+export function ServicesPanelBody({
   baseSelected,
   project,
   projectId,
   orgId,
   selectedEnvironment,
+  environments,
   environmentsCount,
   projectServerCount,
   storageCount,
@@ -465,12 +468,14 @@ function ServicesPanelBody({
   onOpenScopeConfig,
   onSaveProjectCompose,
   onSaveEnvironmentCompose,
+  onSaveBlocked,
 }: Readonly<{
   baseSelected: boolean
   project: ProjectRecord
   projectId: string
   orgId: string
   selectedEnvironment: EnvironmentRecord | null
+  environments: readonly EnvironmentRecord[]
   /** Project's environment count — Overview Base inventory only. */
   environmentsCount: number
   /** Distinct servers placing this project's environments — Overview Base inventory only. */
@@ -490,6 +495,8 @@ function ServicesPanelBody({
   onOpenScopeConfig: () => void
   onSaveProjectCompose: (compose: ComposeDocument) => Promise<void>
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
+  /** Told why a save was not sent, so the edits are never dropped silently. */
+  onSaveBlocked: (message: string) => void
 }>): ReactNode {
   const router = useRouter()
   const draftStore = useComposeDraftStore()
@@ -519,6 +526,14 @@ function ServicesPanelBody({
   // Plain handlers (not useCallback): React Compiler could not preserve manual
   // memoization of this save path (`preserve-manual-memoization` on scopeKey).
   async function saveOverviewDraft(): Promise<void> {
+    // A draft made while the Base was editable is stale once the project follows
+    // the repository again: the Base refuses it, so drop it instead of sending.
+    const blocked = baseSelected ? settingsSaveBlockedMessage(project) : null
+    if (blocked) {
+      onSaveBlocked(`These edits were not saved. ${blocked}`)
+      discardOverviewDraft()
+      return
+    }
     const snapshot = resolveComposeDraftSnapshot(draftStore, scopeKey, savedDocument)
     const reconciled = reconcileComposeDraft(snapshot)
     if (reconciled == null) return
@@ -571,26 +586,34 @@ function ServicesPanelBody({
   if (baseSelected) {
     if (editing) {
       return (
-        <ComposeEditorPanel
-          document={project.options?.compose}
-          onSave={onSaveProjectCompose}
-          saving={saving}
-          editView={editView}
-          sessionKey={scopeKey}
-          // The base has no layer above it, so its own root is the whole scope.
-          extraPrincipalAliases={[]}
-          documentFacts={documentFacts}
-          onOpenScopeConfig={onOpenScopeConfig}
-          // The project tab bar has Compose but no Services tab, so the Base
-          // editor keeps its own Compose / Services toggle. A draft switches
-          // lenses from the wizard's tabs instead.
-          {...(draft
-            ? { hideSave: true, onDraftChange: draft.onDraftChange }
-            : {
-                onViewChange: (view: ComposeEditorView) =>
-                  router.push(projectComposeEditHref(orgId, projectId, { view }) as Href),
-              })}
-        />
+        <ComposeSourceGate
+          orgId={orgId}
+          project={project}
+          environments={environments}
+          canMutate={canMutate}
+          isDraft={draft != null}
+        >
+          <ComposeEditorPanel
+            document={project.options?.compose}
+            onSave={onSaveProjectCompose}
+            saving={saving}
+            editView={editView}
+            sessionKey={scopeKey}
+            // The base has no layer above it, so its own root is the whole scope.
+            extraPrincipalAliases={[]}
+            documentFacts={documentFacts}
+            onOpenScopeConfig={onOpenScopeConfig}
+            // The project tab bar has Compose but no Services tab, so the Base
+            // editor keeps its own Compose / Services toggle. A draft switches
+            // lenses from the wizard's tabs instead.
+            {...(draft
+              ? { hideSave: true, onDraftChange: draft.onDraftChange }
+              : {
+                  onViewChange: (view: ComposeEditorView) =>
+                    router.push(projectComposeEditHref(orgId, projectId, { view }) as Href),
+                })}
+          />
+        </ComposeSourceGate>
       )
     }
     return (
@@ -819,7 +842,7 @@ export function ComposeServicesTab() {
       setError(null)
       const result = await persistProjectCompose.run(compose)
       if (!result.ok && persistProjectCompose.actionError) {
-        setError(persistProjectCompose.actionError)
+        setError(failedRunMessage(result, persistProjectCompose.actionError))
       }
     },
     [draft, baseSelected, persistProjectCompose, setError]
@@ -883,6 +906,7 @@ export function ComposeServicesTab() {
             projectId={projectId}
             orgId={orgId}
             selectedEnvironment={selectedEnvironment}
+            environments={environments}
             environmentsCount={environments.length}
             projectServerCount={projectServerCount}
             storageCount={storageCount}
@@ -899,6 +923,7 @@ export function ComposeServicesTab() {
             onOpenScopeConfig={openScopeConfig}
             onSaveProjectCompose={handleSaveProjectCompose}
             onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
+            onSaveBlocked={setError}
           />
         )}
         {draft ? <DraftEnvironmentNotice /> : null}
