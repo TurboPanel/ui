@@ -17,7 +17,6 @@ vi.mock(
 vi.mock('@/lib/queries/projects', () => ({ useSetComposeSource: vi.fn() }))
 vi.mock('@/lib/queries/execution-logs', () => ({ useEnvironmentDeployments: vi.fn() }))
 
-
 afterEach(cleanup)
 
 const SOURCE = {
