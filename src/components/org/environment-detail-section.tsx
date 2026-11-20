@@ -2687,6 +2687,12 @@ export function EnvironmentDetailBody({
 
   const environment = environmentQuery.data?.environment ?? null
   const projectCompose = projectQuery.data?.project.options?.compose ?? null
+  let baseLayers: EnvironmentBaseLayers | EnvironmentBaseFailure | null = null
+  if (projectQuery.data) {
+    baseLayers = environmentBaseLayers(projectQuery.data.project.options, environment?.options)
+  } else if (projectQuery.error) {
+    baseLayers = { error: userErrorMessage(projectQuery.error, 'Failed to load the project') }
+  }
   const projectDefaultServerId = projectQuery.data?.project.options?.defaultServerId ?? null
   const allServers = orEmptyArray(serversQuery.data?.servers)
   const tlsLibrary = tlsQuery.data?.tls ?? []
@@ -3168,13 +3174,7 @@ export function EnvironmentDetailBody({
           projectId={projectId}
           orgId={orgId}
           mergedCompose={mergedCompose}
-          baseLayers={
-            projectQuery.data
-              ? environmentBaseLayers(projectQuery.data.project.options, environment.options)
-              : projectQuery.error
-                ? { error: userErrorMessage(projectQuery.error, 'Failed to load the project') }
-                : null
-          }
+          baseLayers={baseLayers}
           serviceNames={serviceNames}
           allServers={allServers}
           sortedServers={sortedServers}

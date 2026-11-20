@@ -80,14 +80,15 @@ export function lintEnvironmentLayer(
     return layerIssues
   }
   if (base === null || 'error' in base) {
+    const message =
+      base === null
+        ? "Waiting for the project's Base to load"
+        : `Couldn't load the project's Base: ${base.error}. Reload to try again.`
     return [
       ...layerIssues,
       {
         level: 'error',
-        message:
-          base === null
-            ? "Waiting for the project's Base to load"
-            : `Couldn't load the project's Base: ${base.error}. Reload to try again.`,
+        message,
         code: 'base_not_loaded',
         path: '$',
       },
