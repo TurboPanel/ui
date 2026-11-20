@@ -1123,6 +1123,8 @@ export type ServerServicesAppContainer = {
 }
 
 export type ServerServicesApp = {
+  /** True when the app's PHP runs in the shared pool; absent when unknown. */
+  phpShared?: true
   serviceId: string
   name: string
   project: string
@@ -8195,6 +8197,15 @@ export type ContainerLogEventRecord = {
   message: string
 }
 
+/** A post-deploy command that failed after the new release went live. */
+export type DeploymentPostDeployFailure = {
+  program: string | null
+  /** A plain sentence naming the program; the program's own output is in the deploy log. */
+  message: string
+  /** True when a previous release is named, so Roll Back is offered. */
+  rollBackAvailable: boolean
+}
+
 /**
  * One deploy attempt against one server, read from the append-only `command`
  * table. `id` **is** the command id — pass it to {@link fetchCommandLog} for the
@@ -8230,6 +8241,8 @@ export type DeploymentHistoryRecord = {
   strategyOutcome?: DeploymentStrategyOutcome | null
   /** Why it rolled back or needs attention. */
   strategyOutcomeReason?: string | null
+  /** Set when a post-deploy command failed after the new release was already live; null or absent otherwise. */
+  postDeployFailure?: DeploymentPostDeployFailure | null
   /** What set the attempt off when it was a git push; null for a deploy a person started. */
   trigger?: DeploymentTriggerRecord | null
   /**
@@ -13174,6 +13187,19 @@ export type TunnelRecord = {
   runTokenRotationBlock?: TunnelRotationBlock | null
   /** What each server that carries the tunnel or runs one of its sites last reported about the peer hop; missing from an older panel. */
   peerHop?: TunnelPeerHop[]
+  /** Whether the connector status ports are locked on each carrying server, as last reported; missing from an older panel. */
+  statusPorts?: TunnelStatusPorts[]
+}
+
+/** One carrying server's report on the lock for the connector status ports. */
+export type TunnelStatusPorts = {
+  serverId: string
+  /** True when the last lock load worked, false when it failed, null when not reported yet (an older daemon). Null never means locked. */
+  locked: boolean | null
+  /** Why the last load failed; null unless `locked` is false. */
+  reason: string | null
+  /** When the last load ran; null when unknown. */
+  checkedAt: string | null
 }
 
 /** One server's report on the client-certificate check between servers. */

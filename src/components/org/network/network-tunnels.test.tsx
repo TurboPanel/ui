@@ -193,6 +193,36 @@ describe('a tunnel card', () => {
     expect(rowOf('s4').getByTestId('badge').textContent).toBe('Verify')
     expect(rowOf('s4').queryByText(/^Reported /)).toBeNull()
   })
+  it('shows each server status port lock and treats null as not reported', () => {
+    render(
+      <NetworkTunnelCard
+        orgId="o1"
+        tunnel={tunnel({
+          portals: [],
+          statusPorts: [
+            { serverId: 's1', locked: true, reason: null, checkedAt: '2026-11-03T14:05:00Z' },
+            { serverId: 's2', locked: false, reason: 'nft failed', checkedAt: null },
+            { serverId: 's3', locked: null, reason: null, checkedAt: null },
+          ],
+        })}
+        servers={[server('s1'), server('s2'), server('s3')]}
+        datacenters={[]}
+      />
+    )
+    expect(screen.getByText('Status Ports')).toBeTruthy()
+    const rowOf = (id: string) => within(screen.getByTestId(`status-ports-${id}`))
+    expect(rowOf('s1').getByText('Status ports locked')).toBeTruthy()
+    expect(rowOf('s1').getByText(/^Reported /)).toBeTruthy()
+    expect(rowOf('s2').getByText('Status ports open: nft failed')).toBeTruthy()
+    expect(rowOf('s3').getByText('Not reported yet')).toBeTruthy()
+    expect(rowOf('s3').queryByText('Status ports locked')).toBeNull()
+  })
+  it('renders without status port data from an older control plane', () => {
+    render(
+      <NetworkTunnelCard orgId="o1" tunnel={tunnel()} servers={[server('s1')]} datacenters={[]} />
+    )
+    expect(screen.queryByText('Status Ports')).toBeNull()
+  })
   it('renders without peer hop data from an older control plane', () => {
     render(
       <NetworkTunnelCard orgId="o1" tunnel={tunnel()} servers={[server('s1')]} datacenters={[]} />

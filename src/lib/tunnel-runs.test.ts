@@ -26,6 +26,7 @@ import {
   placementBody,
   placementSummary,
   peerHopState,
+  statusPortsState,
   portalState,
   reportedLabel,
   seenLabel,
@@ -312,6 +313,21 @@ describe('words for status', () => {
     const down = peerHopState({ mode: 'verify', downgraded: true })
     expect(down).toMatchObject({ label: 'Downgraded', tone: 'danger' })
     expect(down.note).toContain('cannot be used as a client certificate')
+  })
+  it('describes the status port lock and never reads unknown as locked', () => {
+    expect(statusPortsState({ locked: true, reason: null })).toEqual({
+      label: 'Status ports locked',
+      open: false,
+    })
+    expect(statusPortsState({ locked: false, reason: 'nft failed' })).toEqual({
+      label: 'Status ports open: nft failed',
+      open: true,
+    })
+    expect(statusPortsState({ locked: false, reason: null }).label).toBe('Status ports open')
+    expect(statusPortsState({ locked: null, reason: null })).toEqual({
+      label: 'Not reported yet',
+      open: false,
+    })
   })
   it('words when a peer hop mode was reported', () => {
     expect(reportedLabel(null)).toBeNull()
