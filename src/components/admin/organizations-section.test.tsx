@@ -77,7 +77,10 @@ function row(over: Partial<AdminOrganizationRow>): AdminOrganizationRow {
 
 describe('OrganizationsSection', () => {
   it('lists owner, counts and a Root badge', () => {
-    rows.current = [row({}), row({ id: 'o2', name: 'Platform', isRoot: true, owner: null, projectCount: 9 })]
+    rows.current = [
+      row({}),
+      row({ id: 'o2', name: 'Platform', isRoot: true, owner: null, projectCount: 9 }),
+    ]
     render(<OrganizationsSection />)
     expect(screen.getByText('Acme')).toBeTruthy()
     expect(screen.getByText('Ada')).toBeTruthy()
