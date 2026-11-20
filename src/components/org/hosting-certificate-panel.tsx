@@ -159,6 +159,8 @@ function DnsResult({ dns }: Readonly<{ dns: HostingDnsReport }>) {
 }
 
 /** The actions the server offers for this certificate, plus Deploy now when one is due. */
+const USE_LETS_ENCRYPT_NOTE = 'Applies Let’s Encrypt to every name on this site.'
+
 function CertificateButtons({
   view,
   composeOwned,
@@ -181,41 +183,54 @@ function CertificateButtons({
   checkingDns: boolean
   onCheckDns: () => void
 }>) {
+  const canRequest = view.actions.includes('use_lets_encrypt') && !composeOwned
   return (
-    <ButtonRow>
-      {view.actions.includes('deploy') && deploy ? (
-        <DeployNowButton deploy={deploy} disabled={disabled} />
-      ) : null}
-      {view.actions.includes('check_dns') ? (
-        <Button
-          label="Check DNS"
-          busyLabel="Checking…"
-          size="sm"
-          variant="secondary"
-          busy={checkingDns}
-          disabled={disabled}
-          onPress={onCheckDns}
-        />
-      ) : null}
-      {view.actions.includes('try_again') && composeOwned && composeAutomatic ? (
-        <Button
-          label="Try again"
-          busyLabel="Trying…"
-          size="sm"
-          variant="secondary"
-          busy={requesting}
-          disabled={disabled}
-          onPress={onRequest}
-        />
-      ) : null}
-    </ButtonRow>
+    <>
+      {canRequest ? <Text style={styles.hint}>{USE_LETS_ENCRYPT_NOTE}</Text> : null}
+      <ButtonRow>
+        {view.actions.includes('deploy') && deploy ? (
+          <DeployNowButton deploy={deploy} disabled={disabled} />
+        ) : null}
+        {canRequest ? (
+          <Button
+            label="Use Let’s Encrypt"
+            busyLabel="Checking DNS…"
+            size="sm"
+            variant="primary"
+            busy={requesting}
+            disabled={disabled}
+            onPress={onRequest}
+          />
+        ) : null}
+        {view.actions.includes('check_dns') ? (
+          <Button
+            label="Check DNS"
+            busyLabel="Checking…"
+            size="sm"
+            variant="secondary"
+            busy={checkingDns}
+            disabled={disabled}
+            onPress={onCheckDns}
+          />
+        ) : null}
+        {view.actions.includes('try_again') && (!composeOwned || composeAutomatic) ? (
+          <Button
+            label="Try again"
+            busyLabel="Trying…"
+            size="sm"
+            variant="secondary"
+            busy={requesting}
+            disabled={disabled}
+            onPress={onRequest}
+          />
+        ) : null}
+      </ButtonRow>
+    </>
   )
 }
 
 /**
- * The certificate state of one domain. A panel-managed name picks its
- * certificate in the per-name pickers, so the whole-site Let's Encrypt request
- * (which would overwrite those picks) is not offered here.
+ * The certificate state of one domain, and the one-click "Use Let's Encrypt".
  * Every state word and the choice of actions come from the server's derived
  * `certificate` block; nothing here re-decides them.
  */
