@@ -47,6 +47,7 @@ import {
   type ComposeLintIssue,
 } from '@/lib/compose'
 import { reachCandidates } from '@/lib/compose/reach'
+import { lintEnvironmentLayer } from '@/lib/compose/layer-lint'
 import {
   readComposeNetworks,
   writeComposeNetworks,
@@ -591,6 +592,7 @@ export function ComposeEditorSection({
   renderHostingEditor,
   renderReleasesPanel,
   extraPrincipalAliases,
+  baseDocument,
   hideReach = false,
 }: Readonly<{
   document: unknown
@@ -619,6 +621,14 @@ export function ComposeEditorSection({
    * be flagged.
    */
   extraPrincipalAliases?: readonly string[]
+  /**
+   * The project's Base (`null` when it has none), set only when `document` is an
+   * environment's changes. Those changes may set one field of a service the Base
+   * defines, so they are linted as a partial layer and then as the merge with
+   * the Base, where a service still needs an `image` or `build`. Omitted for the
+   * Base itself, which is held to the full rule.
+   */
+  baseDocument?: unknown
   /**
    * Leave out a container's helper port fields. An environment layer does not
    * restate the Base's service kinds or accounts, so reach is edited on the Base.
@@ -886,18 +896,22 @@ export function ComposeEditorSection({
       // validateComposeDocument, including the one-repository-per-project rule.
       // `undefined` (no project context) leaves that rule skipped, exactly as
       // the instance does for a caller that cannot resolve a project.
+      const lintOptions = {
+        ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
+        ...(extraPrincipalAliases === undefined
+          ? {}
+          : {
+              knownPrincipalAliases: new Set([
+                ...extraPrincipalAliases,
+                ...composePrincipalAliases(next),
+              ]),
+            }),
+      }
+      const nextYaml = composeDocumentToYaml(next)
       const blocking = blockingComposeLintIssues(
-        lintComposeYaml(composeDocumentToYaml(next), {
-          ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
-          ...(extraPrincipalAliases === undefined
-            ? {}
-            : {
-                knownPrincipalAliases: new Set([
-                  ...extraPrincipalAliases,
-                  ...composePrincipalAliases(next),
-                ]),
-              }),
-        })
+        baseDocument === undefined
+          ? lintComposeYaml(nextYaml, lintOptions)
+          : lintEnvironmentLayer(nextYaml, next, baseDocument, lintOptions)
       )
       if (blocking.length > 0) {
         setShowSaveLint(true)
@@ -1119,7 +1133,7 @@ export function ComposeEditorSection({
     // service kinds live only on the full draft shadow when hidden.
     const lintSource = tab === 'visual' ? visibleYaml(draft) : lintYaml
     const siteServices = hiddenSiteServiceNames(hideComposeTurbopanelExtensions(draft).hidden)
-    return lintComposeYaml(lintSource, {
+    const lintOptions = {
       siteServices,
       managedExtensionHidden: true,
       ...(extraPrincipalAliases === undefined
@@ -1130,8 +1144,11 @@ export function ComposeEditorSection({
               ...composePrincipalAliases(draft),
             ]),
           }),
-    })
-  }, [tab, lintYaml, draft, extraPrincipalAliases])
+    }
+    return baseDocument === undefined
+      ? lintComposeYaml(lintSource, lintOptions)
+      : lintEnvironmentLayer(lintSource, draft, baseDocument, lintOptions)
+  }, [tab, lintYaml, draft, extraPrincipalAliases, baseDocument])
   const blockingLintIssues = useMemo(() => blockingComposeLintIssues(lintIssues), [lintIssues])
   const displayLintIssues = useMemo(
     () => (showSaveLint ? blockingLintIssues : liveComposeLintIssues(lintIssues)),

@@ -44,6 +44,7 @@ import { DraftEnvironmentNotice } from '@/components/org/project/draft-environme
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { appFactsByService, type ServiceAppFacts } from '@/lib/compose/app-facts'
 import { composePrincipalAliases } from '@/lib/compose/principals-document'
+import { lintEnvironmentLayer } from '@/lib/compose/layer-lint'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import type {
   ComposeDocFacts,
@@ -243,6 +244,7 @@ function ComposeEditorPanel({
   renderHostingEditor,
   renderReleasesPanel,
   extraPrincipalAliases,
+  baseDocument,
   hideReach,
   onViewChange,
 }: Readonly<{
@@ -259,6 +261,8 @@ function ComposeEditorPanel({
   renderReleasesPanel?: (composeServiceName: string) => ReactNode
   /** Aliases from the layer above; `[]` on the base, the base's on an overlay. */
   extraPrincipalAliases?: readonly string[]
+  /** The Base the document is changes to; set only for an environment's compose. */
+  baseDocument?: unknown
   /** Leave out the helper port fields: an overlay lacks the Base's kinds and accounts. */
   hideReach?: boolean
   /**
@@ -287,6 +291,7 @@ function ComposeEditorPanel({
       {...(renderHostingEditor ? { renderHostingEditor } : {})}
       {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
       {...(extraPrincipalAliases === undefined ? {} : { extraPrincipalAliases })}
+      {...(baseDocument === undefined ? {} : { baseDocument })}
       {...(hideReach ? { hideReach } : {})}
     />
   )
@@ -515,17 +520,22 @@ function ServicesPanelBody({
     if (reconciled == null) return
     const viewForSave: ComposeEditorView = editView === 'visual' ? 'visual' : 'editor'
     const next = stripComposePlacement(setComposeEditorView(reconciled, viewForSave))
+    // Overview's own save path — the same rules the editor and the instance
+    // apply, so neither a second repository nor a dangling principal alias
+    // can slip in through this surface.
+    const lintOptions = {
+      ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
+      knownPrincipalAliases: new Set([
+        ...(baseSelected ? [] : composePrincipalAliases(project.options?.compose)),
+        ...composePrincipalAliases(next),
+      ]),
+    }
+    const nextYaml = composeDocumentToYaml(next)
+    // An environment's changes are checked against the Base they change.
     const blocking = blockingComposeLintIssues(
-      lintComposeYaml(composeDocumentToYaml(next), {
-        // Overview's own save path — the same rules the editor and the instance
-        // apply, so neither a second repository nor a dangling principal alias
-        // can slip in through this surface.
-        ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
-        knownPrincipalAliases: new Set([
-          ...(baseSelected ? [] : composePrincipalAliases(project.options?.compose)),
-          ...composePrincipalAliases(next),
-        ]),
-      })
+      baseSelected
+        ? lintComposeYaml(nextYaml, lintOptions)
+        : lintEnvironmentLayer(nextYaml, next, project.options?.compose ?? null, lintOptions)
     )
     if (blocking.length > 0) return
     if (baseSelected) {
@@ -651,6 +661,7 @@ function ServicesPanelBody({
         sessionKey={scopeKey}
         // An overlay answers to the project's root as well as its own.
         extraPrincipalAliases={composePrincipalAliases(project.options?.compose)}
+        baseDocument={project.options?.compose ?? null}
         hideReach
         documentFacts={documentFacts}
         onOpenScopeConfig={onOpenScopeConfig}

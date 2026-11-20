@@ -48,7 +48,10 @@ export type ComposeLintLevel = 'error' | 'warning'
  * style the note as what it is rather than parse the sentence.
  */
 export type ComposeLintCode =
-  'field_unsupported' | 'turbofabric_required' | 'field_requires_org_opt_in'
+  | 'field_unsupported'
+  | 'turbofabric_required'
+  | 'field_requires_org_opt_in'
+  | 'service_missing_image_or_build'
 
 export type ComposeLintIssue = {
   level: ComposeLintLevel
@@ -1208,6 +1211,7 @@ function lintService(
       message: `Service "${name}" must define "image" or "build"${
         options?.merged ? MERGED_MISSING_IMAGE_SUFFIX : ''
       }`,
+      code: 'service_missing_image_or_build',
       path,
       line: keyLine,
     })

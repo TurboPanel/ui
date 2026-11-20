@@ -1827,10 +1827,13 @@ function EnvironmentInfoPanel({
 
 function EnvironmentComposeOverlayPanel({
   environment,
+  baseCompose,
   onSaveCompose,
   savingCompose,
 }: Readonly<{
   environment: EnvironmentRecord
+  /** The project's Base, which these changes are checked against before saving. */
+  baseCompose: unknown
   onSaveCompose: (compose: ComposeDocument) => Promise<void>
   savingCompose: boolean
 }>) {
@@ -1843,6 +1846,7 @@ function EnvironmentComposeOverlayPanel({
     >
       <ComposeEditorSection
         document={environment.options?.compose}
+        baseDocument={baseCompose ?? null}
         onSave={onSaveCompose}
         saving={savingCompose}
         title="Environment compose overlay"
@@ -2268,6 +2272,7 @@ function EnvironmentLoadedPanels({
   projectId,
   orgId,
   mergedCompose,
+  baseCompose,
   serviceNames,
   allServers,
   sortedServers,
@@ -2305,6 +2310,8 @@ function EnvironmentLoadedPanels({
   projectId: string
   orgId: string
   mergedCompose: ComposeDocument
+  /** The project's Base (`null` when it has none). */
+  baseCompose: unknown
   serviceNames: string[]
   allServers: OrgServerRecord[]
   sortedServers: OrgServerRecord[]
@@ -2358,6 +2365,7 @@ function EnvironmentLoadedPanels({
       {showEnvironmentChrome && showComposeOverlay ? (
         <EnvironmentComposeOverlayPanel
           environment={environment}
+          baseCompose={baseCompose}
           onSaveCompose={onSaveCompose}
           savingCompose={savingCompose}
         />
@@ -3155,6 +3163,7 @@ export function EnvironmentDetailBody({
           projectId={projectId}
           orgId={orgId}
           mergedCompose={mergedCompose}
+          baseCompose={projectCompose}
           serviceNames={serviceNames}
           allServers={allServers}
           sortedServers={sortedServers}
