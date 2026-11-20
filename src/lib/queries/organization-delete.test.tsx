@@ -15,12 +15,15 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+let activeClient = createAppQueryClient()
+
+function Wrapper({ children }: Readonly<{ children: ReactNode }>) {
+  return <QueryClientProvider client={activeClient}>{children}</QueryClientProvider>
+}
+
 function setup() {
-  const client = createAppQueryClient()
-  const wrapper = ({ children }: Readonly<{ children: ReactNode }>) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  )
-  return { client, wrapper }
+  activeClient = createAppQueryClient()
+  return { client: activeClient, wrapper: Wrapper }
 }
 
 describe('organization delete and admin list hooks', () => {
