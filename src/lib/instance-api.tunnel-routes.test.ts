@@ -12,7 +12,7 @@ import {
   removeTunnelHostname,
   rotateTunnelRunToken,
   setServerTunnelCarrying,
-  setTunnelVerifyOrigin,
+  setTunnelHostnameReach,
   TunnelDnsRecordExistsError,
   tunnelDnsRefusal,
   TunnelDnsReplaceIncompleteError,
@@ -116,13 +116,13 @@ describe('instance-api tunnel wrappers', () => {
     expect(JSON.parse(String(init.body))).toEqual({ carry: false })
   })
 
-  it('turns the verified connection on with the wildcard choice, or off', async () => {
-    await setTunnelVerifyOrigin('org-1', 't1', { enabled: true, wildcard: true })
-    expect(lastCall().url).toMatch(/\/organizations\/org-1\/tunnels\/t1\/verify-origin$/)
-    expect(lastCall().init.method).toBe('PUT')
-    expect(JSON.parse(String(lastCall().init.body))).toEqual({ enabled: true, wildcard: true })
-    await setTunnelVerifyOrigin('org-1', 't1', { enabled: false })
-    expect(JSON.parse(String(lastCall().init.body))).toEqual({ enabled: false })
+  it('opens or closes a tunnel name for direct visitors', async () => {
+    await setTunnelHostnameReach('org-1', 't1', 'h1', false)
+    expect(lastCall().url).toMatch(/\/organizations\/org-1\/tunnels\/t1\/hostnames\/h1$/)
+    expect(lastCall().init.method).toBe('PATCH')
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ isLocalOnly: false })
+    await setTunnelHostnameReach('org-1', 't1', 'h1', true)
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ isLocalOnly: true })
   })
 
   it('lists the origin certificates TurboPanel issued for an account', async () => {

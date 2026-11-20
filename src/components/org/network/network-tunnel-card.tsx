@@ -38,7 +38,6 @@ import {
 import { NetworkTunnelHostnames } from './network-tunnel-hostnames'
 import { NetworkTunnelPlacement } from './network-tunnel-placement'
 import { NetworkTunnelRotate } from './network-tunnel-rotate'
-import { NetworkTunnelVerify } from './network-tunnel-verify'
 
 function PortalRow({ portal, serverName }: Readonly<{ portal: TunnelPortal; serverName: string }>) {
   const state = portalState(portal)
@@ -252,9 +251,12 @@ export function NetworkTunnelCard({
         </View>
       ) : null}
       <PlacementEditor orgId={orgId} tunnel={tunnel} servers={servers} datacenters={datacenters} />
-      <NetworkTunnelVerify orgId={orgId} tunnel={tunnel} />
       <NetworkTunnelRotate orgId={orgId} tunnel={tunnel} names={names} />
-      <NetworkTunnelHostnames orgId={orgId} tunnelId={tunnel.id} />
+      <NetworkTunnelHostnames
+        orgId={orgId}
+        tunnelId={tunnel.id}
+        verifiedNames={tunnel.verifiedNames}
+      />
       <ButtonRow>
         <TypeNameDeleteButton
           label="Remove Tunnel"

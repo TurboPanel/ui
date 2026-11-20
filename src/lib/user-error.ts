@@ -28,9 +28,16 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   managed_has_bindings: MANAGED_HAS_BINDINGS_COPY,
   principal_required_for_service_kind: 'Add a Hosting Account under Bindings first.',
   provider_origin_managed:
-    'A Tunnel manages this certificate. Turn off Verified Connection on the Tunnel and it is removed once no site uses it.',
+    'A Tunnel manages this certificate. Give the names that use it another certificate and deploy the site again, then it is removed once no site uses it.',
   tls_in_use:
-    'A site still uses this certificate. Turn off Verified Connection on its Tunnel and deploy the site again first.',
+    'A site still uses this certificate. Give its names another certificate and deploy the site again first.',
+  name_certificates_need_update:
+    'Names with different certificates need a server on a newer version. Update the servers that run this site, or give every name the same certificate.',
+  name_not_served: 'One of those names is not a name this site answers on. Save the names first.',
+  tls_order_open:
+    'A certificate is being ordered for this entry. Try again when the order has finished.',
+  tls_dns_records_outstanding:
+    'This certificate still has DNS records to remove. Try again in a few minutes.',
   tls_organization_ca:
     'The Organization CA can\u2019t be deleted. Replace it with Rotate on the Organization CA panel.',
   server_offline: 'The server is offline. Try again when it is back.',

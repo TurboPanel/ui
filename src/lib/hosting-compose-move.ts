@@ -48,7 +48,6 @@ export function withoutComposeHostingRoute(
 
 export type MovedRouteCertificate = Readonly<{
   tlsId: string | null
-  getLetsEncrypt: boolean
   /**
    * The certificate the file names when the library does not have it. The move
    * stops and says so rather than quietly falling back to self-signed.
@@ -59,20 +58,21 @@ export type MovedRouteCertificate = Readonly<{
 /**
  * The certificate a hostname keeps when it moves to the panel before any
  * deploy made its hosting: the same library certificate (named by id or name
- * in the file), or a Let's Encrypt request right after the save.
+ * in the file). A route that asked for automatic certificates gets the panel's
+ * default for each name when it is saved.
  */
 export function panelCertificateForMovedRoute(
   entry: Pick<ComposeHostingExtensionEntry, 'tls'>,
   library: readonly TlsRecord[]
 ): MovedRouteCertificate {
   const mode = entry.tls?.mode
-  if (mode === 'automatic') return { tlsId: null, getLetsEncrypt: true, missingRef: null }
+  if (mode === 'automatic') return { tlsId: null, missingRef: null }
   if (mode === 'certificate') {
     const ref = entry.tls?.certificateRef ?? ''
     const row = resolveCertificateRef(ref, library)
-    return { tlsId: row?.id ?? null, getLetsEncrypt: false, missingRef: row ? null : ref }
+    return { tlsId: row?.id ?? null, missingRef: row ? null : ref }
   }
-  return { tlsId: null, getLetsEncrypt: false, missingRef: null }
+  return { tlsId: null, missingRef: null }
 }
 
 /** The steps a move to the panel runs; each says why itself when it fails. */

@@ -86,14 +86,13 @@ describe('pinnedCertificateGap', () => {
 describe('stalePinReset', () => {
   const editor = (tlsId: string | null, hostnames: string) => ({ tlsId, hostnames, www: null })
 
-  it('lets a Let’s Encrypt pin go and asks for a new certificate when the name changed', () => {
+  it('lets a Let’s Encrypt pin go when the name changed', () => {
     expect(stalePinReset(rows, editor('le', 'shop.turbopanel.io'), 'turbopanel.io')).toEqual({
       tlsId: null,
-      getLetsEncrypt: true,
     })
   })
 
-  it('lets an uploaded pin go without asking for a certificate', () => {
+  it('lets an uploaded pin go', () => {
     expect(stalePinReset(rows, editor('up-bare', 'shop.turbopanel.io'), 'turbopanel.io')).toEqual({
       tlsId: null,
     })

@@ -41,7 +41,9 @@ import {
   withPlacementKind,
   type PlacementDraft,
   issuedCertificateNote,
-  verifyOriginSummary,
+  hostnameReach,
+  nameVerification,
+  reachChangeNote,
 } from './tunnel-runs'
 
 function server(
@@ -71,7 +73,7 @@ function tunnel(extra: Partial<TunnelRecord> = {}): TunnelRecord {
     carryingServerIds: [],
     warnings: [],
     doorwayCount: 0,
-    verifyOrigin: { enabled: false, active: false, pendingNames: [] },
+    verifiedNames: [],
     ...extra,
   }
 }
@@ -400,37 +402,44 @@ describe('hostnames', () => {
   })
 })
 
-describe('verifyOriginSummary', () => {
-  it('reads a missing field, as sent by an older panel, as off', () => {
-    expect(verifyOriginSummary(undefined).label).toBe('Off')
-    expect(verifyOriginSummary(null).label).toBe('Off')
+describe('nameVerification', () => {
+  it('reads a missing list, as sent by an older panel, as not verified', () => {
+    expect(nameVerification(undefined, 'a.example.com')).toMatchObject({
+      verified: false,
+      label: 'Not Verified',
+    })
   })
-  it('says Off, On and Waiting in plain words, and names what it waits for', () => {
-    expect(verifyOriginSummary({ enabled: false, active: false, pendingNames: [] }).label).toBe(
-      'Off'
-    )
-    expect(verifyOriginSummary({ enabled: true, active: true, pendingNames: [] })).toMatchObject({
-      label: 'On',
+  it('matches a verified name without regard to case or spaces', () => {
+    expect(nameVerification(['A.example.com'], ' a.EXAMPLE.com ')).toMatchObject({
+      verified: true,
+      label: 'Verified',
       tone: 'ok',
     })
-    const one = verifyOriginSummary({
-      enabled: true,
-      active: false,
-      pendingNames: ['a.example.com'],
+    expect(nameVerification(['a.example.com'], 'b.example.com').verified).toBe(false)
+  })
+})
+
+describe('hostnameReach', () => {
+  it('describes a tunnel-only name and offers to open it', () => {
+    expect(hostnameReach({ isLocalOnly: true })).toMatchObject({
+      label: 'Tunnel Only',
+      actionLabel: 'Also Reach Directly',
     })
-    expect(one.label).toBe('Waiting')
-    expect(one.line).toContain('a.example.com')
-    expect(one.line).toContain('it has a site and a certificate')
-    const two = verifyOriginSummary({
-      enabled: true,
-      active: false,
-      pendingNames: ['a.example.com', 'b.example.com'],
+  })
+  it('describes a name reached both ways and offers to close it', () => {
+    expect(hostnameReach({ isLocalOnly: false })).toMatchObject({
+      label: 'Tunnel and Direct',
+      actionLabel: 'Tunnel Only',
     })
-    expect(two.line).toContain('a.example.com, b.example.com')
-    expect(two.line).toContain('they have sites and certificates')
-    expect(verifyOriginSummary({ enabled: true, active: false, pendingNames: [] }).line).toContain(
-      'Add a hostname'
-    )
+  })
+})
+
+describe('reachChangeNote', () => {
+  it('names the moved certificates and the deploy, or just says saved', () => {
+    expect(reachChangeNote({ certificateChangedNames: [], needsDeploy: false })).toBe('Saved.')
+    const note = reachChangeNote({ certificateChangedNames: ['a.example.com'], needsDeploy: true })
+    expect(note).toContain('a.example.com moved to the default certificate')
+    expect(note).toContain('Deploy the site')
   })
 })
 

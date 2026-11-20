@@ -46,13 +46,29 @@ describe('apiErrorCopy', () => {
 
   it('explains a certificate a Tunnel manages or a site still uses', () => {
     expect(apiErrorCopy(new Error('x failed: HTTP 409: provider_origin_managed'))).toContain(
-      'Turn off Verified Connection'
+      'Give the names that use it another certificate'
     )
     expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_in_use'))).toContain(
       'A site still uses this certificate'
     )
     expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_organization_ca'))).toContain(
       'Replace it with Rotate on the Organization CA panel.'
+    )
+  })
+
+  it('explains a delete refused while an order is open or DNS records remain', () => {
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_order_open'))).toContain('being ordered')
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_dns_records_outstanding'))).toContain(
+      'DNS records to remove'
+    )
+  })
+
+  it('explains per-name certificate refusals', () => {
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: name_certificates_need_update'))).toContain(
+      'newer version'
+    )
+    expect(apiErrorCopy(new Error('x failed: HTTP 400: name_not_served'))).toContain(
+      'not a name this site answers on'
     )
   })
 

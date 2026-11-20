@@ -70,8 +70,8 @@ export function NetworkOriginCertificates({
     <View style={styles.root}>
       <Text style={panelStyles.detailTitle}>Origin Certificates</Text>
       <Text style={panelStyles.muted}>
-        Certificates Cloudflare issues for the hop between a tunnel and your web server. Turn on
-        Verified Connection on a tunnel to get one for exactly the names its sites serve.
+        Certificates Cloudflare issues for the hop between a tunnel and your web server. Pick the
+        origin certificate for a name on its site to get one for exactly the names that site serves.
       </Text>
       {issued.isLoading ? <LoadingState label="Loading certificates…" /> : null}
       {issued.isError ? (
