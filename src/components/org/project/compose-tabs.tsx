@@ -445,7 +445,7 @@ function EnvironmentOverviewCompose({
   )
 }
 
-function ServicesPanelBody({
+export function ServicesPanelBody({
   baseSelected,
   project,
   projectId,
@@ -468,6 +468,7 @@ function ServicesPanelBody({
   onOpenScopeConfig,
   onSaveProjectCompose,
   onSaveEnvironmentCompose,
+  onSaveBlocked,
 }: Readonly<{
   baseSelected: boolean
   project: ProjectRecord
@@ -494,6 +495,8 @@ function ServicesPanelBody({
   onOpenScopeConfig: () => void
   onSaveProjectCompose: (compose: ComposeDocument) => Promise<void>
   onSaveEnvironmentCompose: (compose: ComposeDocument) => Promise<void>
+  /** Told why a save was not sent, so the edits are never dropped silently. */
+  onSaveBlocked: (message: string) => void
 }>): ReactNode {
   const router = useRouter()
   const draftStore = useComposeDraftStore()
@@ -525,7 +528,9 @@ function ServicesPanelBody({
   async function saveOverviewDraft(): Promise<void> {
     // A draft made while the Base was editable is stale once the project follows
     // the repository again: the Base refuses it, so drop it instead of sending.
-    if (baseSelected && settingsSaveBlockedMessage(project)) {
+    const blocked = baseSelected ? settingsSaveBlockedMessage(project) : null
+    if (blocked) {
+      onSaveBlocked(`These edits were not saved. ${blocked}`)
       discardOverviewDraft()
       return
     }
@@ -918,6 +923,7 @@ export function ComposeServicesTab() {
             onOpenScopeConfig={openScopeConfig}
             onSaveProjectCompose={handleSaveProjectCompose}
             onSaveEnvironmentCompose={handleSaveEnvironmentCompose}
+            onSaveBlocked={setError}
           />
         )}
         {draft ? <DraftEnvironmentNotice /> : null}
