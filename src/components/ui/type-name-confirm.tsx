@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { Button, ButtonRow, type ButtonSize } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -44,6 +44,8 @@ export type TypeNameConfirmProps = Readonly<{
   undoable?: boolean
   pending: boolean
   error?: string | null
+  /** Under the error: a link or button that fixes it (shown only with an error). */
+  errorAction?: ReactNode
   onCancel: () => void
   onConfirm: (typedName: string) => void
 }>
@@ -62,6 +64,7 @@ export function TypeNameConfirmModal({
   undoable = false,
   pending,
   error,
+  errorAction,
   onCancel,
   onConfirm,
 }: TypeNameConfirmProps) {
@@ -106,6 +109,7 @@ export function TypeNameConfirmModal({
       />
       <Text style={[panelStyles.muted, styles.help]}>{typeNameHelp(undoable)}</Text>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {error ? errorAction : null}
     </ModalSheet>
   )
 }
@@ -123,14 +127,20 @@ export function TypeNameDeleteButton({
   busy = false,
   onConfirm,
   error,
+  onOpen,
+  errorAction,
   ...modal
 }: Readonly<
-  Omit<TypeNameConfirmProps, 'pending' | 'onCancel' | 'onConfirm'> & {
+  Omit<TypeNameConfirmProps, 'pending' | 'onCancel' | 'onConfirm' | 'errorAction'> & {
+    /** As on the dialog, or a function that is given the way to close it (a link that leaves the page). */
+    errorAction?: ReactNode | ((close: () => void) => ReactNode)
     /** The button that opens the dialog; defaults to the dialog title. */
     label?: string
     size?: ButtonSize
     disabled?: boolean
     busy?: boolean
+    /** Called each time the dialog opens, so a caller can clear an old error. */
+    onOpen?: () => void
     onConfirm: (typedName: string) => unknown
   }
 >) {
@@ -167,6 +177,7 @@ export function TypeNameDeleteButton({
         disabled={disabled || busy}
         onPress={() => {
           setFailure(null)
+          onOpen?.()
           setOpen(true)
         }}
       />
@@ -175,6 +186,9 @@ export function TypeNameDeleteButton({
           {...modal}
           pending={running || busy}
           error={error ?? failure}
+          errorAction={
+            typeof errorAction === 'function' ? errorAction(() => setOpen(false)) : errorAction
+          }
           onCancel={() => {
             setOpen(false)
             setFailure(null)

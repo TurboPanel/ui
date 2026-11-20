@@ -66,11 +66,7 @@ export function ManagedNavIcon({ size = 16, color }: NavIconProps) {
         stroke={color}
         strokeWidth={1.75}
       />
-      <Path
-        d="M4.5 12c0 1.657 3.358 3 7.5 3s7.5-1.343 7.5-3"
-        stroke={color}
-        strokeWidth={1.75}
-      />
+      <Path d="M4.5 12c0 1.657 3.358 3 7.5 3s7.5-1.343 7.5-3" stroke={color} strokeWidth={1.75} />
     </Svg>
   )
 }
@@ -91,12 +87,7 @@ export function ServersNavIcon({ size = 16, color }: NavIconProps) {
         strokeWidth={1.75}
         strokeLinejoin="round"
       />
-      <Path
-        d="M7.5 7.5h.008M7.5 16.5h.008"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-      />
+      <Path d="M7.5 7.5h.008M7.5 16.5h.008" stroke={color} strokeWidth={2} strokeLinecap="round" />
     </Svg>
   )
 }
@@ -112,12 +103,7 @@ export function AccessNavIcon({ size = 16, color }: NavIconProps) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <Path
-        d="M16.5 9.75h.008"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-      />
+      <Path d="M16.5 9.75h.008" stroke={color} strokeWidth={2} strokeLinecap="round" />
     </Svg>
   )
 }
@@ -163,12 +149,7 @@ export function SearchIcon({ size = 16, color }: NavIconProps) {
 export function PlusIcon({ size = 16, color }: NavIconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M12 5v14M5 12h14"
-        stroke={color}
-        strokeWidth={1.75}
-        strokeLinecap="round"
-      />
+      <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth={1.75} strokeLinecap="round" />
     </Svg>
   )
 }
@@ -380,12 +361,7 @@ export function NotificationsBellIcon({ size = 16, color }: NavIconProps) {
 export function MetricsNavIcon({ size = 16, color }: NavIconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M4 4v15a1 1 0 0 0 1 1h15"
-        stroke={color}
-        strokeWidth={1.75}
-        strokeLinecap="round"
-      />
+      <Path d="M4 4v15a1 1 0 0 0 1 1h15" stroke={color} strokeWidth={1.75} strokeLinecap="round" />
       <Path
         d="m7.5 14.5 3.5-4 3 2.5 5-6"
         stroke={color}
@@ -445,6 +421,7 @@ const ADMIN_AREA_ICONS = {
   'auth-providers': AccessNavIcon,
   git: GitNavIcon,
   signup: SignupNavIcon,
+  organizations: OrganizationIcon,
   secrets: SecretsNavIcon,
   metrics: MetricsNavIcon,
   // The tier catalogue is the billing catalogue seen from the instance side.

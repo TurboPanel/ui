@@ -61,6 +61,17 @@ export function CreateOrganizationModal({
     onClose()
   }
 
+  // Enter in the name field does what Create does, once, and only with a name.
+  const submit = () => {
+    if (!canCreate || submitting) {
+      return
+    }
+    handleCreate().catch(() => {
+      setSubmitting(false)
+      setError('Could not create organization.')
+    })
+  }
+
   return (
     <ModalSheet
       visible={visible}
@@ -77,12 +88,7 @@ export function CreateOrganizationModal({
             busy={submitting}
             busyLabel="Creating…"
             disabled={!canCreate}
-            onPress={() => {
-              handleCreate().catch(() => {
-                setSubmitting(false)
-                setError('Could not create organization.')
-              })
-            }}
+            onPress={submit}
           />
         </ButtonRow>
       }
@@ -102,6 +108,8 @@ export function CreateOrganizationModal({
         editable={!submitting}
         maxLength={DISPLAY_NAME_MAX_LENGTH}
         accessibilityLabel="Organization name"
+        returnKeyType="done"
+        onSubmitEditing={submit}
       />
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
     </ModalSheet>
