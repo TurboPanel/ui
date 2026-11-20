@@ -150,13 +150,31 @@ describe('a refused Let’s Encrypt request after saving', () => {
   })
 })
 
-describe('the panel’s own Use Let’s Encrypt on a screen that keeps refusals', () => {
+describe('a compose domain’s Try again on a screen that keeps refusals', () => {
+  beforeEach(() => {
+    state.certificate = cert({
+      state: 'renewal_failed',
+      source: 'lets_encrypt',
+      lastError: 'DNS problem',
+      letsEncryptAvailable: false,
+    })
+    state.metadata = { composeOwned: true, composeServiceName: 'web', composeTlsMode: 'automatic' }
+  })
+
+  function renderOwned(actions: HostingCertificateActions) {
+    return render(
+      <HostingCertificateActionsContext.Provider value={actions}>
+        <HostingCertificatePanel orgId="o1" hostingId="h1" composeOwned disabled={false} />
+      </HostingCertificateActionsContext.Provider>
+    )
+  }
+
   it('clears the refusal from the last save once its own request goes through', async () => {
     state.run.mockResolvedValue({ ok: true, value: {} })
     const onRefusal = vi.fn()
-    renderPanel({ refusals: { h1: OFF }, onRefusal })
+    renderOwned({ refusals: { h1: OFF }, onRefusal })
     expect(screen.getByText(OFF.message)).toBeTruthy()
-    fireEvent.click(screen.getByLabelText('Use Let’s Encrypt'))
+    fireEvent.click(screen.getByLabelText('Try again'))
     await waitFor(() => expect(onRefusal).toHaveBeenCalledWith('h1', null))
   })
 
@@ -164,8 +182,8 @@ describe('the panel’s own Use Let’s Encrypt on a screen that keeps refusals'
     const off = new Error('/hostings/h1/use-letsencrypt failed: HTTP 403: lets_encrypt_not_enabled')
     state.run.mockResolvedValue({ ok: false, error: off.message, cause: off })
     const onRefusal = vi.fn()
-    renderPanel({ refusals: {}, onRefusal })
-    fireEvent.click(screen.getByLabelText('Use Let’s Encrypt'))
+    renderOwned({ refusals: {}, onRefusal })
+    fireEvent.click(screen.getByLabelText('Try again'))
     await waitFor(() => expect(onRefusal).toHaveBeenCalledWith('h1', OFF))
   })
 
@@ -173,8 +191,17 @@ describe('the panel’s own Use Let’s Encrypt on a screen that keeps refusals'
     state.requestError = new Error(
       '/hostings/h1/use-letsencrypt failed: HTTP 400: hosting_not_http'
     )
-    renderPanel({ refusals: {}, onRefusal: vi.fn() })
+    renderOwned({ refusals: {}, onRefusal: vi.fn() })
     expect(screen.queryByText(/web domains/)).toBeNull()
+  })
+})
+
+describe('a panel domain', () => {
+  it('has no whole-site Let’s Encrypt request, which would overwrite the per-name picks', () => {
+    state.certificate = cert({ letsEncryptAvailable: true })
+    renderPanel()
+    expect(screen.queryByLabelText('Use Let’s Encrypt')).toBeNull()
+    expect(screen.queryByLabelText('Try again')).toBeNull()
   })
 })
 

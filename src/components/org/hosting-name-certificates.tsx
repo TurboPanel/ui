@@ -20,7 +20,10 @@ import {
   otherNamesCoveredBy,
   retryWaitMessage,
   sharedOptions,
+  sameChoice,
+  savedChoice,
   sharedValue,
+  tunnelPathFor,
   withLibraryChoice,
   withNameChoice,
   withSharedChoice,
@@ -73,7 +76,7 @@ function NameRow({
   const retry = useRetryDnsCertificate(orgId)
   const [retryNote, setRetryNote] = useState<string | null>(null)
   const choice = currentChoice(name, edits)
-  const changed = choice.certificate !== name.certificate || choice.tlsId !== name.tlsId
+  const changed = !sameChoice(choice, savedChoice(name))
   // A changed choice has no state of its own until it is saved.
   const state = nameState(name, library, hosting.certificate)
 
@@ -118,6 +121,7 @@ function NameRow({
         <ButtonRow>
           <Button
             label="Try Again"
+            accessibilityLabel={`Try again for ${name.hostname}`}
             size="sm"
             variant="secondary"
             busy={retry.isPending}
@@ -209,9 +213,7 @@ export function HostingNameCertificates({
           key={name.hostname}
           orgId={orgId}
           name={name}
-          tunnel={hosting.tunnels?.find(
-            (path) => path.hostname.toLowerCase() === name.hostname.toLowerCase()
-          )}
+          tunnel={tunnelPathFor(name.hostname, hosting.tunnels)}
           hosting={hosting}
           library={library}
           edits={edits}

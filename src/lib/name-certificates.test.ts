@@ -53,13 +53,14 @@ function row(
   id: string,
   acme: NonNullable<TlsRecord['metadata']['acme']> | undefined,
   status: string,
-  dnsNames = ['a.example.net']
+  dnsNames = ['a.example.net'],
+  source = 'lets_encrypt'
 ) {
   return {
     id,
     organizationId: 'o1',
     name: null,
-    source: 'upload',
+    source,
     metadata: { dnsNames, status, acme },
     createdAt: '',
     updatedAt: '',
@@ -82,7 +83,7 @@ describe('picker values', () => {
   })
 
   it('names an option by the panel label, the library name, then the kind', () => {
-    const library = [row('lib-1', undefined, 'ready')]
+    const library = [row('lib-1', undefined, 'ready', ['a.example.net'], 'upload')]
     expect(optionLabel(opt('self_signed', { label: 'Test' }), library)).toBe('Test')
     expect(optionLabel(opt('library', { tlsId: 'lib-1' }), library)).toBe(
       'Certificate From The Library: a.example.net'
@@ -96,7 +97,7 @@ describe('picker values', () => {
   it('finds the option a choice stands on', () => {
     const n = name('a.example.net')
     expect(optionOf(n, { certificate: 'library', tlsId: 'lib-1' })?.tlsId).toBe('lib-1')
-    expect(optionOf(n, { certificate: 'letsencrypt_http', tlsId: 'x' })?.certificate).toBe(
+    expect(optionOf(n, { certificate: 'letsencrypt_http', tlsId: null })?.certificate).toBe(
       'letsencrypt_http'
     )
     expect(optionOf(n, { certificate: 'library', tlsId: 'other' })).toBeUndefined()
@@ -179,7 +180,7 @@ describe('same for all names', () => {
 })
 
 describe('otherNamesCoveredBy', () => {
-  const library = [row('lib-1', undefined, 'ready', ['*.example.net'])]
+  const library = [row('lib-1', undefined, 'ready', ['*.example.net'], 'upload')]
   const names = [name('a.example.net'), name('b.example.net'), name('c.other.test')]
 
   it('offers the names the certificate lists and can serve', () => {
@@ -224,7 +225,12 @@ describe('nameState', () => {
     const state = pinned([
       row(
         't1',
-        { stage: 'backoff', lastError: 'DNS timed out.', nextAttemptAt: NOW, managedBy: 'panel' },
+        {
+          stage: 'backoff',
+          lastError: 'DNS timed out.',
+          nextAttemptAt: NOW,
+          challengeType: 'dns-01',
+        },
         'failed'
       ),
     ])
@@ -236,16 +242,23 @@ describe('nameState', () => {
     expect(state.retryTlsId).toBe('t1')
   })
 
+  it('does not offer a retry for an uploaded row, even one the panel orders', () => {
+    const state = pinned([
+      row(
+        't9',
+        { stage: 'backoff', lastError: 'x', managedBy: 'panel' },
+        'failed',
+        undefined,
+        'upload'
+      ),
+    ])
+    expect(state.canRetry).toBe(false)
+  })
+
   it('does not offer a retry for an HTTP order', () => {
     const state = nameState(
       { certificate: 'letsencrypt_http', tlsId: 't2' },
-      [
-        row(
-          't2',
-          { stage: 'backoff', lastError: 'x', managedBy: 'caddy', challengeType: 'http-01' },
-          'failed'
-        ),
-      ],
+      [row('t2', { stage: 'backoff', lastError: 'x', challengeType: 'http-01' }, 'failed')],
       null
     )
     expect(state.canRetry).toBe(false)
@@ -266,7 +279,7 @@ describe('nameState', () => {
   it('reads ready and expired rows', () => {
     expect(pinned([row('t6', { notAfter: NOW }, 'automatic')]).label).toBe('Ready')
     expect(pinned([row('t7', undefined, 'ready')]).label).toBe('Ready')
-    const expired = pinned([row('t8', { lastError: 'Gone.', managedBy: 'panel' }, 'expired')])
+    const expired = pinned([row('t8', { lastError: 'Gone.', challengeType: 'dns-01' }, 'expired')])
     expect(expired.label).toBe('Expired')
     expect(expired.canRetry).toBe(true)
   })
@@ -303,5 +316,70 @@ describe('retryWaitMessage', () => {
       'The certificate authority asked for a wait. Try again later.'
     )
     expect(retryWaitMessage(new Error('boom'))).toBeNull()
+  })
+})
+
+describe('names that already have an issued certificate', () => {
+  const origin = name('a.example.net', 'cloudflare_origin', 'origin-1', [
+    opt('self_signed'),
+    opt('cloudflare_origin'),
+  ])
+  const letsEncrypt = name('b.example.net', 'letsencrypt_http', 'le-1')
+  const names = [origin, letsEncrypt]
+
+  it('reads a pinned origin or Let’s Encrypt name as that kind, not as an unknown value', () => {
+    expect(optionValue(opt('cloudflare_origin', { tlsId: 'origin-1' }))).toBe('cloudflare_origin')
+    expect(optionValue(opt('letsencrypt_http', { tlsId: 'le-1' }))).toBe('letsencrypt_http')
+    expect(choiceFromValue('letsencrypt_http:le-1')).toEqual({
+      certificate: 'letsencrypt_http',
+      tlsId: null,
+    })
+    expect(currentChoice(origin, {})).toEqual({ certificate: 'cloudflare_origin', tlsId: null })
+    expect(optionOf(letsEncrypt, currentChoice(letsEncrypt, {}))?.certificate).toBe(
+      'letsencrypt_http'
+    )
+  })
+
+  it('sends nothing when the same kind is picked again, so the issued certificate stays', () => {
+    const edits = withNameChoice(names, {}, 'b.example.net', {
+      certificate: 'letsencrypt_http',
+      tlsId: null,
+    })
+    expect(edits).toEqual({})
+    expect(nameChoicesToSend(names, edits)).toBeNull()
+  })
+
+  it('sends no tlsId when the kind changes, and the library pin when it is chosen', () => {
+    const toSelf = withNameChoice(names, {}, 'a.example.net', {
+      certificate: 'self_signed',
+      tlsId: null,
+    })
+    expect(nameChoicesToSend(names, toSelf)).toEqual([
+      { hostname: 'a.example.net', certificate: 'self_signed' },
+    ])
+    const toLibrary = withNameChoice(names, {}, 'b.example.net', {
+      certificate: 'library',
+      tlsId: 'lib-1',
+    })
+    expect(nameChoicesToSend(names, toLibrary)).toEqual([
+      { hostname: 'b.example.net', certificate: 'library', tlsId: 'lib-1' },
+    ])
+  })
+
+  it('counts two names of the same kind as the same, and different kinds as mixed', () => {
+    const twoLe = [letsEncrypt, name('c.example.net', 'letsencrypt_http', 'le-2')]
+    expect(hasMixedChoices(twoLe, {})).toBe(false)
+    expect(sharedValue(twoLe, {})).toBe('letsencrypt_http')
+    expect(hasMixedChoices(names, {})).toBe(true)
+    expect(sharedValue(names, {})).toBe(MIXED_VALUE)
+  })
+
+  it('treats the shared Let’s Encrypt pick as unchanged for a name that already has it', () => {
+    const edits = withSharedChoice(
+      [letsEncrypt, name('c.example.net', 'self_signed')],
+      {},
+      { certificate: 'letsencrypt_http', tlsId: null }
+    )
+    expect(Object.keys(edits)).toEqual(['c.example.net'])
   })
 })

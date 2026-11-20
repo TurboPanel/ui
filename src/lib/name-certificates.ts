@@ -29,7 +29,11 @@ export const CERTIFICATE_LABELS: Readonly<Record<HostnameCertificate, string>> =
 /** The picker value that stands for several names with different certificates. */
 export const MIXED_VALUE = 'mixed'
 
-/** One name's picked certificate. `tlsId` is set for a library pin and for a pair that already exists. */
+/**
+ * One name's picked certificate. `tlsId` is set only for a library pin: the
+ * issued certificate of an origin or Let's Encrypt name is not a choice, and the
+ * panel keeps it as long as the name keeps its kind.
+ */
 export type NameChoice = Readonly<{ certificate: HostnameCertificate; tlsId: string | null }>
 
 /** The names the person changed, keyed by lower-case hostname. Names left out keep what the panel has. */
@@ -37,16 +41,25 @@ export type NameChoiceEdits = Readonly<Record<string, NameChoice>>
 
 const key = (hostname: string): string => hostname.trim().toLowerCase()
 
-/** The value a picker option carries, so a certificate and the library entry it pins stay together. */
+/** The pin a choice carries: only a library certificate has one. */
+function pinOf(certificate: HostnameCertificate, tlsId: string | null | undefined): string | null {
+  return certificate === 'library' ? (tlsId ?? null) : null
+}
+
+/** The value a picker option carries, so a library certificate and the entry it pins stay together. */
 export function optionValue(option: Pick<HostingNameCertificateOption, 'certificate' | 'tlsId'>) {
-  return option.tlsId ? `${option.certificate}:${option.tlsId}` : option.certificate
+  const pin = pinOf(option.certificate, option.tlsId)
+  return pin ? `${option.certificate}:${pin}` : option.certificate
 }
 
 /** The choice a picker value stands for. */
 export function choiceFromValue(value: string): NameChoice | null {
   const [certificate, tlsId] = value.split(':')
   if (!certificate || !(certificate in CERTIFICATE_LABELS)) return null
-  return { certificate: certificate as HostnameCertificate, tlsId: tlsId || null }
+  return {
+    certificate: certificate as HostnameCertificate,
+    tlsId: pinOf(certificate as HostnameCertificate, tlsId),
+  }
 }
 
 /** What an option is called: the panel's label, the library certificate's name, or the kind. */
@@ -62,9 +75,20 @@ export function optionLabel(
     : CERTIFICATE_LABELS[option.certificate]
 }
 
+/** What the panel has saved for a name, as a choice. */
+export function savedChoice(
+  name: Pick<HostingNameCertificate, 'certificate' | 'tlsId'>
+): NameChoice {
+  return { certificate: name.certificate, tlsId: pinOf(name.certificate, name.tlsId) }
+}
+
+export function sameChoice(a: NameChoice, b: NameChoice): boolean {
+  return a.certificate === b.certificate && a.tlsId === b.tlsId
+}
+
 /** What a name has now: the person's edit, or what the panel saved. */
 export function currentChoice(name: HostingNameCertificate, edits: NameChoiceEdits): NameChoice {
-  return edits[key(name.hostname)] ?? { certificate: name.certificate, tlsId: name.tlsId }
+  return edits[key(name.hostname)] ?? savedChoice(name)
 }
 
 /** The option a choice stands on, when the panel offers it. */
@@ -72,14 +96,10 @@ export function optionOf(
   name: HostingNameCertificate,
   choice: NameChoice
 ): HostingNameCertificateOption | undefined {
-  return (
-    name.certificateOptions.options.find(
-      (option) =>
-        option.certificate === choice.certificate && (option.tlsId ?? null) === choice.tlsId
-    ) ??
-    name.certificateOptions.options.find(
-      (option) => option.certificate === choice.certificate && choice.certificate !== 'library'
-    )
+  return name.certificateOptions.options.find(
+    (option) =>
+      option.certificate === choice.certificate &&
+      pinOf(option.certificate, option.tlsId) === choice.tlsId
   )
 }
 
@@ -92,7 +112,7 @@ export function withNameChoice(
 ): NameChoiceEdits {
   const next: Record<string, NameChoice> = { ...edits }
   const saved = names.find((name) => key(name.hostname) === key(hostname))
-  if (saved?.certificate === choice.certificate && saved?.tlsId === choice.tlsId) {
+  if (saved && sameChoice(savedChoice(saved), choice)) {
     delete next[key(hostname)]
   } else {
     next[key(hostname)] = choice
@@ -124,7 +144,7 @@ export function sharedOptions(
       name.certificateOptions.options.some(
         (other) =>
           other.certificate === option.certificate &&
-          (other.tlsId ?? null) === (option.tlsId ?? null)
+          pinOf(other.certificate, other.tlsId) === pinOf(option.certificate, option.tlsId)
       )
     )
   )
@@ -188,11 +208,13 @@ export function nameChoicesToSend(
   for (const name of names) {
     const edit = edits[key(name.hostname)]
     if (!edit) continue
-    if (edit.certificate === name.certificate && edit.tlsId === name.tlsId) continue
+    if (sameChoice(edit, savedChoice(name))) continue
+    // Only a library certificate sends a tlsId. For the other kinds the panel
+    // issues, or keeps, the certificate that kind needs.
     send.push({
       hostname: name.hostname,
       certificate: edit.certificate,
-      ...(edit.certificate !== 'self_signed' && edit.tlsId ? { tlsId: edit.tlsId } : {}),
+      ...(edit.certificate === 'library' && edit.tlsId ? { tlsId: edit.tlsId } : {}),
     })
   }
   return send.length > 0 ? send : null
@@ -234,7 +256,8 @@ function when(iso: string | null | undefined, locale?: string): string | null {
 
 function stateOfRow(row: TlsRecord, locale?: string): NameState {
   const { acme, status } = row.metadata
-  const retryable = acme?.managedBy === 'panel' || acme?.challengeType === 'dns-01'
+  // Only a Let's Encrypt order by DNS challenge has a retry route.
+  const retryable = row.source === 'lets_encrypt' && acme?.challengeType === 'dns-01'
   const next = when(acme?.nextAttemptAt, locale)
   if (acme?.stage === 'backoff' || status === 'failed') {
     return {
@@ -383,4 +406,18 @@ export function retryWaitMessage(error: unknown, locale?: string): string | null
   return at
     ? `The certificate authority asked for a wait. Try again after ${at}.`
     : 'The certificate authority asked for a wait. Try again later.'
+}
+
+/**
+ * How visitors reach a name: the tunnel path it has itself, or else the one of
+ * its www partner (the way the panel gives a www name what its partner has).
+ */
+export function tunnelPathFor<T extends Readonly<{ hostname: string }>>(
+  hostname: string,
+  paths: readonly T[] | undefined
+): T | undefined {
+  const lower = key(hostname)
+  const partner = lower.startsWith('www.') ? lower.slice(4) : `www.${lower}`
+  const named = (wanted: string) => paths?.find((path) => key(path.hostname) === wanted)
+  return named(lower) ?? named(partner)
 }

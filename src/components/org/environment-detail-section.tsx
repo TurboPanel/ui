@@ -103,7 +103,7 @@ import {
   type PinnedCertificateGap,
   coveringCertificates,
   pinnedCertificateGap,
-  stalePinReset,
+  editorForSave,
 } from '@/lib/hosting-tls-picker'
 import {
   composeHostingEntryFromEditorFields,
@@ -151,7 +151,7 @@ import {
   SERVICE_NOT_SAVED_MESSAGE,
   SHARED_FILE_HOSTNAME_MESSAGE,
 } from '@/lib/hosting-plain-words'
-import { TUNNEL_ONLY_BIND_TEXT, TUNNEL_ONLY_SUMMARY, type TunnelOnly } from '@/lib/hosting-tunnel'
+import { TUNNEL_ONLY_BIND_TEXT, TUNNEL_ONLY_LABEL, type TunnelOnly } from '@/lib/hosting-tunnel'
 import { useHostingTunnelOnly } from '@/lib/queries/tunnel-only'
 import {
   composeRowsAwaitingRemoval,
@@ -895,7 +895,7 @@ function hostingRowSummary(
     return [
       editor.hostnames.trim() || 'no hostnames',
       editor.targetPort.trim() ? `port ${editor.targetPort.trim()}` : null,
-      TUNNEL_ONLY_SUMMARY,
+      TUNNEL_ONLY_LABEL,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -2971,8 +2971,10 @@ export function EnvironmentDetailBody({
     onError: (message: string) => void = (message) =>
       setRowError(row.editorKey, { field: 'save', message })
   ): Promise<boolean> => {
-    // New names must not keep the old name's certificate pinned.
-    const editor = { ...typed, ...stalePinReset(tlsLibrary, typed, row.seed.hostnames) }
+    // A site that is not saved yet must not keep an old name's certificate
+    // pinned. A saved site is left alone: the panel gives a new name its default
+    // and keeps what every other name has.
+    const editor = editorForSave(tlsLibrary, typed, row.seed.hostnames, Boolean(row.hostingId))
     const service = resolvedServices.find(
       (item) => item.composeServiceName === row.composeServiceName
     )

@@ -124,3 +124,16 @@ export function stalePinReset<T extends PickerCertificate>(
   if (gap === null) return null
   return { tlsId: null }
 }
+
+/**
+ * The editor a save sends. A site that is not saved yet lets go of a pin that no
+ * longer covers its names. A saved site is left alone: sending `tlsId: null`
+ * would set every name to self-signed, so the panel gives a new name its
+ * default and keeps what every other name has.
+ */
+export function editorForSave<
+  T extends Readonly<{ tlsId: string | null; hostnames: string; www: HostingWwwMode | null }>,
+>(rows: readonly PickerCertificate[], editor: T, savedHostnamesText: string, isSaved: boolean): T {
+  if (isSaved) return editor
+  return { ...editor, ...stalePinReset(rows, editor, savedHostnamesText) }
+}

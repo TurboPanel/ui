@@ -4273,7 +4273,7 @@ export type TlsMetadata = {
     /** Expiry of the certificate Caddy is serving, as the daemon's probe read it (ISO 8601). */
     notAfter?: string
     /** `panel`: TurboPanel orders it itself with a DNS challenge (the row's source stays `upload`). */
-    managedBy?: 'caddy' | 'panel'
+    managedBy?: 'caddy' | 'panel' | 'server'
     /** Where an order stands: `waiting` for something it needs, an ordering step, or `backoff` after a failure. */
     stage?: string
     /** What the order waits for, in plain words. */

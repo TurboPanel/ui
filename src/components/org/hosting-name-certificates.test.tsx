@@ -17,8 +17,12 @@ const state = vi.hoisted(() => ({
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('@/components/ui', () => ({
   Badge: ({ label }: Props) => <span>{label as string}</span>,
-  Button: ({ label, onPress }: Props) => (
-    <button type="button" onClick={onPress as () => void}>
+  Button: ({ label, onPress, accessibilityLabel }: Props) => (
+    <button
+      type="button"
+      aria-label={(accessibilityLabel as string | undefined) ?? (label as string)}
+      onClick={onPress as () => void}
+    >
       {label as string}
     </button>
   ),
@@ -89,11 +93,16 @@ const library = [
     id: 'dns-1',
     organizationId: 'o1',
     name: null,
-    source: 'upload',
+    source: 'lets_encrypt',
     metadata: {
       dnsNames: ['b.example.net'],
       status: 'failed',
-      acme: { stage: 'backoff', lastError: 'DNS timed out.', managedBy: 'panel' },
+      acme: {
+        stage: 'backoff',
+        lastError: 'DNS timed out.',
+        challengeType: 'dns-01',
+        managedBy: 'server',
+      },
     },
     createdAt: '',
     updatedAt: '',
@@ -207,7 +216,7 @@ describe('HostingNameCertificates', () => {
     expect(screen.getByText('Failed')).toBeTruthy()
     expect(screen.getByText(/DNS timed out\./)).toBeTruthy()
     await act(async () => {
-      fireEvent.click(screen.getByText('Try Again'))
+      fireEvent.click(screen.getByLabelText('Try again for b.example.net'))
     })
     expect(state.retry).toHaveBeenCalledWith('dns-1')
   })
@@ -219,18 +228,37 @@ describe('HostingNameCertificates', () => {
     })
     draw()
     await act(async () => {
-      fireEvent.click(screen.getByText('Try Again'))
+      fireEvent.click(screen.getByLabelText('Try again for b.example.net'))
     })
     expect(screen.getByRole('alert').textContent).toContain('asked for a wait')
   })
 
   it('shows another retry failure in plain words', async () => {
-    state.retry.mockResolvedValueOnce({ ok: false, cause: new Error('boom') })
+    state.retry.mockResolvedValueOnce({ ok: false, cause: new Error('') })
     draw()
     await act(async () => {
-      fireEvent.click(screen.getByText('Try Again'))
+      fireEvent.click(screen.getByLabelText('Try again for b.example.net'))
     })
-    expect(screen.getByRole('alert').textContent).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toBe('Could not try again.')
+  })
+
+  it('does not offer Try Again for an order with no retry route', () => {
+    state.hosting = {
+      certificate: { state: 'secure' },
+      names: [nameOf('b.example.net', 'letsencrypt_http', 'http-1')],
+    }
+    draw()
+    expect(screen.queryByLabelText('Try again for b.example.net')).toBeNull()
+  })
+
+  it('shows a www name with the reach of its partner name', () => {
+    state.hosting = {
+      certificate: { state: 'secure' },
+      tunnels: [{ hostname: 'example.net', tunnelOnly: true, originVerified: true }],
+      names: [nameOf('example.net'), nameOf('www.example.net')],
+    }
+    draw()
+    expect(screen.getAllByText('Tunnel Only')).toHaveLength(2)
   })
 
   it('disables the pickers while locked', () => {

@@ -137,12 +137,12 @@ describe('HostingPanelRow for a tunnel-only name', () => {
     tunnel.only = null
   })
 
-  it('summarises a tunnel-only name with its internal certificate', () => {
+  it('summarises a tunnel-only name without claiming a certificate', () => {
     tunnel.only = { tunnelNames: ['edge'] }
     drawRow({
       editor: { ...readHostingEditor([]), hostnames: 'testing.example' },
     })
-    expect(screen.getByText(/testing\.example · Tunnel only · Internal certificate/)).toBeTruthy()
+    expect(screen.getByText(/testing\.example · Tunnel only/)).toBeTruthy()
     expect(screen.queryByText('Public IP')).toBeNull()
   })
 
