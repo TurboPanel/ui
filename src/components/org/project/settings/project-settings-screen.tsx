@@ -11,6 +11,7 @@ import {
 import { LoadingState } from '@/components/ui'
 import { projectRepositoriesHref } from '@/lib/org-navigation'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
+import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
 import {
   environmentPageTabHref,
   isManagedProject,
@@ -192,6 +193,11 @@ export function ProjectSettingsScreen() {
         keepOriginalNames={(project.options?.containerNaming ?? 'uuid') === 'custom'}
         savingNames={busy === 'names'}
         onKeepOriginalNames={(keep) => {
+          const blocked = settingsSaveBlockedMessage(project)
+          if (blocked) {
+            setError(blocked)
+            return
+          }
           void run('names', {
             options: buildProjectOptionsPatch(project, {
               containerNaming: keep ? 'custom' : 'uuid',

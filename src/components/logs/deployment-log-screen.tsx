@@ -16,6 +16,7 @@ import {
   type StatusTone,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { baseUsedLine } from '@/lib/v4/compose-source'
 import { commandErrorDetail, commandErrorLine } from '@/lib/command-error'
 import { liveProgressHeadline, stepsOf } from '@/lib/deploy-progress'
 import {
@@ -171,6 +172,9 @@ function DeploymentNotes({
       {tooLate ? <Text style={panelStyles.muted}>{tooLate}</Text> : null}
       {stalledHint ? <Text style={panelStyles.muted}>{stalledHint}</Text> : null}
       {strategy ? <Text style={panelStyles.muted}>{`${strategy} deploy`}</Text> : null}
+      {row.composeBase ? (
+        <Text style={panelStyles.muted}>{baseUsedLine(row.composeBase)}</Text>
+      ) : null}
     </>
   )
 }

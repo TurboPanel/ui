@@ -497,7 +497,7 @@ export function ServiceReleasesPanel({
       ) : null}
       {rollback.actionError ? (
         <Text style={panelStyles.error} accessibilityRole="alert">
-          {rollback.actionError}
+          {userErrorMessage(rollback.error, rollback.actionError)}
         </Text>
       ) : null}
       {!releasesQuery.isLoading && releases.length === 0 ? (

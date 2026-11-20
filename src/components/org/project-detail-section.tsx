@@ -64,6 +64,7 @@ import { useServicesByEnvironments } from '@/lib/queries/services'
 import { useWorkspaces } from '@/lib/queries/workspaces'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
+import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
 import { isManagedProject, isTemplateProject, projectDisplayType } from '@/lib/project-navigation'
 import { DISPLAY_NAME_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { useCan } from '@/lib/query-client'
@@ -1006,6 +1007,11 @@ export function ProjectDetailSection({
     const currentMode = project?.options?.containerNaming ?? 'uuid'
     if (currentMode === containerNaming || !project) return
 
+    const blocked = settingsSaveBlockedMessage(project)
+    if (blocked) {
+      setError(blocked)
+      return
+    }
     setError(null)
     const options = buildProjectOptionsPatch(project, { containerNaming })
     const result = await updateProjectMutation.run({ options, target: 'base' })

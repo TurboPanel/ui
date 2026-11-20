@@ -16,6 +16,8 @@ import {
   useProjectRepositoryId,
   type ProjectDraft,
 } from '@/components/org/project/project-context'
+import { ComposeSourceControl } from '@/components/org/project/compose-source-panel'
+import { isFollowingRepository } from '@/lib/v4/compose-source'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import { ComposeInheritedPanel } from '@/components/org/project/compose-inherited-panel'
 import {
@@ -108,7 +110,7 @@ import { useStorage } from '@/lib/queries/storage'
 import { isActiveContainerStatus, serviceStatusTone } from '@/lib/container-status'
 import { countDistinctProjectServers, resolveEffectiveServerId } from '@/lib/project-options'
 import { spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 /** Stable empty list so the facts memo does not thrash on every render. */
 const EMPTY_STORAGE: readonly StorageRecord[] = []
@@ -449,6 +451,7 @@ function ServicesPanelBody({
   projectId,
   orgId,
   selectedEnvironment,
+  environments,
   environmentsCount,
   projectServerCount,
   storageCount,
@@ -471,6 +474,7 @@ function ServicesPanelBody({
   projectId: string
   orgId: string
   selectedEnvironment: EnvironmentRecord | null
+  environments: readonly EnvironmentRecord[]
   /** Project's environment count — Overview Base inventory only. */
   environmentsCount: number
   /** Distinct servers placing this project's environments — Overview Base inventory only. */
@@ -569,28 +573,51 @@ function ServicesPanelBody({
   }
 
   if (baseSelected) {
+    if (editing && !draft && isFollowingRepository(project)) {
+      // Every deploy re-reads the file, so the Base is shown, not edited.
+      return (
+        <ComposeSourceControl
+          orgId={orgId}
+          project={project}
+          environments={environments}
+          canMutate={canMutate}
+          mode="panel"
+        />
+      )
+    }
     if (editing) {
       return (
-        <ComposeEditorPanel
-          document={project.options?.compose}
-          onSave={onSaveProjectCompose}
-          saving={saving}
-          editView={editView}
-          sessionKey={scopeKey}
-          // The base has no layer above it, so its own root is the whole scope.
-          extraPrincipalAliases={[]}
-          documentFacts={documentFacts}
-          onOpenScopeConfig={onOpenScopeConfig}
-          // The project tab bar has Compose but no Services tab, so the Base
-          // editor keeps its own Compose / Services toggle. A draft switches
-          // lenses from the wizard's tabs instead.
-          {...(draft
-            ? { hideSave: true, onDraftChange: draft.onDraftChange }
-            : {
-                onViewChange: (view: ComposeEditorView) =>
-                  router.push(projectComposeEditHref(orgId, projectId, { view }) as Href),
-              })}
-        />
+        <>
+          {!draft && project.options?.composeSource ? (
+            <ComposeSourceControl
+              orgId={orgId}
+              project={project}
+              environments={environments}
+              canMutate={canMutate}
+              mode="banner"
+            />
+          ) : null}
+          <ComposeEditorPanel
+            document={project.options?.compose}
+            onSave={onSaveProjectCompose}
+            saving={saving}
+            editView={editView}
+            sessionKey={scopeKey}
+            // The base has no layer above it, so its own root is the whole scope.
+            extraPrincipalAliases={[]}
+            documentFacts={documentFacts}
+            onOpenScopeConfig={onOpenScopeConfig}
+            // The project tab bar has Compose but no Services tab, so the Base
+            // editor keeps its own Compose / Services toggle. A draft switches
+            // lenses from the wizard's tabs instead.
+            {...(draft
+              ? { hideSave: true, onDraftChange: draft.onDraftChange }
+              : {
+                  onViewChange: (view: ComposeEditorView) =>
+                    router.push(projectComposeEditHref(orgId, projectId, { view }) as Href),
+                })}
+          />
+        </>
       )
     }
     return (
@@ -819,7 +846,7 @@ export function ComposeServicesTab() {
       setError(null)
       const result = await persistProjectCompose.run(compose)
       if (!result.ok && persistProjectCompose.actionError) {
-        setError(persistProjectCompose.actionError)
+        setError(failedRunMessage(result, persistProjectCompose.actionError))
       }
     },
     [draft, baseSelected, persistProjectCompose, setError]
@@ -883,6 +910,7 @@ export function ComposeServicesTab() {
             projectId={projectId}
             orgId={orgId}
             selectedEnvironment={selectedEnvironment}
+            environments={environments}
             environmentsCount={environments.length}
             projectServerCount={projectServerCount}
             storageCount={storageCount}
