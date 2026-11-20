@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ActionButton } from '@/components/ui/v4/action-button'
 import { Notice } from '@/components/ui/v4/notice'
@@ -11,6 +12,7 @@ import { userErrorMessage } from '@/lib/user-error'
 import {
   environmentBranchRows,
   followingNote,
+  isFollowingRepository,
   lastReadTime,
   type EnvironmentBranchRow,
 } from '@/lib/v4/compose-source'
@@ -22,7 +24,8 @@ export const FOLLOW_AGAIN_LABEL = 'Follow the repository again'
 /** Words for the branches other environments read, or null when they all read the project's. */
 export function environmentBranchesLine(rows: readonly EnvironmentBranchRow[]): string | null {
   if (rows.length === 0) return null
-  return `Other branches: ${rows.map((row) => `${row.name} reads ${row.branch}`).join('; ')}.`
+  const reads = rows.map((row) => `${row.name} reads ${row.branch}`)
+  return `Other branches: ${reads.join('; ')}.`
 }
 
 /**
@@ -171,6 +174,46 @@ export function ComposeSourceControl({
       canMutate={canMutate}
       onStop={() => void setMode.run('seed')}
     />
+  )
+}
+
+/**
+ * Around the Base editor: while the project follows the repository the file
+ * is shown instead of the editor; after it stopped, the editor gets a banner.
+ * A draft (the wizard) has no source yet and shows the editor as it is.
+ */
+export function ComposeSourceGate({
+  orgId,
+  project,
+  environments,
+  canMutate,
+  isDraft,
+  children,
+}: Readonly<{
+  orgId: string
+  project: ProjectRecord
+  environments: readonly EnvironmentRecord[]
+  canMutate: boolean
+  isDraft: boolean
+  children: ReactNode
+}>) {
+  if (isDraft || !project.options?.composeSource) return <>{children}</>
+  const mode = isFollowingRepository(project) ? 'panel' : 'banner'
+  const control = (
+    <ComposeSourceControl
+      orgId={orgId}
+      project={project}
+      environments={environments}
+      canMutate={canMutate}
+      mode={mode}
+    />
+  )
+  if (mode === 'panel') return control
+  return (
+    <>
+      {control}
+      {children}
+    </>
   )
 }
 

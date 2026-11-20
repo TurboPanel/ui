@@ -16,8 +16,7 @@ import {
   useProjectRepositoryId,
   type ProjectDraft,
 } from '@/components/org/project/project-context'
-import { ComposeSourceControl } from '@/components/org/project/compose-source-panel'
-import { isFollowingRepository } from '@/lib/v4/compose-source'
+import { ComposeSourceGate } from '@/components/org/project/compose-source-panel'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import { ComposeInheritedPanel } from '@/components/org/project/compose-inherited-panel'
 import {
@@ -573,30 +572,15 @@ function ServicesPanelBody({
   }
 
   if (baseSelected) {
-    if (editing && !draft && isFollowingRepository(project)) {
-      // Every deploy re-reads the file, so the Base is shown, not edited.
+    if (editing) {
       return (
-        <ComposeSourceControl
+        <ComposeSourceGate
           orgId={orgId}
           project={project}
           environments={environments}
           canMutate={canMutate}
-          mode="panel"
-        />
-      )
-    }
-    if (editing) {
-      return (
-        <>
-          {!draft && project.options?.composeSource ? (
-            <ComposeSourceControl
-              orgId={orgId}
-              project={project}
-              environments={environments}
-              canMutate={canMutate}
-              mode="banner"
-            />
-          ) : null}
+          isDraft={draft != null}
+        >
           <ComposeEditorPanel
             document={project.options?.compose}
             onSave={onSaveProjectCompose}
@@ -617,7 +601,7 @@ function ServicesPanelBody({
                     router.push(projectComposeEditHref(orgId, projectId, { view }) as Href),
                 })}
           />
-        </>
+        </ComposeSourceGate>
       )
     }
     return (

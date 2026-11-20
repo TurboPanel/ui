@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ProjectRecord } from '@/lib/instance-api'
 import {
+  ComposeSourceGate,
   environmentBranchesLine,
   FOLLOW_AGAIN_LABEL,
   FollowingPanel,
@@ -14,8 +16,9 @@ vi.mock(
   '@/lib/theme-preference',
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
-vi.mock('@/lib/queries/projects', () => ({ useSetComposeSource: vi.fn() }))
-vi.mock('@/lib/queries/execution-logs', () => ({ useEnvironmentDeployments: vi.fn() }))
+const mocks = vi.hoisted(() => ({ setMode: vi.fn(), deployments: vi.fn() }))
+vi.mock('@/lib/queries/projects', () => ({ useSetComposeSource: mocks.setMode }))
+vi.mock('@/lib/queries/execution-logs', () => ({ useEnvironmentDeployments: mocks.deployments }))
 
 afterEach(cleanup)
 
@@ -88,5 +91,44 @@ describe('environmentBranchesLine', () => {
         { id: 'e2', name: 'Canary', branch: 'next' },
       ])
     ).toBe('Other branches: Staging reads staging; Canary reads next.')
+  })
+})
+
+describe('ComposeSourceGate', () => {
+  const project = (mode: 'seed' | 'track' | undefined) =>
+    ({
+      id: 'p1',
+      options: { composeSource: { ...SOURCE, mode } },
+    }) as unknown as ProjectRecord
+  const render_ = (p: ProjectRecord, isDraft = false) =>
+    render(
+      <ComposeSourceGate orgId="o" project={p} environments={[]} canMutate isDraft={isDraft}>
+        <p>editor</p>
+      </ComposeSourceGate>
+    )
+
+  beforeEach(() => {
+    mocks.setMode.mockReturnValue({ run: vi.fn(), isPending: false, error: null })
+    mocks.deployments.mockReturnValue({ data: undefined })
+  })
+
+  it('shows the editor as it is for a draft or a project with no source', () => {
+    render_(project('track'), true)
+    expect(screen.getByText('editor')).toBeTruthy()
+    cleanup()
+    render_({ id: 'p1', options: null } as unknown as ProjectRecord)
+    expect(screen.getByText('editor')).toBeTruthy()
+  })
+
+  it('replaces the editor with the file while following', () => {
+    render_(project('track'))
+    expect(screen.queryByText('editor')).toBeNull()
+    expect(screen.getByRole('button', { name: STOP_FOLLOWING_LABEL })).toBeTruthy()
+  })
+
+  it('puts a banner above the editor after stopping', () => {
+    render_(project('seed'))
+    expect(screen.getByText('editor')).toBeTruthy()
+    expect(screen.getByRole('button', { name: FOLLOW_AGAIN_LABEL })).toBeTruthy()
   })
 })
