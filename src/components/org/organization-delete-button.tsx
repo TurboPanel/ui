@@ -1,6 +1,6 @@
 import { useRouter, type Href } from 'expo-router'
 import { useState } from 'react'
-import { TextLink, TypeNameDeleteButton, type ButtonSize } from '@/components/ui'
+import { TypeNameDeleteButton, type ButtonSize } from '@/components/ui'
 import {
   organizationDeleteFailure,
   ORGANIZATION_DELETE_DIALOG_DESCRIPTION,
@@ -58,16 +58,16 @@ export function OrganizationDeleteButton({
       name={orgName}
       description={ORGANIZATION_DELETE_DIALOG_DESCRIPTION}
       error={failure?.message ?? null}
-      errorAction={(close) =>
-        link ? (
-          <TextLink
-            label={link.label}
-            onPress={() => {
-              close()
-              router.push(link.href as Href)
-            }}
-          />
-        ) : null
+      errorLink={
+        link
+          ? {
+              label: link.label,
+              onPress: (close) => {
+                close()
+                router.push(link.href as Href)
+              },
+            }
+          : undefined
       }
       onOpen={() => setFailure(null)}
       onConfirm={confirm}

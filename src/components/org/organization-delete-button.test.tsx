@@ -51,6 +51,8 @@ vi.mock('@/components/ui/mono-text', () => ({
 vi.mock('@/components/ui/copy-button', () => ({ CopyButton: () => null }))
 vi.mock('@/components/ui', async () => ({
   TypeNameDeleteButton: (await import('@/components/ui/type-name-confirm')).TypeNameDeleteButton,
+}))
+vi.mock('@/components/ui/text-link', () => ({
   TextLink: ({ label, onPress }: Readonly<{ label: string; onPress: () => void }>) => (
     <button type="button" onClick={onPress}>
       {label}
