@@ -34,6 +34,7 @@ import {
   HostingCertificateActionsContext,
   HostingCertificatePanel,
 } from '@/components/org/hosting-certificate-panel'
+import { environmentBaseLayers, type EnvironmentBase } from '@/lib/compose/layer-lint'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import {
@@ -1827,10 +1828,13 @@ function EnvironmentInfoPanel({
 
 function EnvironmentComposeOverlayPanel({
   environment,
+  baseLayers,
   onSaveCompose,
   savingCompose,
 }: Readonly<{
   environment: EnvironmentRecord
+  /** The layers these changes are checked against before saving; `null` while the project loads. */
+  baseLayers: EnvironmentBase
   onSaveCompose: (compose: ComposeDocument) => Promise<void>
   savingCompose: boolean
 }>) {
@@ -1843,6 +1847,7 @@ function EnvironmentComposeOverlayPanel({
     >
       <ComposeEditorSection
         document={environment.options?.compose}
+        baseDocument={baseLayers}
         onSave={onSaveCompose}
         saving={savingCompose}
         title="Environment compose overlay"
@@ -2268,6 +2273,7 @@ function EnvironmentLoadedPanels({
   projectId,
   orgId,
   mergedCompose,
+  baseLayers,
   serviceNames,
   allServers,
   sortedServers,
@@ -2305,6 +2311,8 @@ function EnvironmentLoadedPanels({
   projectId: string
   orgId: string
   mergedCompose: ComposeDocument
+  /** Layers around the environment's changes; `null` while the project loads. */
+  baseLayers: EnvironmentBase
   serviceNames: string[]
   allServers: OrgServerRecord[]
   sortedServers: OrgServerRecord[]
@@ -2358,6 +2366,7 @@ function EnvironmentLoadedPanels({
       {showEnvironmentChrome && showComposeOverlay ? (
         <EnvironmentComposeOverlayPanel
           environment={environment}
+          baseLayers={baseLayers}
           onSaveCompose={onSaveCompose}
           savingCompose={savingCompose}
         />
@@ -2674,6 +2683,12 @@ export function EnvironmentDetailBody({
 
   const environment = environmentQuery.data?.environment ?? null
   const projectCompose = projectQuery.data?.project.options?.compose ?? null
+  let baseLayers: EnvironmentBase = null
+  if (projectQuery.data) {
+    baseLayers = environmentBaseLayers(projectQuery.data.project.options, environment?.options)
+  } else if (projectQuery.error) {
+    baseLayers = { error: userErrorMessage(projectQuery.error, 'Failed to load the project') }
+  }
   const projectDefaultServerId = projectQuery.data?.project.options?.defaultServerId ?? null
   const allServers = orEmptyArray(serversQuery.data?.servers)
   const tlsLibrary = tlsQuery.data?.tls ?? []
@@ -3155,6 +3170,7 @@ export function EnvironmentDetailBody({
           projectId={projectId}
           orgId={orgId}
           mergedCompose={mergedCompose}
+          baseLayers={baseLayers}
           serviceNames={serviceNames}
           allServers={allServers}
           sortedServers={sortedServers}
