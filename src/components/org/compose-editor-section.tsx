@@ -50,6 +50,7 @@ import { reachCandidates } from '@/lib/compose/reach'
 import {
   draftFromYaml,
   lintEnvironmentLayer,
+  type EnvironmentBaseFailure,
   type EnvironmentBaseLayers,
 } from '@/lib/compose/layer-lint'
 import {
@@ -618,7 +619,7 @@ export function ComposeEditorSection({
    * the Base, where a service still needs an `image` or `build`. Omitted for the
    * Base itself, which is held to the full rule.
    */
-  baseDocument?: EnvironmentBaseLayers | null
+  baseDocument?: EnvironmentBaseLayers | EnvironmentBaseFailure | null
   /**
    * Leave out a container's helper port fields. An environment layer does not
    * restate the Base's service kinds or accounts, so reach is edited on the Base.

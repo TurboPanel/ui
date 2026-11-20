@@ -34,7 +34,11 @@ import {
   HostingCertificateActionsContext,
   HostingCertificatePanel,
 } from '@/components/org/hosting-certificate-panel'
-import { environmentBaseLayers, type EnvironmentBaseLayers } from '@/lib/compose/layer-lint'
+import {
+  environmentBaseLayers,
+  type EnvironmentBaseFailure,
+  type EnvironmentBaseLayers,
+} from '@/lib/compose/layer-lint'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import {
@@ -1834,7 +1838,7 @@ function EnvironmentComposeOverlayPanel({
 }: Readonly<{
   environment: EnvironmentRecord
   /** The layers these changes are checked against before saving; `null` while the project loads. */
-  baseLayers: EnvironmentBaseLayers | null
+  baseLayers: EnvironmentBaseLayers | EnvironmentBaseFailure | null
   onSaveCompose: (compose: ComposeDocument) => Promise<void>
   savingCompose: boolean
 }>) {
@@ -2312,7 +2316,7 @@ function EnvironmentLoadedPanels({
   orgId: string
   mergedCompose: ComposeDocument
   /** Layers around the environment's changes; `null` while the project loads. */
-  baseLayers: EnvironmentBaseLayers | null
+  baseLayers: EnvironmentBaseLayers | EnvironmentBaseFailure | null
   serviceNames: string[]
   allServers: OrgServerRecord[]
   sortedServers: OrgServerRecord[]
@@ -3167,7 +3171,9 @@ export function EnvironmentDetailBody({
           baseLayers={
             projectQuery.data
               ? environmentBaseLayers(projectQuery.data.project.options, environment.options)
-              : null
+              : projectQuery.error
+                ? { error: userErrorMessage(projectQuery.error, 'Failed to load the project') }
+                : null
           }
           serviceNames={serviceNames}
           allServers={allServers}

@@ -17,16 +17,26 @@ export type EnvironmentBaseLayers = {
   after: readonly unknown[]
 }
 
+/** Same cap as the control plane's `MAX_COMPOSE_OVERLAYS`. */
+const MAX_COMPOSE_OVERLAYS = 8
+
+/** Mirrors the control plane's `extractComposeOverlays`: entries without a string id and filename are skipped. */
 function overlayDocuments(options: unknown): unknown[] {
-  if (typeof options !== 'object' || options === null) return []
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) return []
   const raw = (options as { composeOverlays?: unknown }).composeOverlays
   if (!Array.isArray(raw)) return []
-  return raw.flatMap((entry: unknown) =>
-    typeof entry === 'object' && entry !== null
-      ? [(entry as { document?: unknown }).document ?? null]
-      : []
-  )
+  const documents: unknown[] = []
+  for (const entry of raw.slice(0, MAX_COMPOSE_OVERLAYS)) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const record = entry as { id?: unknown; filename?: unknown; document?: unknown }
+    if (typeof record.id !== 'string' || typeof record.filename !== 'string') continue
+    documents.push(record.document ?? null)
+  }
+  return documents
 }
+
+/** The project's Base could not be loaded; the save stays blocked. */
+export type EnvironmentBaseFailure = { error: string }
 
 /** Collect the layers around an environment's own `options.compose`. */
 export function environmentBaseLayers(
@@ -54,14 +64,14 @@ export function environmentBaseLayers(
  * document supplies the merge, so hidden `x-turbopanel` blocks still count. A
  * merge issue has no line, since the merged text is not what the operator sees.
  *
- * `base` is `null` while the project's Base has not loaded: the save stays
- * blocked, with a plain note instead of a missing-image error the Base might
- * answer.
+ * `base` is `null` while the project's Base has not loaded, or a failure when it
+ * could not be: the save stays blocked, with a plain note instead of a
+ * missing-image error the Base might answer.
  */
 export function lintEnvironmentLayer(
   layerSource: string,
   layerDocument: unknown,
-  base: EnvironmentBaseLayers | null,
+  base: EnvironmentBaseLayers | EnvironmentBaseFailure | null,
   options?: ComposeLintOptions
 ): ComposeLintIssue[] {
   const layerIssues = lintComposeYaml(layerSource, { ...options, requireImageOrBuild: false })
@@ -69,12 +79,15 @@ export function lintEnvironmentLayer(
   if (layerSource.trim() === '' || layerIssues.some((issue) => issue.path === '$')) {
     return layerIssues
   }
-  if (base === null) {
+  if (base === null || 'error' in base) {
     return [
       ...layerIssues,
       {
         level: 'error',
-        message: "Waiting for the project's Base to load",
+        message:
+          base === null
+            ? "Waiting for the project's Base to load"
+            : `Couldn't load the project's Base: ${base.error}. Reload to try again.`,
         code: 'base_not_loaded',
         path: '$',
       },
@@ -82,11 +95,12 @@ export function lintEnvironmentLayer(
   }
   let mergedYaml: string
   try {
-    let merged: unknown = null
-    for (const layer of [...base.before, layerDocument, ...base.after]) {
-      merged = mergeComposeOverlay(merged, layer)
-    }
-    mergedYaml = composeDocumentToYaml(merged as ReturnType<typeof mergeComposeOverlay>)
+    // The first layer is resolved on its own, as the control plane does, so a
+    // `!reset` in the Base keeps its value instead of deleting the key.
+    const [first = null, ...rest] = [...base.before, layerDocument, ...base.after]
+    let merged = mergeComposeOverlay(first, null)
+    for (const layer of rest) merged = mergeComposeOverlay(merged, layer)
+    mergedYaml = composeDocumentToYaml(merged)
   } catch {
     return layerIssues
   }

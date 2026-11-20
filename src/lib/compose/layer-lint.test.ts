@@ -130,4 +130,36 @@ describe('lintEnvironmentLayer', () => {
     expect(layers.before).toEqual([BASE, 1])
     expect(layers.after).toEqual([2])
   })
+
+  it('keeps the value of a !reset in the Base, as the control plane does', () => {
+    const base = yamlToComposeDocument(
+      'services:\n  vpn:\n    image: !reset busybox\n    environment:\n      A: b\n'
+    )
+    const layer = yamlToComposeDocument('services:\n  vpn:\n    environment:\n      C: d\n')
+    const issues = lintEnvironmentLayer(composeDocumentToYaml(layer), layer, {
+      before: [base],
+      after: [],
+    })
+    expect(blockingComposeLintIssues(issues)).toEqual([])
+  })
+
+  it('reads overlay files like the control plane does', () => {
+    const entry = (n: number) => ({ id: `o${n}`, filename: `o${n}.yml`, document: n })
+    const many = Array.from({ length: 10 }, (_, n) => entry(n))
+    const layers = environmentBaseLayers(
+      { composeOverlays: [{ id: 1, filename: 'x.yml', document: 9 }, ...many] },
+      null
+    )
+    expect(layers.before).toEqual([null, 0, 1, 2, 3, 4, 5, 6])
+  })
+
+  it('blocks the save with the reason when the Base failed to load', () => {
+    const layer = yamlToComposeDocument('services:\n  vpn:\n    environment:\n      A: b\n')
+    const issues = blockingComposeLintIssues(
+      lintEnvironmentLayer(composeDocumentToYaml(layer), layer, { error: 'timeout' })
+    )
+    expect(issues.map((i) => i.message)).toEqual([
+      "Couldn't load the project's Base: timeout. Reload to try again.",
+    ])
+  })
 })
