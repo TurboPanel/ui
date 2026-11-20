@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useStepUpOpen } from '@/lib/use-step-up-open'
 import { StyleSheet, Text, View } from 'react-native'
 import { Button, ButtonRow, type ButtonSize } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
@@ -72,6 +73,9 @@ export function TypeNameConfirmModal({
   const [typed, setTyped] = useState('')
   const matches = typedNameMatches(typed, name)
   const title = `${verb} ${thing}`
+  // While the confirm-it-is-you prompt is open the request is waiting on the
+  // person, not working: no spinner, and nothing to press again.
+  const stepUpOpen = useStepUpOpen()
   return (
     <ModalSheet
       visible
@@ -87,9 +91,9 @@ export function TypeNameConfirmModal({
           <Button
             label={title}
             variant="danger"
-            busy={pending}
+            busy={pending && !stepUpOpen}
             busyLabel={busyLabel(verb)}
-            disabled={!matches}
+            disabled={!matches || pending}
             onPress={() => {
               if (matches) onConfirm(typed)
             }}
