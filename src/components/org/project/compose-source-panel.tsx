@@ -2,6 +2,7 @@ import { type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ActionButton } from '@/components/ui/v4/action-button'
 import { Notice } from '@/components/ui/v4/notice'
+import { useRepositories } from '@/lib/queries/releases'
 import { useSetComposeSource } from '@/lib/queries/projects'
 import { useEnvironmentDeployments } from '@/lib/queries/execution-logs'
 import { primaryEnvironmentOf } from '@/lib/v4/primary-environment'
@@ -145,7 +146,11 @@ export function ComposeSourceControl({
     enabled: mode === 'panel' && Boolean(primary),
     limit: 20,
   })
+  const repositories = useRepositories(orgId, { enabled: mode === 'panel' && Boolean(source) })
   if (!source) return null
+  const defaultBranch =
+    repositories.data?.repositories?.find((repo) => repo.id === source.sourceId)?.defaultBranch ??
+    null
   const error = setMode.error ? userErrorMessage(setMode.error, 'Could not change this') : null
   if (mode === 'banner') {
     return (
@@ -160,13 +165,19 @@ export function ComposeSourceControl({
   }
   const commit = source.lastReadCommitSha ?? source.seededCommitSha
   const note = followingNote(source, {
+    defaultBranch,
     readAt: lastReadTime(deployments.data?.deployments, commit),
   })
   return (
     <FollowingPanel
       note={note}
       branchesLine={environmentBranchesLine(
-        environmentBranchRows(project, environments, source.sourceId, source.ref ?? null)
+        environmentBranchRows(
+          project,
+          environments,
+          source.sourceId,
+          source.ref ?? defaultBranch ?? null
+        )
       )}
       yaml={composeFullYaml(project.options?.compose ?? emptyComposeDocument())}
       busy={setMode.isPending}

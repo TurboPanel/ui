@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectRecord } from '@/lib/instance-api'
 import {
+  ComposeSourceControl,
   ComposeSourceGate,
   environmentBranchesLine,
   FOLLOW_AGAIN_LABEL,
@@ -16,8 +17,13 @@ vi.mock(
   '@/lib/theme-preference',
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
-const mocks = vi.hoisted(() => ({ setMode: vi.fn(), deployments: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  setMode: vi.fn(),
+  deployments: vi.fn(),
+  repositories: vi.fn(),
+}))
 vi.mock('@/lib/queries/projects', () => ({ useSetComposeSource: mocks.setMode }))
+vi.mock('@/lib/queries/releases', () => ({ useRepositories: mocks.repositories }))
 vi.mock('@/lib/queries/execution-logs', () => ({ useEnvironmentDeployments: mocks.deployments }))
 
 afterEach(cleanup)
@@ -110,6 +116,7 @@ describe('ComposeSourceGate', () => {
   beforeEach(() => {
     mocks.setMode.mockReturnValue({ run: vi.fn(), isPending: false, error: null })
     mocks.deployments.mockReturnValue({ data: undefined })
+    mocks.repositories.mockReturnValue({ data: undefined })
   })
 
   it('shows the editor as it is for a draft or a project with no source', () => {
@@ -130,5 +137,40 @@ describe('ComposeSourceGate', () => {
     render_(project('seed'))
     expect(screen.getByText('editor')).toBeTruthy()
     expect(screen.getByRole('button', { name: FOLLOW_AGAIN_LABEL })).toBeTruthy()
+  })
+})
+
+describe('ComposeSourceControl default branch', () => {
+  const project = {
+    id: 'p1',
+    options: { composeSource: { ...SOURCE, sourceId: 'repo-1', mode: 'track' } },
+  } as unknown as ProjectRecord
+
+  beforeEach(() => {
+    mocks.setMode.mockReturnValue({ run: vi.fn(), isPending: false, error: null })
+    mocks.deployments.mockReturnValue({ data: undefined })
+    mocks.repositories.mockReturnValue({
+      data: {
+        repositories: [
+          { id: 'other', defaultBranch: 'dev' },
+          { id: 'repo-1', defaultBranch: 'trunk' },
+        ],
+      },
+    })
+  })
+
+  it('names the repository default branch when the source has no ref', () => {
+    render(
+      <ComposeSourceControl orgId="o" project={project} environments={[]} canMutate mode="panel" />
+    )
+    expect(screen.getAllByText(/on trunk/).length).toBeGreaterThan(0)
+  })
+
+  it('falls back to no branch when the repository is not listed', () => {
+    mocks.repositories.mockReturnValue({ data: { repositories: [] } })
+    render(
+      <ComposeSourceControl orgId="o" project={project} environments={[]} canMutate mode="panel" />
+    )
+    expect(screen.queryByText(/on trunk/)).toBeNull()
   })
 })

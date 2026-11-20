@@ -16,6 +16,7 @@ import {
   useProjectRepositoryId,
   type ProjectDraft,
 } from '@/components/org/project/project-context'
+import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
 import { ComposeSourceGate } from '@/components/org/project/compose-source-panel'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import { ComposeInheritedPanel } from '@/components/org/project/compose-inherited-panel'
@@ -522,6 +523,12 @@ function ServicesPanelBody({
   // Plain handlers (not useCallback): React Compiler could not preserve manual
   // memoization of this save path (`preserve-manual-memoization` on scopeKey).
   async function saveOverviewDraft(): Promise<void> {
+    // A draft made while the Base was editable is stale once the project follows
+    // the repository again: the Base refuses it, so drop it instead of sending.
+    if (baseSelected && settingsSaveBlockedMessage(project)) {
+      discardOverviewDraft()
+      return
+    }
     const snapshot = resolveComposeDraftSnapshot(draftStore, scopeKey, savedDocument)
     const reconciled = reconcileComposeDraft(snapshot)
     if (reconciled == null) return

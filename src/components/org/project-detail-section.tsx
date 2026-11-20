@@ -15,9 +15,7 @@ import {
   InlineNotice,
   LoadingState,
   SectionPanel,
-  SettingRow,
   TextField,
-  Toggle,
   TypeNameDeleteButton,
 } from '@/components/ui'
 import { confirmationName } from '@/lib/confirm-name'
@@ -63,8 +61,6 @@ import { useEnvironments } from '@/lib/queries/environments'
 import { useServicesByEnvironments } from '@/lib/queries/services'
 import { useWorkspaces } from '@/lib/queries/workspaces'
 import { orEmptyArray } from '@/lib/or-empty-array'
-import { buildProjectOptionsPatch } from '@/lib/project-options'
-import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
 import { isManagedProject, isTemplateProject, projectDisplayType } from '@/lib/project-navigation'
 import { DISPLAY_NAME_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from '@/lib/display-name'
 import { useCan } from '@/lib/query-client'
@@ -74,7 +70,7 @@ import {
 } from '@/components/org/principal-name-scheme-field'
 import { principalNamesLabel, principalSchemeErrorMessage } from '@/lib/principal-name-scheme'
 import { chrome, colors, spacing, webPointer } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 type ProjectServiceOption = {
   id: string
@@ -436,7 +432,7 @@ export function ProjectPrincipalsSection({
   const saveDeclaredAccount = async (writes: Parameters<typeof persistAccount.run>[0]) => {
     const saved = await persistAccount.run(writes)
     if (saved.ok) setUsername('')
-    else setError(persistAccount.actionError ?? 'Could not add the Hosting Account.')
+    else setError(failedRunMessage(saved, 'Could not add the Hosting Account.'))
   }
 
   const handleAdd = async () => {
@@ -824,57 +820,6 @@ function ProjectPageHeader({
   )
 }
 
-type ContainerNamingMode = 'uuid' | 'custom'
-
-function ContainerNamingPanel({
-  canManage,
-  value,
-  saving,
-  onChange,
-}: Readonly<{
-  canManage: boolean
-  value: ContainerNamingMode
-  saving: boolean
-  onChange: (mode: ContainerNamingMode) => void
-}>) {
-  const keepOriginal = value === 'custom'
-  return (
-    <SectionPanel
-      title="Container naming"
-      hint="How Docker container_name values are generated at deploy"
-    >
-      {canManage ? (
-        <View style={styles.namingBlock}>
-          <SettingRow
-            label="Keep original container names"
-            description="By default TurboPanel renames containers so you can run multiple instances of this project."
-          >
-            <Toggle
-              value={keepOriginal}
-              busy={saving}
-              accessibilityLabel="Keep original container names"
-              onValueChange={(next) => onChange(next ? 'custom' : 'uuid')}
-            />
-          </SettingRow>
-          {keepOriginal ? (
-            <View style={panelStyles.calloutWarning}>
-              <Text style={panelStyles.calloutWarningText}>
-                Keeping original names disables rolling updates. We rename containers by default so
-                multiple instances of this project can run side by side.
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      ) : (
-        <Text style={panelStyles.detailLine}>
-          {keepOriginal ? 'Keep original container names' : 'Rename containers (default)'}
-        </Text>
-      )}
-      {saving ? <Text style={panelStyles.muted}>Saving…</Text> : null}
-    </SectionPanel>
-  )
-}
-
 function WorkspaceMovePanel({
   canOwn,
   workspaces,
@@ -1003,23 +948,6 @@ export function ProjectDetailSection({
     }
   }
 
-  const saveContainerNaming = async (containerNaming: ContainerNamingMode) => {
-    const currentMode = project?.options?.containerNaming ?? 'uuid'
-    if (currentMode === containerNaming || !project) return
-
-    const blocked = settingsSaveBlockedMessage(project)
-    if (blocked) {
-      setError(blocked)
-      return
-    }
-    setError(null)
-    const options = buildProjectOptionsPatch(project, { containerNaming })
-    const result = await updateProjectMutation.run({ options, target: 'base' })
-    if (!result.ok && updateProjectMutation.actionError) {
-      setError(updateProjectMutation.actionError)
-    }
-  }
-
   const saveProjectMeta = async () => {
     const displayName = editDisplayName.trim()
     const description = editDescription.trim()
@@ -1046,7 +974,6 @@ export function ProjectDetailSection({
 
   const savingCompose = persistProjectCompose.isPending
   const savingWorkspace = updateProjectMutation.isPending
-  const savingContainerNaming = updateProjectMutation.isPending
   const savingMeta = updateProjectMutation.isPending
 
   if (loading && !project) {
@@ -1105,15 +1032,6 @@ export function ProjectDetailSection({
 
               {isComposeProject(project) ? (
                 <>
-                  <ContainerNamingPanel
-                    canManage={canManage}
-                    value={project.options?.containerNaming ?? 'uuid'}
-                    saving={savingContainerNaming}
-                    onChange={(mode) => {
-                      void saveContainerNaming(mode)
-                    }}
-                  />
-
                   <SectionPanel
                     title="Compose"
                     hint="Shared stack — each environment can override"
