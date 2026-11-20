@@ -11,6 +11,7 @@ import {
   type DataTableColumn,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { confirmationName } from '@/lib/confirm-name'
 import { formatShortDate, type AdminOrganizationRow } from '@/lib/instance-api'
 import { getActiveOrganizationId, setActiveOrganizationId } from '@/lib/org-context'
 import { defaultOrgDashboardHref, replaceOrganization } from '@/lib/org-navigation'
@@ -46,7 +47,7 @@ function OrganizationRow({
   return (
     <DataTableRow last={last}>
       <DataTableCell column={C_NAME}>
-        <Text style={styles.name}>{row.name}</Text>
+        <Text style={styles.name}>{confirmationName(row.name, row.id)}</Text>
         {row.isRoot ? (
           <View style={styles.badge}>
             <Badge label="Root" tone="info" />
@@ -80,7 +81,7 @@ function OrganizationRow({
           <Button
             label="Open"
             size="sm"
-            accessibilityLabel={`Open ${row.name}`}
+            accessibilityLabel={`Open ${confirmationName(row.name, row.id)}`}
             onPress={() => {
               setActiveOrganizationId(row.id)
               replaceOrganization(router, defaultOrgDashboardHref(row.id) as Href)
@@ -88,7 +89,7 @@ function OrganizationRow({
           />
           <OrganizationDeleteButton
             orgId={row.id}
-            orgName={row.name}
+            orgName={confirmationName(row.name, row.id)}
             label="Delete"
             disabled={gate.disabled}
             onDeleted={(deletedId) => {

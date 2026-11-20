@@ -5,6 +5,7 @@ import { OrganizationDeleteButton } from '@/components/org/organization-delete-b
 import { ButtonRow, SectionPanel } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { isAdminSession, useAuth } from '@/lib/auth-context'
+import { confirmationName } from '@/lib/confirm-name'
 import type { OrganizationRecord } from '@/lib/instance-api'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import {
@@ -36,7 +37,9 @@ export function OrganizationDeleteSection({ orgId }: Readonly<{ orgId: string }>
   const adminList = useAdminOrganizations({ enabled: admin && canOwn })
   const isRoot = adminList.data?.organizations.find((row) => row.id === orgId)?.isRoot === true
 
-  if (!canOwn || isRoot) return null
+  // A platform admin's list says whether this is the root organization; wait for it.
+  const rootKnown = !admin || adminList.isSuccess
+  if (!canOwn || !rootKnown || isRoot) return null
 
   const onDeleted = (deletedId: string) => {
     const cached = queryClient.getQueryData<{ organizations: OrganizationRecord[] }>(
@@ -61,7 +64,7 @@ export function OrganizationDeleteSection({ orgId }: Readonly<{ orgId: string }>
         <ButtonRow>
           <OrganizationDeleteButton
             orgId={orgId}
-            orgName={org?.name ?? orgId}
+            orgName={confirmationName(org?.name, orgId)}
             label="Delete Organization"
             disabled={!org}
             onDeleted={onDeleted}

@@ -90,6 +90,13 @@ describe('OrganizationsSection', () => {
     expect(screen.getByText('No owner')).toBeTruthy()
   })
 
+  it('falls back to the id when an organization has no name', () => {
+    rows.current = [row({ id: 'o9', name: null })]
+    render(<OrganizationsSection />)
+    expect(screen.getByText('o9')).toBeTruthy()
+    expect(screen.getByLabelText('Open o9')).toBeTruthy()
+  })
+
   it('disables Delete for the root and explains servers', () => {
     rows.current = [
       row({ id: 'o2', name: 'Platform', isRoot: true }),

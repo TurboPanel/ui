@@ -118,8 +118,19 @@ describe('OrganizationDeleteButton', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('says so when the step-up was cancelled and the control plane refused with 403', async () => {
-    mutateAsync.mockRejectedValue(new Error('/organizations/o1 failed: HTTP 403 reauth_required'))
+  it('asks the person to confirm it is them when the step-up was cancelled (403 reauth_required)', async () => {
+    mutateAsync.mockRejectedValue(new Error('/organizations/o1 failed: HTTP 403: reauth_required'))
+    open()
+    type('Acme')
+    await act(async () => {
+      fireEvent.click(confirm())
+    })
+    expect(screen.getByText(/confirm it is you/)).toBeTruthy()
+    expect(screen.queryByText(/owner or a platform admin/)).toBeNull()
+  })
+
+  it('says only the owner or a platform admin can delete on a plain 403', async () => {
+    mutateAsync.mockRejectedValue(new Error('/organizations/o1 failed: HTTP 403: forbidden'))
     open()
     type('Acme')
     await act(async () => {

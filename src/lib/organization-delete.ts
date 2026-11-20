@@ -14,6 +14,9 @@ export const ORGANIZATION_DELETE_DIALOG_DESCRIPTION =
 export const ORGANIZATION_DELETE_FORBIDDEN =
   'Only the organization owner or a platform admin can delete an organization.'
 
+export const ORGANIZATION_DELETE_REAUTH_NEEDED =
+  'Deleting an organization needs you to confirm it is you. Try again and enter your password or code when asked.'
+
 export type OrganizationDeleteFailure = Readonly<{
   message: string
   /** The page that fixes it, when there is one. */
@@ -56,7 +59,14 @@ export function organizationDeleteBlock(
 /** Whatever went wrong with an organization delete, in plain words. */
 export function organizationDeleteFailure(err: unknown, orgId: string): OrganizationDeleteFailure {
   if (err instanceof OrganizationDeleteBlockedError) return organizationDeleteBlock(err, orgId)
-  if (isForbiddenError(err)) return { message: ORGANIZATION_DELETE_FORBIDDEN, link: null }
+  if (isForbiddenError(err)) {
+    // A cancelled or failed step-up hands back the original 403 reauth_required: that is
+    // about proving who you are, not about permission.
+    if (err instanceof Error && err.message.includes('reauth_required')) {
+      return { message: ORGANIZATION_DELETE_REAUTH_NEEDED, link: null }
+    }
+    return { message: ORGANIZATION_DELETE_FORBIDDEN, link: null }
+  }
   if (isHttpStatusError(err, 404)) {
     return {
       message: 'This organization was not found, or you are not allowed to delete it.',

@@ -2964,7 +2964,8 @@ export async function deleteOrganization(
 /** One row of `GET /api/admin/v1/organizations` (platform admins). */
 export type AdminOrganizationRow = {
   id: string
-  name: string
+  /** Can be empty; the name to type then falls back to the id, as the control plane does. */
+  name: string | null
   createdAt: string
   owner: { id: string; name: string | null; email: string | null } | null
   memberCount: number

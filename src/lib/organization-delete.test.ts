@@ -51,6 +51,12 @@ describe('organizationDeleteFailure', () => {
       'not found, or you are not allowed'
     )
   })
+
+  it('asks for a confirmation, not permission, on a 403 reauth_required', () => {
+    const out = organizationDeleteFailure(new Error('/x failed: HTTP 403: reauth_required'), 'o')
+    expect(out.message).toContain('confirm it is you')
+    expect(out.message).not.toContain('platform admin')
+  })
 })
 
 describe('organizationDeleteGate', () => {
