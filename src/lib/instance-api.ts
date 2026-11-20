@@ -13678,9 +13678,10 @@ export async function retryDnsCertificate(
     `${dnsCertificatesPath(orgId)}/${id}/retry`,
     { method: 'POST' },
     undefined,
-    (status, body) =>
-      status === 409 && body.error === 'rate_limited'
-        ? new DnsCertificateRateLimitedError(typeof body.retryAt === 'string' ? body.retryAt : null)
-        : null
+    (status, body) => {
+      if (status !== 409 || body.error !== 'rate_limited') return null
+      const retryAt = typeof body.retryAt === 'string' ? body.retryAt : null
+      return new DnsCertificateRateLimitedError(retryAt)
+    }
   )
 }

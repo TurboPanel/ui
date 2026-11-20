@@ -92,7 +92,7 @@ export function withNameChoice(
 ): NameChoiceEdits {
   const next: Record<string, NameChoice> = { ...edits }
   const saved = names.find((name) => key(name.hostname) === key(hostname))
-  if (saved && saved.certificate === choice.certificate && saved.tlsId === choice.tlsId) {
+  if (saved?.certificate === choice.certificate && saved?.tlsId === choice.tlsId) {
     delete next[key(hostname)]
   } else {
     next[key(hostname)] = choice
