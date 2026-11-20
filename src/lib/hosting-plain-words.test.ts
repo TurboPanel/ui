@@ -24,7 +24,7 @@ import {
   LETS_ENCRYPT_CHOICE_TEXT,
   manageHereInsteadPrompt,
   missingCertificateMessage,
-  panelCertificateHint,
+  NEW_HOSTING_CERTIFICATE_HINT,
   PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
   removeHostnamePrompt,
@@ -85,8 +85,7 @@ describe('plain hosting words', () => {
       ...RAW_REFUSALS.map((refusal) => hostingActionErrorMessage(refusal)),
       pendingRemovalNote(true),
       pendingRemovalNote(false),
-      panelCertificateHint(true),
-      panelCertificateHint(false),
+      NEW_HOSTING_CERTIFICATE_HINT,
       PENDING_REMOVAL_CERTIFICATE_HINT,
       ...STATES.flatMap((state) => [
         removeHostnamePrompt('example.test', state),
@@ -103,12 +102,6 @@ describe('plain hosting words', () => {
   it('says what the next deploy does with a hostname removed from the file', () => {
     expect(pendingRemovalNote(false)).toMatch(/^This hostname will be removed on the next deploy\./)
     expect(pendingRemovalNote(true)).toMatch(/managed on this screen again/)
-  })
-
-  it('points at the Let’s Encrypt box only while it is shown', () => {
-    expect(panelCertificateHint(true)).toMatch(/tick the box below/)
-    expect(panelCertificateHint(false)).not.toMatch(/tick the box/)
-    expect(panelCertificateHint(false)).toMatch(/enter a hostname and keep Self-signed picked/)
   })
 
   it('names a library certificate by its name, then its first name on it, then its id', () => {

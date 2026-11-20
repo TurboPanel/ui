@@ -11,7 +11,7 @@ import {
   useOriginCertificates,
   useRemoveTunnelHostname,
   useSetServerTunnelCarrying,
-  useSetTunnelVerifyOrigin,
+  useSetTunnelHostnameReach,
   useTunnelHostnames,
   useTunnels,
   useUpdateTunnelPlacement,
@@ -26,7 +26,7 @@ const api = vi.hoisted(() => ({
   addTunnelHostname: vi.fn(),
   removeTunnelHostname: vi.fn(),
   setServerTunnelCarrying: vi.fn(),
-  setTunnelVerifyOrigin: vi.fn(),
+  setTunnelHostnameReach: vi.fn(),
   fetchOriginCertificates: vi.fn(),
   fetchExistingOriginCertificates: vi.fn(),
 }))
@@ -151,20 +151,22 @@ describe('tunnel queries', () => {
     expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnels })
   })
 
-  it('turning the verified connection on or off refreshes the tunnels', async () => {
+  it('changing how a name is reached refreshes the names and the tunnels', async () => {
     const client = createAppQueryClient()
     const spy = vi.spyOn(client, 'invalidateQueries')
-    api.setTunnelVerifyOrigin.mockResolvedValue({ needsDeploy: false })
-    const { result } = renderHook(() => useSetTunnelVerifyOrigin(orgId, 't1'), {
+    api.setTunnelHostnameReach.mockResolvedValue({
+      hostname: {},
+      certificateChangedNames: [],
+      needsDeploy: false,
+    })
+    const { result } = renderHook(() => useSetTunnelHostnameReach(orgId, 't1'), {
       wrapper: createWrapper(client),
     })
     await act(async () => {
-      await result.current.run({ enabled: true, wildcard: true })
+      await result.current.run({ doorwayId: 'h1', isLocalOnly: false })
     })
-    expect(api.setTunnelVerifyOrigin).toHaveBeenCalledWith(orgId, 't1', {
-      enabled: true,
-      wildcard: true,
-    })
+    expect(api.setTunnelHostnameReach).toHaveBeenCalledWith(orgId, 't1', 'h1', false)
+    expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnelHostnames('t1') })
     expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnels })
   })
 

@@ -4130,8 +4130,43 @@ export type HostingRecord = {
   certificate?: HostingCertificate | null
   /** The names a tunnel carries, one entry per name; absent on older control planes. */
   tunnels?: HostingTunnelPath[]
+  /** The certificate choice of every name the site answers on, www names included; absent on older control planes. */
+  names?: HostingNameCertificate[]
   createdAt: string
   updatedAt: string
+}
+
+/** What a name's certificate can be. `library` is one the organization already holds (a pin). */
+export type HostnameCertificate =
+  'cloudflare_origin' | 'letsencrypt_http' | 'letsencrypt_dns' | 'self_signed' | 'library'
+
+/** One thing the panel offers for a name; an option it cannot do right now comes with its `reason`. */
+export type HostingNameCertificateOption = {
+  certificate: HostnameCertificate
+  /** A library option names the certificate that covers the name. */
+  tlsId?: string | null
+  label?: string
+  available: boolean
+  /** Why it is not available, in plain words. */
+  reason?: string
+}
+
+/** One name the site answers on and the certificate it has. */
+export type HostingNameCertificate = {
+  hostname: string
+  certificate: HostnameCertificate
+  tlsId: string | null
+  certificateOptions: {
+    default: HostnameCertificate
+    options: HostingNameCertificateOption[]
+  }
+}
+
+/** One certificate choice sent on a save; names left out keep theirs. `self_signed` carries no `tlsId`, `library` needs one. */
+export type HostingNameChoice = {
+  hostname: string
+  certificate: HostnameCertificate
+  tlsId?: string
 }
 
 /**
@@ -4238,7 +4273,14 @@ export type TlsMetadata = {
     /** Expiry of the certificate Caddy is serving, as the daemon's probe read it (ISO 8601). */
     notAfter?: string
     /** `panel`: TurboPanel orders it itself with a DNS challenge (the row's source stays `upload`). */
-    managedBy?: 'caddy' | 'panel'
+    managedBy?: 'caddy' | 'panel' | 'server'
+    /** Where an order stands: `waiting` for something it needs, an ordering step, or `backoff` after a failure. */
+    stage?: string
+    /** What the order waits for, in plain words. */
+    warning?: string
+    /** When the order is tried again after a failure (ISO 8601). */
+    nextAttemptAt?: string
+    attempts?: number
   }
 }
 
@@ -5067,6 +5109,7 @@ export async function createHosting(
     options?: Record<string, unknown>
     tlsId?: string | null
     ipId?: string | null
+    names?: HostingNameChoice[]
   }
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/hostings`, {
@@ -5079,6 +5122,7 @@ export async function createHosting(
       ...(body?.options !== undefined ? { options: body.options } : {}),
       ...(body?.tlsId !== undefined ? { tlsId: body.tlsId } : {}),
       ...(body?.ipId !== undefined ? { ipId: body.ipId } : {}),
+      ...(body?.names !== undefined ? { names: body.names } : {}),
     }),
   })
 }
@@ -5092,6 +5136,7 @@ export async function updateHosting(
     options?: Record<string, unknown>
     tlsId?: string | null
     ipId?: string | null
+    names?: HostingNameChoice[]
   }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`, {
@@ -13179,8 +13224,8 @@ export type TunnelRecord = {
   carryingServerIds: string[]
   warnings: string[]
   doorwayCount: number
-  /** The verified connection to your web server (see `setTunnelVerifyOrigin`). Missing from an older panel, which means off. */
-  verifyOrigin?: VerifyOriginState
+  /** Names whose hop to the web server the connector verifies, as last written to the provider. Every other name skips the check. */
+  verifiedNames?: string[]
   /** The last or current run-token rotation; null when there was none, missing from an older panel. */
   runTokenRotation?: TunnelRunTokenRotation | null
   /** Why Rotate Run Token would be refused now, or null when it can start; missing from an older panel. */
@@ -13232,14 +13277,6 @@ export type TunnelRotationBlock = {
   code: string
   message: string
   serverIds?: string[]
-}
-
-/** Asked for, in effect, and which names still wait for a site or a certificate. */
-export type VerifyOriginState = {
-  enabled: boolean
-  /** Every name is served with a covering origin certificate, so the connector verifies. */
-  active: boolean
-  pendingNames: string[]
 }
 
 /** An origin certificate TurboPanel issued. The key stays sealed on the panel and is never returned. */
@@ -13344,26 +13381,29 @@ export async function updateTunnelPlacement(
   })
 }
 
-export type TunnelVerifyOriginBody = { enabled: boolean; wildcard?: boolean }
+/** What opening or closing a tunnel name for direct visitors did. */
+export type TunnelHostnameReachResult = {
+  hostname: TunnelHostnameRecord
+  /** Names whose certificate moved to the default of a name reached both ways; a picked certificate is never changed. */
+  certificateChangedNames: string[]
+  /** The site's servers pick the change up with its next deploy. */
+  needsDeploy: boolean
+}
 
 /**
- * Turn the verified connection on or off for a tunnel. Safe to repeat. **409**
- * `verify_origin_public_names`, `verify_origin_zones`, `verify_origin_names`,
- * `badge_cannot_certify`, `badge_cannot_dns`, `badge_cannot_tunnel`.
+ * Open (`isLocalOnly: false`) or close (`true`) a tunnel name for direct
+ * visitors on the site's datacenter address. **409** `doorway_bind_not_datacenter`,
+ * `doorway_no_site`, `doorway_removing`.
  */
-export async function setTunnelVerifyOrigin(
+export async function setTunnelHostnameReach(
   orgId: string,
   tunnelId: string,
-  body: TunnelVerifyOriginBody
-): Promise<{
-  tunnel: TunnelRecord
-  verifyOrigin: VerifyOriginState
-  pinnedHostingIds: string[]
-  needsDeploy: boolean
-}> {
-  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/verify-origin`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
+  doorwayId: string,
+  isLocalOnly: boolean
+): Promise<TunnelHostnameReachResult> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames/${doorwayId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isLocalOnly }),
   })
 }
 
@@ -13555,10 +13595,9 @@ export async function setServerTunnelCarrying(
 }
 
 // ---------------------------------------------------------------------------
-// Certificates ordered through a DNS challenge. The control plane no longer
-// orders or renews them: order, check and retry answer 422
-// `certificate_ordering_off`; the list stays. The three calls have no screen
-// now and stay as the mirror of the routes, which are still mounted.
+// Certificates ordered through a DNS challenge: list, order, check and retry
+// mirror the panel's routes. Retry answers 409 `rate_limited` while the
+// certificate authority asks for a wait.
 
 /** One certificate TurboPanel ordered itself, proven by a DNS record in the connected account. */
 export type DnsCertificate = {
@@ -13602,7 +13641,7 @@ export async function fetchDnsCertificates(
   return await apiFetch(dnsCertificatesPath(orgId))
 }
 
-/** Refused: 422 `certificate_ordering_off`. */
+/** Order a certificate for one name, several names or a wildcard. */
 export async function orderDnsCertificate(
   orgId: string,
   body: OrderDnsCertificateBody
@@ -13610,7 +13649,7 @@ export async function orderDnsCertificate(
   return await apiFetch(dnsCertificatesPath(orgId), { method: 'POST', body: JSON.stringify(body) })
 }
 
-/** Move an order on now. Refused: 422 `certificate_ordering_off`. */
+/** Move an order on now. */
 export async function checkDnsCertificate(
   orgId: string,
   id: string
@@ -13618,10 +13657,31 @@ export async function checkDnsCertificate(
   return await apiFetch(`${dnsCertificatesPath(orgId)}/${id}/check`, { method: 'POST' })
 }
 
-/** Try again a certificate that gave up. Refused: 422 `certificate_ordering_off`. */
+/** 409 `rate_limited`: the certificate authority asked for a wait; `retryAt` is when to try again. */
+export class DnsCertificateRateLimitedError extends Error {
+  readonly code = 'rate_limited'
+  readonly retryAt: string | null
+
+  constructor(retryAt: string | null) {
+    super('The certificate authority asked for a wait before this order is tried again.')
+    this.name = 'DnsCertificateRateLimitedError'
+    this.retryAt = retryAt
+  }
+}
+
+/** Try a certificate order that gave up again. 409 `rate_limited` (see `DnsCertificateRateLimitedError`) while the authority is rate limiting the organization. */
 export async function retryDnsCertificate(
   orgId: string,
   id: string
 ): Promise<{ certificate: DnsCertificate }> {
-  return await apiFetch(`${dnsCertificatesPath(orgId)}/${id}/retry`, { method: 'POST' })
+  return await apiFetch(
+    `${dnsCertificatesPath(orgId)}/${id}/retry`,
+    { method: 'POST' },
+    undefined,
+    (status, body) => {
+      if (status !== 409 || body.error !== 'rate_limited') return null
+      const retryAt = typeof body.retryAt === 'string' ? body.retryAt : null
+      return new DnsCertificateRateLimitedError(retryAt)
+    }
+  )
 }

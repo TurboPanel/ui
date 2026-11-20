@@ -12,7 +12,6 @@ export type TunnelOnly = Readonly<{ tunnelNames: string[] }>
 /** The words a tunnel-only name wears in the Hosting tab summary and the Bind box. */
 export const TUNNEL_ONLY_LABEL = 'Tunnel only'
 export const INTERNAL_CERTIFICATE_LABEL = 'Internal certificate'
-export const TUNNEL_ONLY_SUMMARY = `${TUNNEL_ONLY_LABEL} · ${INTERNAL_CERTIFICATE_LABEL}`
 
 /** What the Bind box says in place of its choices for a tunnel-only name. */
 export const TUNNEL_ONLY_BIND_TEXT =
@@ -21,10 +20,6 @@ export const TUNNEL_ONLY_BIND_TEXT =
 /** What the new-project form says under a name a tunnel already carries. */
 export const TUNNEL_ONLY_SETUP_NOTE =
   'This name is reached only through a tunnel, so it uses the internal certificate and no certificate is requested. Visitors see the tunnel’s edge certificate.'
-
-/** Hint for the Hosting tab's Certificate box. */
-export const TUNNEL_ONLY_CERTIFICATE_HINT =
-  'This name is reached only through a tunnel. The server uses its internal certificate and no certificate is requested here.'
 
 /**
  * `names` are all tunnel-only when each one is in `lookup` (name, lower case,

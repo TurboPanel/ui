@@ -103,7 +103,7 @@ import {
   type PinnedCertificateGap,
   coveringCertificates,
   pinnedCertificateGap,
-  stalePinReset,
+  editorForSave,
 } from '@/lib/hosting-tls-picker'
 import {
   composeHostingEntryFromEditorFields,
@@ -144,22 +144,15 @@ import {
   hostingActionErrorMessage,
   hostingSaveErrorMessage,
   missingCertificateMessage,
-  panelCertificateHint,
+  NEW_HOSTING_CERTIFICATE_HINT,
   PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
   resolveCertificateRef,
   SERVICE_NOT_SAVED_MESSAGE,
   SHARED_FILE_HOSTNAME_MESSAGE,
 } from '@/lib/hosting-plain-words'
-import {
-  INTERNAL_CERTIFICATE_LABEL,
-  TUNNEL_ONLY_BIND_TEXT,
-  TUNNEL_ONLY_CERTIFICATE_HINT,
-  TUNNEL_ONLY_SUMMARY,
-  tunnelOnlyOf,
-  type TunnelOnly,
-} from '@/lib/hosting-tunnel'
-import { useHostingTunnelOnly, useTunnelOnlyNames } from '@/lib/queries/tunnel-only'
+import { TUNNEL_ONLY_BIND_TEXT, TUNNEL_ONLY_LABEL, type TunnelOnly } from '@/lib/hosting-tunnel'
+import { useHostingTunnelOnly } from '@/lib/queries/tunnel-only'
 import {
   composeRowsAwaitingRemoval,
   configuredHostingState,
@@ -180,10 +173,9 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
-import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
+import { HostingNameCertificates } from '@/components/org/hosting-name-certificates'
+import { nameChoicesToSend, type NameChoiceEdits } from '@/lib/name-certificates'
 import {
-  certificateAfterSave,
-  hostingSaveNote,
   withCertificateRefusal,
   type HostingSaveNote,
   type LetsEncryptRefusal,
@@ -191,7 +183,6 @@ import {
 import { RemovedServiceCard } from '@/components/org/removed-service-card'
 import { containerCardServices, removedFromComposeServiceIds } from '@/lib/directory-names'
 import { useEnvironmentFolders } from '@/lib/queries/folders'
-import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
 import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 import { useLeaveWarning } from '@/components/ui/use-leave-warning'
 import { useSyncedEditors } from '@/components/org/use-synced-editors'
@@ -223,11 +214,11 @@ type HostingEditorState = {
   /** Multiline KEY=VALUE for options.web.env (HTTP hostings). */
   webEnvLines: string
   /**
-   * Ask for a free Let's Encrypt certificate as part of this save. On for a
-   * hosting that does not exist yet, off for one that does (it has the
-   * Certificate section for that).
+   * The certificate picked for each name of a saved site, keyed by name; only
+   * the names that changed. A new site has none: the panel picks a default for
+   * every name when it is saved.
    */
-  getLetsEncrypt: boolean
+  nameChoices: NameChoiceEdits
 }
 
 function formatWebEnvLines(web: unknown): string {
@@ -349,7 +340,7 @@ export function readHostingEditor(hostings: HostingRecord[]): HostingEditorState
     protocol: readHostingProtocol(optionsRecord),
     ports: formatHostingPorts(optionsRecord),
     ...readWebOptions(optionsRecord),
-    getLetsEncrypt: hostings.length === 0,
+    nameChoices: {},
     tlsAutomatic: false,
   }
 }
@@ -522,7 +513,7 @@ function readComposeHostingEditor(
     tlsId: entry.tls?.mode === 'certificate' ? (entry.tls.certificateRef ?? null) : null,
     tlsAutomatic: entry.tls?.mode === 'automatic',
     // Compose sets the certificate for a route it declares.
-    getLetsEncrypt: false,
+    nameChoices: {},
   }
 }
 
@@ -904,7 +895,7 @@ function hostingRowSummary(
     return [
       editor.hostnames.trim() || 'no hostnames',
       editor.targetPort.trim() ? `port ${editor.targetPort.trim()}` : null,
-      TUNNEL_ONLY_SUMMARY,
+      TUNNEL_ONLY_LABEL,
     ]
       .filter(Boolean)
       .join(' · ')
@@ -1054,70 +1045,73 @@ function HostingWwwField({
   )
 }
 
-/** The sentence under Certificate: who sets it, and how to get Let’s Encrypt where it applies. */
-function tlsPickerHint(
-  composeOwned: boolean,
-  awaitingRemoval: boolean,
-  letsEncryptBoxShown: boolean
-): string {
+/** The sentence under Certificate: who sets it. */
+function tlsPickerHint(composeOwned: boolean, awaitingRemoval: boolean): string {
   if (awaitingRemoval) return PENDING_REMOVAL_CERTIFICATE_HINT
-  return composeOwned ? COMPOSE_CERTIFICATE_HINT : panelCertificateHint(letsEncryptBoxShown)
+  return composeOwned ? COMPOSE_CERTIFICATE_HINT : NEW_HOSTING_CERTIFICATE_HINT
 }
 
 function HostingTlsPicker({
+  orgId,
+  hostingId,
   isHttp,
   composeOwned,
   awaitingRemoval,
   editor,
   covering,
+  library,
   pinnedGap,
   locked,
-  tunnelOnly,
   onChange,
 }: Readonly<{
+  orgId: string
+  /** The saved hosting, when the row has one: its names carry the certificate choices. */
+  hostingId: string | null
   isHttp: boolean
   composeOwned: boolean
-  /** Reached only through a tunnel: the internal certificate, nothing to pick or request. */
-  tunnelOnly: TunnelOnly | null
-  /** Waiting for the next deploy to remove it: no Save, so no Let’s Encrypt box. */
+  /** Waiting for the next deploy to remove it: nothing to pick. */
   awaitingRemoval: boolean
   editor: HostingEditorState
   covering: TlsRecord[]
+  /** Every certificate in the library, for the names of a saved site. */
+  library: TlsRecord[]
   /** A pinned certificate that no longer covers the names: still shown, with a note. */
   pinnedGap: PinnedCertificateGap<TlsRecord> | null
   locked: boolean
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
   if (!isHttp) return null
-  if (tunnelOnly) {
+  if (!composeOwned) {
     return (
       <>
-        <Text style={styles.tlsLabel}>Certificate</Text>
-        <Text style={styles.tlsHint}>{TUNNEL_ONLY_CERTIFICATE_HINT}</Text>
-        <Text style={styles.wwwResult}>{INTERNAL_CERTIFICATE_LABEL}</Text>
+        {hostingId && !awaitingRemoval ? (
+          <HostingNameCertificates
+            orgId={orgId}
+            hostingId={hostingId}
+            library={library}
+            edits={editor.nameChoices}
+            locked={locked}
+            onEditsChange={(nameChoices) => onChange({ nameChoices })}
+          />
+        ) : (
+          <>
+            <Text style={styles.tlsLabel}>Certificate</Text>
+            <Text style={styles.tlsHint}>{tlsPickerHint(false, awaitingRemoval)}</Text>
+          </>
+        )}
       </>
     )
   }
   const chips = pinnedGap ? [...covering, pinnedGap.row] : covering
   const picked = resolveCertificateRef(editor.tlsId ?? undefined, chips)
-  const letsEncryptBoxShown =
-    !awaitingRemoval &&
-    offersLetsEncrypt({
-      composeOwned,
-      protocol: editor.protocol,
-      tlsId: editor.tlsId,
-      hostnameCount: parseHostnameList(editor.hostnames).length,
-    })
   return (
     <>
       <Text style={styles.tlsLabel}>Certificate</Text>
-      <Text style={styles.tlsHint}>
-        {tlsPickerHint(composeOwned, awaitingRemoval, letsEncryptBoxShown)}
-      </Text>
+      <Text style={styles.tlsHint}>{tlsPickerHint(true, awaitingRemoval)}</Text>
       <SegmentedControl
         accessibilityLabel="Certificate"
         options={[
-          ...(composeOwned ? [{ value: AUTOMATIC_CHOICE, label: 'Let\u2019s Encrypt' }] : []),
+          { value: AUTOMATIC_CHOICE, label: 'Let\u2019s Encrypt' },
           { value: NO_CHOICE, label: 'Self-signed' },
           ...chips.map((row) => ({ value: row.id, label: tlsLabel(row) })),
         ]}
@@ -1132,14 +1126,6 @@ function HostingTlsPicker({
         })}`}
       </Text>
       <HostingHintText hint={pinnedGap?.note ?? null} />
-      {letsEncryptBoxShown ? (
-        <Checkbox
-          label="Get a free Let’s Encrypt certificate when I save"
-          checked={editor.getLetsEncrypt}
-          disabled={locked}
-          onPress={() => onChange({ getLetsEncrypt: !editor.getLetsEncrypt })}
-        />
-      ) : null}
     </>
   )
 }
@@ -1337,38 +1323,14 @@ function hostingCertificateNames(editor: HostingEditorState): string[] {
   return wwwCertificateNames(names, effectiveWwwMode(editor.www, names))
 }
 
-/** A panel hosting save also asks Let's Encrypt for a certificate. */
-function wantsLetsEncrypt(editor: HostingEditorState): boolean {
-  return (
-    editor.getLetsEncrypt &&
-    offersLetsEncrypt({
-      composeOwned: false,
-      protocol: editor.protocol,
-      tlsId: editor.tlsId,
-      hostnameCount: parseHostnameList(editor.hostnames).length,
-    })
-  )
-}
-
-/** A panel save asks Let's Encrypt unless every name is reached only through a tunnel. */
-export function panelSaveAsksLetsEncrypt(
-  editor: HostingEditorState,
-  tunnelOnly: TunnelOnly | null
-): boolean {
-  return wantsLetsEncrypt(editor) && !tunnelOnly
-}
-
 /** A row's save button, and right after it what its last save said. */
 function HostingSaveControls({
-  asksLetsEncrypt,
   saving,
   disabled,
   error,
   savedNote,
   onSave,
 }: Readonly<{
-  /** The save also asks Let's Encrypt for a certificate. */
-  asksLetsEncrypt: boolean
   saving: boolean
   disabled: boolean
   /** Why the last save failed, in plain words. */
@@ -1376,15 +1338,13 @@ function HostingSaveControls({
   savedNote: HostingSaveNote | null
   onSave: () => void
 }>) {
-  // Said while saving, so leaving early is not mistaken for done.
-  const busyLabel = asksLetsEncrypt ? 'Saving and asking Let’s Encrypt…' : 'Saving…'
   const note = error === null ? savedNote : { tone: 'error' as const, message: error }
   const failed = note?.tone === 'error'
   return (
     <>
       <Button
         label="Save hosting"
-        busyLabel={busyLabel}
+        busyLabel="Saving…"
         size="sm"
         variant="secondary"
         busy={saving}
@@ -1518,8 +1478,7 @@ export function HostingPanelRow({
   saving: boolean
   disabled: boolean
   onChange: (patch: Partial<HostingEditorState>) => void
-  /** Told whether the row's names are tunnel-only, so a save never asks for a certificate it cannot get. */
-  onSave: (tunnelOnly: TunnelOnly | null) => void
+  onSave: () => void
 }>) {
   const covering = coveringCertificates(tlsOptions, editor.hostnames, editor.www)
   const pinnedGap = pinnedCertificateGap(tlsOptions, editor.tlsId, editor.hostnames, editor.www)
@@ -1620,14 +1579,16 @@ export function HostingPanelRow({
       <HostingWwwField isHttp={isHttp} editor={editor} locked={locked} onChange={onChange} />
 
       <HostingTlsPicker
+        orgId={orgId}
+        hostingId={hostingId ?? null}
         isHttp={isHttp}
         composeOwned={composeOwned}
         awaitingRemoval={awaitingRemoval}
         editor={editor}
         covering={covering}
+        library={tlsOptions}
         pinnedGap={pinnedGap}
         locked={locked}
-        tunnelOnly={certificateTunnel}
         onChange={onChange}
       />
 
@@ -1671,12 +1632,11 @@ export function HostingPanelRow({
 
       {canSave ? (
         <HostingSaveControls
-          asksLetsEncrypt={!composeOwned && panelSaveAsksLetsEncrypt(editor, tunnelOnly)}
           saving={saving}
           disabled={disabled}
           error={rowErrorFor(rowError, 'save')}
           savedNote={savedNote}
-          onSave={() => onSave(tunnelOnly)}
+          onSave={onSave}
         />
       ) : null}
 
@@ -2089,7 +2049,7 @@ function EnvironmentHostingSectionPanel({
   publicIps: IpRecord[]
   /** `editorKey` of the row being saved, or null. */
   savingHosting: string | null
-  onSaveHosting: (row: HostingPanelRowDescriptor, tunnelOnly: TunnelOnly | null) => void
+  onSaveHosting: (row: HostingPanelRowDescriptor) => void
   hostingRowActions: HostingRowActions
   focusHostingId: string | null
 }>) {
@@ -2166,7 +2126,7 @@ function EnvironmentHostingSectionPanel({
                       [row.editorKey]: { ...editor, ...patch },
                     }))
                   }
-                  onSave={(tunnelOnly) => onSaveHosting(row, tunnelOnly)}
+                  onSave={() => onSaveHosting(row)}
                 />
               )
             })}
@@ -2369,7 +2329,7 @@ function EnvironmentLoadedPanels({
   tlsLibrary: TlsRecord[]
   publicIps: IpRecord[]
   savingHosting: string | null
-  onSaveHosting: (row: HostingPanelRowDescriptor, tunnelOnly: TunnelOnly | null) => void
+  onSaveHosting: (row: HostingPanelRowDescriptor) => void
   hostingRowActions: HostingRowActions
   containersByService: Record<string, ContainerRecord[]>
   canManage: boolean
@@ -2688,7 +2648,6 @@ export function EnvironmentDetailBody({
   const deployEnvironmentMutation = useDeployEnvironment(orgId, environmentId)
   const upsertHostingMutation = useUpsertHosting(orgId)
   const releaseHostingMutation = useReleaseHostingFromCompose(orgId)
-  const letsEncryptMutation = useRequestLetsEncrypt(orgId)
 
   const [error, setError] = useState<string | null>(null)
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
@@ -2720,7 +2679,6 @@ export function EnvironmentDetailBody({
   const tlsLibrary = tlsQuery.data?.tls ?? []
   const publicIps = ipsQuery.data?.ips ?? []
   const hostingsByService = hostingsQuery.hostingsByService
-  const tunnelOnlyLookup = useTunnelOnlyNames(orgId)
   const containersByService = containersQuery.containersByService
   // Memoized because `hostingRows` depends on it: a fresh `[]` every render
   // would rebuild every descriptor and re-seed the editors mid-edit.
@@ -3011,12 +2969,12 @@ export function EnvironmentDetailBody({
     row: HostingPanelRowDescriptor,
     typed: HostingEditorState = hostingEditors[row.editorKey] ?? row.seed,
     onError: (message: string) => void = (message) =>
-      setRowError(row.editorKey, { field: 'save', message }),
-    /** The row's own answer when it has one: list records carry no tunnel paths. */
-    rowTunnelOnly?: TunnelOnly | null
+      setRowError(row.editorKey, { field: 'save', message })
   ): Promise<boolean> => {
-    // New names must not keep the old name's certificate pinned.
-    const editor = { ...typed, ...stalePinReset(tlsLibrary, typed, row.seed.hostnames) }
+    // A site that is not saved yet must not keep an old name's certificate
+    // pinned. A saved site is left alone: the panel gives a new name its default
+    // and keeps what every other name has.
+    const editor = editorForSave(tlsLibrary, typed, row.seed.hostnames, Boolean(row.hostingId))
     const service = resolvedServices.find(
       (item) => item.composeServiceName === row.composeServiceName
     )
@@ -3024,6 +2982,10 @@ export function EnvironmentDetailBody({
       onError(SERVICE_NOT_SAVED_MESSAGE)
       return false
     }
+    const savedBefore = (hostingsByService[service.id] ?? []).find(
+      (item) => item.id === row.hostingId
+    )
+    const names = nameChoicesToSend(savedBefore?.names ?? [], editor.nameChoices)
     const result = await upsertHostingMutation.run({
       serviceId: service.id,
       ...(row.hostingId ? { hostingId: row.hostingId } : {}),
@@ -3031,8 +2993,12 @@ export function EnvironmentDetailBody({
         name: row.composeServiceName,
         metadata: { composeServiceName: row.composeServiceName },
         options: buildHostingOptions(editor),
-        tlsId: editor.tlsId,
+        // A saved site's names carry their own certificates; the whole-site pin
+        // is sent only when it changed (a new site, a moved compose route, or a
+        // pin let go because the names changed).
+        ...(editor.tlsId === (savedBefore?.tlsId ?? null) ? {} : { tlsId: editor.tlsId }),
         ipId: editor.ipId,
+        ...(names ? { names } : {}),
       },
     })
     if (!result.ok) {
@@ -3040,29 +3006,8 @@ export function EnvironmentDetailBody({
       onError(hostingSaveErrorMessage(result, 'Could not save this hostname.'))
       return false
     }
-    const savedHostingId =
-      row.hostingId ??
-      ('id' in result.value && typeof result.value.id === 'string' ? result.value.id : null)
-    const saved = (hostingsByService[service.id] ?? []).find((item) => item.id === savedHostingId)
-    const tunnelOnly =
-      rowTunnelOnly === undefined
-        ? tunnelOnlyOf(hostingCertificateNames(editor), tunnelOnlyLookup, saved)
-        : rowTunnelOnly
-    const wantsCertificate = panelSaveAsksLetsEncrypt(editor, tunnelOnly)
-    // The hosting is already saved; a refused certificate is said next to its
-    // Certificate section (with the fix when there is one), never undone.
-    const certificateStep = await certificateAfterSave({
-      hostingId: savedHostingId,
-      wantsCertificate,
-      request: letsEncryptMutation.run,
-    })
-    if (certificateStep) {
-      setCertificateRefusals((current) =>
-        withCertificateRefusal(current, certificateStep.hostingId, certificateStep.refusal)
-      )
-    }
     await refreshEditorsAfterSave([row.editorKey])
-    setSavedNote(row.editorKey, hostingSaveNote(wantsCertificate, certificateStep?.refusal ?? null))
+    setSavedNote(row.editorKey, { tone: 'ok', message: 'Saved.' })
     return true
   }
 
@@ -3079,10 +3024,10 @@ export function EnvironmentDetailBody({
     }
   }
 
-  const saveHosting = (row: HostingPanelRowDescriptor, tunnelOnly: TunnelOnly | null) =>
+  const saveHosting = (row: HostingPanelRowDescriptor) =>
     runRowAction(row, async () => {
       if (row.source.kind === 'panel') {
-        await savePanelHostingRow(row, undefined, undefined, tunnelOnly)
+        await savePanelHostingRow(row)
         return
       }
       // Nothing to save until the next deploy has removed it.
@@ -3149,7 +3094,6 @@ export function EnvironmentDetailBody({
               {
                 ...editor,
                 tlsId: certificate.tlsId,
-                getLetsEncrypt: certificate.getLetsEncrypt,
                 tlsAutomatic: false,
                 protocol: 'http',
               },
@@ -3239,8 +3183,8 @@ export function EnvironmentDetailBody({
           tlsLibrary={tlsLibrary}
           publicIps={publicIps}
           savingHosting={savingHosting}
-          onSaveHosting={(row, tunnelOnly) => {
-            saveHosting(row, tunnelOnly).catch((err: unknown) => {
+          onSaveHosting={(row) => {
+            saveHosting(row).catch((err: unknown) => {
               setRowError(row.editorKey, {
                 field: 'save',
                 message: userErrorMessage(err, 'Could not save this hostname.'),

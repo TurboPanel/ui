@@ -2,12 +2,13 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useDnsCertificates } from '@/lib/queries/dns-certificates'
-import { createAppQueryClient } from '@/lib/query-client'
+import { useDnsCertificates, useRetryDnsCertificate } from '@/lib/queries/dns-certificates'
+import { createAppQueryClient, queryKeys } from '@/lib/query-client'
 
 const api = vi.hoisted(() => ({
   fetchDnsCertificates: vi.fn(),
   checkDnsCertificate: vi.fn(),
+  retryDnsCertificate: vi.fn(),
   isForbiddenError: vi.fn(),
 }))
 
@@ -78,5 +79,21 @@ describe('certificate order queries', () => {
     api.fetchDnsCertificates.mockRejectedValue(new Error('boom'))
     const failed = renderHook(() => useDnsCertificates(orgId), { wrapper: createWrapper() })
     await waitFor(() => expect(failed.result.current.isError).toBe(true))
+  })
+})
+
+describe('retrying an order', () => {
+  it('retries by certificate id and refreshes the lists', async () => {
+    const client = createAppQueryClient()
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    api.retryDnsCertificate.mockResolvedValue({ certificate: { id: 'c1' } })
+    const { result } = renderHook(() => useRetryDnsCertificate(orgId), {
+      wrapper: createWrapper(client),
+    })
+    await act(async () => {
+      await result.current.run('c1')
+    })
+    expect(api.retryDnsCertificate).toHaveBeenCalledWith(orgId, 'c1')
+    expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tls })
   })
 })

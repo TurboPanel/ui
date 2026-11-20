@@ -98,7 +98,7 @@ const tunnel = (extra: Partial<TunnelRecord> = {}): TunnelRecord =>
     carryingServerIds: ['s1'],
     warnings: [],
     doorwayCount: 0,
-    verifyOrigin: { enabled: false, active: false, pendingNames: [] },
+    verifiedNames: [],
     ...extra,
   }) as TunnelRecord
 

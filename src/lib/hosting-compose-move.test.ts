@@ -66,10 +66,9 @@ describe('withoutComposeHostingRoute', () => {
 })
 
 describe('panelCertificateForMovedRoute', () => {
-  it('keeps Let’s Encrypt as a request after the save', () => {
+  it('leaves an automatic route to the panel’s default for each name', () => {
     expect(panelCertificateForMovedRoute({ tls: { mode: 'automatic' } }, library)).toEqual({
       tlsId: null,
-      getLetsEncrypt: true,
       missingRef: null,
     })
   })
@@ -80,24 +79,22 @@ describe('panelCertificateForMovedRoute', () => {
         { tls: { mode: 'certificate', certificateRef: 'Shop wildcard' } },
         library
       )
-    ).toEqual({ tlsId: 'cert-1', getLetsEncrypt: false, missingRef: null })
+    ).toEqual({ tlsId: 'cert-1', missingRef: null })
     expect(
       panelCertificateForMovedRoute(
         { tls: { mode: 'certificate', certificateRef: 'cert-1' } },
         library
       )
-    ).toEqual({ tlsId: 'cert-1', getLetsEncrypt: false, missingRef: null })
+    ).toEqual({ tlsId: 'cert-1', missingRef: null })
   })
 
-  it('keeps self-signed as no certificate and no request', () => {
+  it('keeps self-signed as no certificate', () => {
     expect(panelCertificateForMovedRoute({ tls: { mode: 'internal' } }, library)).toEqual({
       tlsId: null,
-      getLetsEncrypt: false,
       missingRef: null,
     })
     expect(panelCertificateForMovedRoute({}, library)).toEqual({
       tlsId: null,
-      getLetsEncrypt: false,
       missingRef: null,
     })
   })
@@ -108,7 +105,7 @@ describe('panelCertificateForMovedRoute', () => {
         { tls: { mode: 'certificate', certificateRef: 'gone' } },
         library
       )
-    ).toEqual({ tlsId: null, getLetsEncrypt: false, missingRef: 'gone' })
+    ).toEqual({ tlsId: null, missingRef: 'gone' })
   })
 })
 

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setActiveOrganizationId } from '@/lib/org-context'
 import {
   checkDnsCertificate,
+  DnsCertificateRateLimitedError,
   fetchDnsCertificates,
   orderDnsCertificate,
   retryDnsCertificate,
@@ -56,5 +57,28 @@ describe('instance-api certificate order wrappers', () => {
       '/api/client/v1/organizations/org-1/dns-certificates/c1/retry'
     )
     expect((fetchMock.mock.calls[2]?.[1] as RequestInit).method).toBe('POST')
+  })
+
+  it('reads a 409 rate_limited retry as a wait with the time to try again', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'rate_limited', retryAt: '2026-11-20T10:00:00Z' }), {
+        status: 409,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const error = await retryDnsCertificate('org-1', 'c1').catch((err: unknown) => err)
+    expect(error).toBeInstanceOf(DnsCertificateRateLimitedError)
+    expect((error as DnsCertificateRateLimitedError).retryAt).toBe('2026-11-20T10:00:00Z')
+  })
+
+  it('leaves any other refusal as the plain error', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'not_found' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    const error = await retryDnsCertificate('org-1', 'c1').catch((err: unknown) => err)
+    expect(error).not.toBeInstanceOf(DnsCertificateRateLimitedError)
   })
 })

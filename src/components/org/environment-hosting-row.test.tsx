@@ -3,7 +3,11 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveHostingServiceContext } from '@/lib/compose/hosting-service-context'
 import { normalizeCompose } from '@/lib/compose'
-import { PENDING_REMOVAL_CERTIFICATE_HINT, pendingRemovalNote } from '@/lib/hosting-plain-words'
+import {
+  NEW_HOSTING_CERTIFICATE_HINT,
+  PENDING_REMOVAL_CERTIFICATE_HINT,
+  pendingRemovalNote,
+} from '@/lib/hosting-plain-words'
 import type { HostingRecord } from '@/lib/instance-api'
 
 const tunnel = vi.hoisted(() => ({
@@ -94,7 +98,6 @@ vi.mock('@/components/ui', () => ({
 import {
   buildHostingPanelRows,
   HostingPanelRow,
-  panelSaveAsksLetsEncrypt,
   readHostingEditor,
 } from './environment-detail-section'
 import { useSyncedEditors } from './use-synced-editors'
@@ -134,41 +137,13 @@ describe('HostingPanelRow for a tunnel-only name', () => {
     tunnel.only = null
   })
 
-  it('shows the internal certificate and never offers a public one', () => {
+  it('summarises a tunnel-only name without claiming a certificate', () => {
     tunnel.only = { tunnelNames: ['edge'] }
     drawRow({
-      editor: { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true },
+      editor: { ...readHostingEditor([]), hostnames: 'testing.example' },
     })
-    expect(screen.getByText(/testing\.example · Tunnel only · Internal certificate/)).toBeTruthy()
-    expect(screen.getByText('Internal certificate')).toBeTruthy()
-    expect(screen.getByText('Tunnel Only')).toBeTruthy()
-    expect(screen.queryByText(/Self-signed/)).toBeNull()
-    expect(screen.queryByText(/Get a free Let’s Encrypt/)).toBeNull()
+    expect(screen.getByText(/testing\.example · Tunnel only/)).toBeTruthy()
     expect(screen.queryByText('Public IP')).toBeNull()
-  })
-
-  it('does not request Let\u2019s Encrypt on save for a tunnel-only name, and leaves the box alone', () => {
-    const onChange = vi.fn()
-    const editor = { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true }
-    tunnel.only = { tunnelNames: ['edge'] }
-    drawRow({ onChange, editor })
-    expect(onChange).not.toHaveBeenCalled()
-    expect(panelSaveAsksLetsEncrypt(editor, tunnel.only)).toBe(false)
-    expect(panelSaveAsksLetsEncrypt(editor, null)).toBe(true)
-  })
-
-  it('hands the row\u2019s tunnel-only answer to the save, so it cannot ask Let\u2019s Encrypt', () => {
-    const onSave = vi.fn()
-    tunnel.only = { tunnelNames: ['edge'] }
-    drawRow({ onSave })
-    fireEvent.click(screen.getByText('Save hosting'))
-    expect(onSave).toHaveBeenCalledWith({ tunnelNames: ['edge'] })
-    onSave.mockClear()
-    tunnel.only = null
-    cleanup()
-    drawRow({ onSave })
-    fireEvent.click(screen.getByText('Save hosting'))
-    expect(onSave).toHaveBeenCalledWith(null)
   })
 
   it('counts the www name of a bare domain as a name to check', () => {
@@ -218,19 +193,6 @@ describe('HostingPanelRow save feedback', () => {
     expect(message.textContent).toBe('The server is offline.')
     expect(message.previousElementSibling?.textContent).toBe('Save hosting')
     expect(screen.queryByText('Saved.')).toBeNull()
-  })
-
-  it('says the certificate is part of the save while it runs', () => {
-    drawRow({
-      saving: true,
-      editor: { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true },
-    })
-    expect(screen.getByText('Saving and asking Let’s Encrypt…')).toBeTruthy()
-  })
-
-  it('does not claim a certificate the save will not ask for (no hostname yet)', () => {
-    drawRow({ saving: true, editor: { ...readHostingEditor([]), getLetsEncrypt: true } })
-    expect(screen.getByText('Saving…')).toBeTruthy()
   })
 })
 
@@ -364,15 +326,9 @@ describe('a hostname removed from the configuration file, before the next deploy
   })
 })
 
-describe('the certificate hint of a hostname managed on this screen', () => {
-  it('mentions the Let’s Encrypt box only while the box is there', () => {
+describe('the certificate hint of a site that is not saved yet', () => {
+  it('says each name gets a certificate when it is saved', () => {
     drawRow()
-    expect(
-      screen.getByText(/tick the box below to get a free Let’s Encrypt certificate/)
-    ).toBeTruthy()
-    cleanup()
-    drawRow({ editor: { ...readHostingEditor([]), hostnames: '' } })
-    expect(screen.queryByText(/tick the box below/)).toBeNull()
-    expect(screen.getByText(/enter a hostname and keep Self-signed picked/)).toBeTruthy()
+    expect(screen.getByText(NEW_HOSTING_CERTIFICATE_HINT)).toBeTruthy()
   })
 })

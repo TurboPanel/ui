@@ -208,19 +208,9 @@ export function pendingRemovalNote(handedBack: boolean): string {
 export const PENDING_REMOVAL_CERTIFICATE_HINT =
   'The certificate stays as it is until the next deploy removes this hostname.'
 
-/**
- * The certificate picker's explanation for a hostname managed on this screen.
- * It mentions the Let’s Encrypt box only while the box is shown (Self-signed
- * picked and a hostname typed), and otherwise says how to get it.
- */
-export function panelCertificateHint(letsEncryptBoxShown: boolean): string {
-  const base =
-    'Until a real certificate is in place the site uses a basic self-signed one. Pick a library certificate to use an upload or an org self-signed one'
-  return letsEncryptBoxShown
-    ? base + ', or tick the box below to get a free Let’s Encrypt certificate when you save.'
-    : base +
-        '. For a free Let’s Encrypt certificate, enter a hostname and keep Self-signed picked: a box to ask for one shows up below.'
-}
+/** Under Certificate on a site that is not saved yet: no names exist for the panel to pick for. */
+export const NEW_HOSTING_CERTIFICATE_HINT =
+  'Each name gets a certificate when you save, chosen for how visitors reach it. Save, then pick a different one for any name.'
 
 /** A move refused because a deploy of the environment is running. */
 export const DEPLOY_RUNNING_MESSAGE =

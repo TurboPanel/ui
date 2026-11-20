@@ -178,6 +178,21 @@ describe('the panel’s own Use Let’s Encrypt on a screen that keeps refusals'
   })
 })
 
+describe('Use Let’s Encrypt on a panel domain', () => {
+  it('says it applies to every name on the site', () => {
+    state.certificate = cert({ letsEncryptAvailable: true })
+    renderPanel()
+    expect(screen.getByText('Applies Let’s Encrypt to every name on this site.')).toBeTruthy()
+    expect(screen.getByLabelText('Use Let’s Encrypt')).toBeTruthy()
+  })
+
+  it('has no note when the button is not offered', () => {
+    state.certificate = cert({ letsEncryptAvailable: false })
+    renderPanel()
+    expect(screen.queryByText(/Applies Let/)).toBeNull()
+  })
+})
+
 describe('a certificate that starts on the next deploy', () => {
   beforeEach(() => {
     state.certificate = cert({ state: 'issuing', needsDeploy: true })

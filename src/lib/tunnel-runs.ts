@@ -6,6 +6,7 @@
 import type {
   OrgServerRecord,
   TunnelCarrier,
+  TunnelHostnameReachResult,
   TunnelHostnameRecord,
   OriginCertificateRecord,
   TunnelPlacement,
@@ -15,7 +16,6 @@ import type {
   TunnelPortal,
   TunnelRecord,
   TunnelRunTokenRotation,
-  VerifyOriginState,
 } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
 
@@ -241,47 +241,67 @@ export function tunnelHealth(tunnel: Pick<TunnelRecord, 'status' | 'portals'>): 
   return { label: 'Setting Up', tone: 'pending' }
 }
 
-/** What an older panel, which sends no verified-connection field, means: off. */
-export const VERIFY_ORIGIN_OFF: VerifyOriginState = {
-  enabled: false,
-  active: false,
-  pendingNames: [],
+/**
+ * Whether the connector checks the certificate a name carries on its server.
+ * The panel decides per name (`verifiedNames` on the tunnel): a name is
+ * verified once its certificate is in place and a deploy carried it; every
+ * other name skips the check, so a site that is not set up yet can never make
+ * a name unreachable. An older panel sends no list, which reads as none.
+ */
+export function nameVerification(
+  verifiedNames: readonly string[] | undefined,
+  hostname: string
+): { verified: boolean; label: string; tone: BadgeTone; line: string } {
+  const wanted = hostname.trim().toLowerCase()
+  const verified = (verifiedNames ?? []).some((name) => name.toLowerCase() === wanted)
+  if (verified) {
+    return {
+      verified,
+      label: 'Verified',
+      tone: 'ok',
+      line: 'The connector checks the certificate of your web server for this name.',
+    }
+  }
+  return {
+    verified,
+    label: 'Not Verified',
+    tone: 'muted',
+    line: 'The connector accepts the certificate of your web server without checking it. It starts checking once this name has an origin certificate or a ready Let’s Encrypt certificate and a deploy carried it.',
+  }
 }
 
-/**
- * The verified connection, as a badge and a sentence. "Waiting" is the safe
- * state: the choice is made but a name has no site or certificate yet, so the
- * connector keeps skipping verification for the whole tunnel until it is
- * applied again.
- */
-export function verifyOriginSummary(given?: VerifyOriginState | null): {
+/** How a tunnel name is reached: through the tunnel only, or also directly on the datacenter address. */
+export function hostnameReach(record: Pick<TunnelHostnameRecord, 'isLocalOnly'>): {
   label: string
-  tone: BadgeTone
   line: string
+  actionLabel: string
 } {
-  const state = given ?? VERIFY_ORIGIN_OFF
-  if (!state.enabled) {
+  if (record.isLocalOnly) {
     return {
-      label: 'Off',
-      tone: 'muted',
-      line: 'The connector does not check the certificate of your web server.',
+      label: 'Tunnel Only',
+      line: 'Only the tunnel and the servers that carry it reach this name.',
+      actionLabel: 'Also Reach Directly',
     }
   }
-  if (state.active) {
-    return {
-      label: 'On',
-      tone: 'ok',
-      line: 'The connector checks the certificate of your web server for every hostname.',
-    }
+  return {
+    label: 'Tunnel and Direct',
+    line: 'Visitors also reach this name directly on the site’s datacenter address.',
+    actionLabel: 'Tunnel Only',
   }
-  const count = state.pendingNames.length
-  const names = state.pendingNames.join(', ')
-  const until = count === 1 ? 'it has a site and a certificate' : 'they have sites and certificates'
-  const line =
-    count === 0
-      ? 'Add a hostname to start checking the certificate of your web server.'
-      : `Waiting for ${names}. Until ${until}, the connector does not check the certificate for any hostname of this tunnel.`
-  return { label: 'Waiting', tone: 'pending', line }
+}
+
+/** The sentence after a reach change was saved. */
+export function reachChangeNote(
+  result: Pick<TunnelHostnameReachResult, 'certificateChangedNames' | 'needsDeploy'>
+): string {
+  const parts: string[] = []
+  if (result.certificateChangedNames.length > 0) {
+    parts.push(
+      `${result.certificateChangedNames.join(', ')} moved to the default certificate for a name reached both ways.`
+    )
+  }
+  if (result.needsDeploy) parts.push('Deploy the site so its servers pick up the change.')
+  return parts.length > 0 ? parts.join(' ') : 'Saved.'
 }
 
 /** The sentence under an origin certificate TurboPanel issued: replaced, renewing soon, or nothing to say. */
