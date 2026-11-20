@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { composeDocumentToYaml, yamlToComposeDocument } from './convert'
 import { blockingComposeLintIssues } from './lint'
-import { lintEnvironmentLayer } from './layer-lint'
+import { environmentBaseLayers, lintEnvironmentLayer } from './layer-lint'
 
 const BASE = yamlToComposeDocument(`services:
   vpn:
@@ -18,9 +18,12 @@ const BASE = yamlToComposeDocument(`services:
     image: nginx:alpine
 `)
 
-function lint(layerYaml: string, base: unknown) {
+function lint(layerYaml: string, base: unknown, overlays: unknown[] = [], after: unknown[] = []) {
   const layer = yamlToComposeDocument(layerYaml)
-  return lintEnvironmentLayer(composeDocumentToYaml(layer), layer, base)
+  return lintEnvironmentLayer(composeDocumentToYaml(layer), layer, {
+    before: [base, ...overlays],
+    after,
+  })
 }
 
 describe('lintEnvironmentLayer', () => {
@@ -70,6 +73,61 @@ describe('lintEnvironmentLayer', () => {
   })
 
   it('returns no issues for empty changes', () => {
-    expect(lintEnvironmentLayer('', null, BASE)).toEqual([])
+    expect(lintEnvironmentLayer('', null, { before: [BASE], after: [] })).toEqual([])
+  })
+
+  it('refuses a service whose image is reset and has no build', () => {
+    const issues = blockingComposeLintIssues(
+      lint(`services:\n  web:\n    image: !reset null\n`, BASE)
+    )
+    expect(issues.map((i) => i.code)).toEqual(['service_missing_image_or_build'])
+  })
+
+  it('refuses a service-level override that drops the Base build', () => {
+    const issues = blockingComposeLintIssues(
+      lint(`services:\n  vpn: !override\n    environment:\n      MODE: prod\n`, BASE)
+    )
+    expect(issues.map((i) => i.code)).toEqual(['service_missing_image_or_build'])
+  })
+
+  it('reports an unparseable layer without merging it', () => {
+    const issues = lintEnvironmentLayer('services:\n  vpn: [\n', null, {
+      before: [BASE],
+      after: [],
+    })
+    expect(blockingComposeLintIssues(issues).length).toBeGreaterThan(0)
+    expect(issues.some((i) => i.code === 'service_missing_image_or_build')).toBe(false)
+  })
+
+  it('counts a build that only a project overlay file gives the service', () => {
+    const projectOverlay = yamlToComposeDocument(
+      'services:\n  worker:\n    build:\n      context: ./worker\n'
+    )
+    const layer = `services:\n  worker:\n    environment:\n      MODE: prod\n`
+    expect(blockingComposeLintIssues(lint(layer, BASE, [projectOverlay]))).toEqual([])
+    expect(blockingComposeLintIssues(lint(layer, BASE))).toHaveLength(1)
+  })
+
+  it('counts an image that only an environment overlay file gives the service', () => {
+    const envOverlay = yamlToComposeDocument('services:\n  worker:\n    image: busybox\n')
+    const layer = `services:\n  worker:\n    environment:\n      MODE: prod\n`
+    expect(blockingComposeLintIssues(lint(layer, BASE, [], [envOverlay]))).toEqual([])
+  })
+
+  it('blocks the save with a plain note while the Base is loading', () => {
+    const layer = yamlToComposeDocument(`services:\n  vpn:\n    environment:\n      A: b\n`)
+    const issues = blockingComposeLintIssues(
+      lintEnvironmentLayer(composeDocumentToYaml(layer), layer, null)
+    )
+    expect(issues.map((i) => i.message)).toEqual(["Waiting for the project's Base to load"])
+  })
+
+  it('collects the project and environment overlay files around the changes', () => {
+    const layers = environmentBaseLayers(
+      { compose: BASE, composeOverlays: [{ id: 'a', filename: 'a.yml', document: 1 }] },
+      { composeOverlays: [{ id: 'b', filename: 'b.yml', document: 2 }, 'junk'] }
+    )
+    expect(layers.before).toEqual([BASE, 1])
+    expect(layers.after).toEqual([2])
   })
 })

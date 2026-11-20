@@ -34,6 +34,7 @@ import {
   HostingCertificateActionsContext,
   HostingCertificatePanel,
 } from '@/components/org/hosting-certificate-panel'
+import { environmentBaseLayers, type EnvironmentBaseLayers } from '@/lib/compose/layer-lint'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import {
@@ -1827,13 +1828,13 @@ function EnvironmentInfoPanel({
 
 function EnvironmentComposeOverlayPanel({
   environment,
-  baseCompose,
+  baseLayers,
   onSaveCompose,
   savingCompose,
 }: Readonly<{
   environment: EnvironmentRecord
-  /** The project's Base, which these changes are checked against before saving. */
-  baseCompose: unknown
+  /** The layers these changes are checked against before saving; `null` while the project loads. */
+  baseLayers: EnvironmentBaseLayers | null
   onSaveCompose: (compose: ComposeDocument) => Promise<void>
   savingCompose: boolean
 }>) {
@@ -1846,7 +1847,7 @@ function EnvironmentComposeOverlayPanel({
     >
       <ComposeEditorSection
         document={environment.options?.compose}
-        baseDocument={baseCompose ?? null}
+        baseDocument={baseLayers}
         onSave={onSaveCompose}
         saving={savingCompose}
         title="Environment compose overlay"
@@ -2272,7 +2273,7 @@ function EnvironmentLoadedPanels({
   projectId,
   orgId,
   mergedCompose,
-  baseCompose,
+  baseLayers,
   serviceNames,
   allServers,
   sortedServers,
@@ -2310,8 +2311,8 @@ function EnvironmentLoadedPanels({
   projectId: string
   orgId: string
   mergedCompose: ComposeDocument
-  /** The project's Base (`null` when it has none). */
-  baseCompose: unknown
+  /** Layers around the environment's changes; `null` while the project loads. */
+  baseLayers: EnvironmentBaseLayers | null
   serviceNames: string[]
   allServers: OrgServerRecord[]
   sortedServers: OrgServerRecord[]
@@ -2365,7 +2366,7 @@ function EnvironmentLoadedPanels({
       {showEnvironmentChrome && showComposeOverlay ? (
         <EnvironmentComposeOverlayPanel
           environment={environment}
-          baseCompose={baseCompose}
+          baseLayers={baseLayers}
           onSaveCompose={onSaveCompose}
           savingCompose={savingCompose}
         />
@@ -3163,7 +3164,11 @@ export function EnvironmentDetailBody({
           projectId={projectId}
           orgId={orgId}
           mergedCompose={mergedCompose}
-          baseCompose={projectCompose}
+          baseLayers={
+            projectQuery.data
+              ? environmentBaseLayers(projectQuery.data.project.options, environment.options)
+              : null
+          }
           serviceNames={serviceNames}
           allServers={allServers}
           sortedServers={sortedServers}

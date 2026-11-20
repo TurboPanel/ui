@@ -52,6 +52,7 @@ export type ComposeLintCode =
   | 'turbofabric_required'
   | 'field_requires_org_opt_in'
   | 'service_missing_image_or_build'
+  | 'base_not_loaded'
 
 export type ComposeLintIssue = {
   level: ComposeLintLevel

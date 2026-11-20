@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
+import type { EnvironmentBaseLayers } from '@/lib/compose/layer-lint'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import type { ComposeDocFacts } from '@/components/org/project/compose-document-view'
 import type { ComposeDocument, ComposeEditorView } from '@/lib/compose'
@@ -58,7 +59,7 @@ export function ComposeBasePanel({
    */
   extraPrincipalAliases?: readonly string[]
   /** The project's Base, when `document` is an environment's changes. See `ComposeEditorSection`. */
-  baseDocument?: unknown
+  baseDocument?: EnvironmentBaseLayers | null
   /** Leave out the helper port fields (an environment layer lacks the Base's kinds and accounts). */
   hideReach?: boolean
 }>) {

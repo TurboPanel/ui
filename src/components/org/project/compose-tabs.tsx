@@ -44,7 +44,11 @@ import { DraftEnvironmentNotice } from '@/components/org/project/draft-environme
 import { ComposeBasePanel } from '@/components/org/compose-base-panel'
 import { appFactsByService, type ServiceAppFacts } from '@/lib/compose/app-facts'
 import { composePrincipalAliases } from '@/lib/compose/principals-document'
-import { lintEnvironmentLayer } from '@/lib/compose/layer-lint'
+import {
+  environmentBaseLayers,
+  lintEnvironmentLayer,
+  type EnvironmentBaseLayers,
+} from '@/lib/compose/layer-lint'
 import { EnvironmentDetailBody } from '@/components/org/environment-detail-section'
 import type {
   ComposeDocFacts,
@@ -262,7 +266,7 @@ function ComposeEditorPanel({
   /** Aliases from the layer above; `[]` on the base, the base's on an overlay. */
   extraPrincipalAliases?: readonly string[]
   /** The Base the document is changes to; set only for an environment's compose. */
-  baseDocument?: unknown
+  baseDocument?: EnvironmentBaseLayers | null
   /** Leave out the helper port fields: an overlay lacks the Base's kinds and accounts. */
   hideReach?: boolean
   /**
@@ -535,7 +539,12 @@ function ServicesPanelBody({
     const blocking = blockingComposeLintIssues(
       baseSelected
         ? lintComposeYaml(nextYaml, lintOptions)
-        : lintEnvironmentLayer(nextYaml, next, project.options?.compose ?? null, lintOptions)
+        : lintEnvironmentLayer(
+            nextYaml,
+            next,
+            environmentBaseLayers(project.options, selectedEnvironment?.options),
+            lintOptions
+          )
     )
     if (blocking.length > 0) return
     if (baseSelected) {
@@ -661,7 +670,7 @@ function ServicesPanelBody({
         sessionKey={scopeKey}
         // An overlay answers to the project's root as well as its own.
         extraPrincipalAliases={composePrincipalAliases(project.options?.compose)}
-        baseDocument={project.options?.compose ?? null}
+        baseDocument={environmentBaseLayers(project.options, selectedEnvironment.options)}
         hideReach
         documentFacts={documentFacts}
         onOpenScopeConfig={onOpenScopeConfig}
