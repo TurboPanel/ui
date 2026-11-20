@@ -6,6 +6,7 @@ import { TextField } from '@/components/ui/form-field'
 import { ModalSheet } from '@/components/ui/modal-sheet'
 import { MonoText } from '@/components/ui/mono-text'
 import { panelStyles } from '@/components/ui/panel-styles'
+import { TextLink } from '@/components/ui/text-link'
 import { typedNameMatches } from '@/lib/confirm-name'
 import { userErrorMessage } from '@/lib/user-error'
 import { spacing } from '@/lib/theme'
@@ -44,6 +45,8 @@ export type TypeNameConfirmProps = Readonly<{
   undoable?: boolean
   pending: boolean
   error?: string | null
+  /** Under the error: a link that fixes it (shown only with an error). */
+  errorLink?: Readonly<{ label: string; onPress: () => void }>
   onCancel: () => void
   onConfirm: (typedName: string) => void
 }>
@@ -62,6 +65,7 @@ export function TypeNameConfirmModal({
   undoable = false,
   pending,
   error,
+  errorLink,
   onCancel,
   onConfirm,
 }: TypeNameConfirmProps) {
@@ -106,6 +110,7 @@ export function TypeNameConfirmModal({
       />
       <Text style={[panelStyles.muted, styles.help]}>{typeNameHelp(undoable)}</Text>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {error && errorLink ? <TextLink label={errorLink.label} onPress={errorLink.onPress} /> : null}
     </ModalSheet>
   )
 }
@@ -123,14 +128,20 @@ export function TypeNameDeleteButton({
   busy = false,
   onConfirm,
   error,
+  onOpen,
+  errorLink,
   ...modal
 }: Readonly<
-  Omit<TypeNameConfirmProps, 'pending' | 'onCancel' | 'onConfirm'> & {
+  Omit<TypeNameConfirmProps, 'pending' | 'onCancel' | 'onConfirm' | 'errorLink'> & {
+    /** As on the dialog; `onPress` is given the way to close it (a link that leaves the page). */
+    errorLink?: Readonly<{ label: string; onPress: (close: () => void) => void }>
     /** The button that opens the dialog; defaults to the dialog title. */
     label?: string
     size?: ButtonSize
     disabled?: boolean
     busy?: boolean
+    /** Called each time the dialog opens, so a caller can clear an old error. */
+    onOpen?: () => void
     onConfirm: (typedName: string) => unknown
   }
 >) {
@@ -167,6 +178,7 @@ export function TypeNameDeleteButton({
         disabled={disabled || busy}
         onPress={() => {
           setFailure(null)
+          onOpen?.()
           setOpen(true)
         }}
       />
@@ -175,6 +187,11 @@ export function TypeNameDeleteButton({
           {...modal}
           pending={running || busy}
           error={error ?? failure}
+          errorLink={
+            errorLink
+              ? { label: errorLink.label, onPress: () => errorLink.onPress(() => setOpen(false)) }
+              : undefined
+          }
           onCancel={() => {
             setOpen(false)
             setFailure(null)

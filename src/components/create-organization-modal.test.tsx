@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { createElement, type ReactNode } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { CreateOrganizationModal } from './create-organization-modal'
 
@@ -35,6 +35,9 @@ vi.mock('@/components/ui', () => ({
       'aria-label': props.accessibilityLabel as string,
       placeholder: props.placeholder as string,
       value: props.value as string,
+      onKeyDown: (event: { key: string }) => {
+        if (event.key === 'Enter') (props.onSubmitEditing as (() => void) | undefined)?.()
+      },
       onChange: (event: { target: { value: string } }) =>
         (props.onChangeText as (value: string) => void)(event.target.value),
     }),
@@ -75,5 +78,25 @@ describe('CreateOrganizationModal', () => {
     expect(create.disabled).toBe(false)
     fireEvent.click(create)
     expect(onCreate).toHaveBeenCalledWith('Northwind Studio')
+  })
+
+  it('submits when Enter is pressed in the name field', async () => {
+    const onCreate = renderModal()
+    const input = screen.getByLabelText('Organization name') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'Acme' } })
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' })
+    })
+    expect(onCreate).toHaveBeenCalledTimes(1)
+    expect(onCreate).toHaveBeenCalledWith('Acme')
+  })
+
+  it('does nothing on Enter while the name is empty', async () => {
+    const onCreate = renderModal()
+    const input = screen.getByLabelText('Organization name')
+    await act(async () => {
+      fireEvent.keyDown(input, { key: 'Enter' })
+    })
+    expect(onCreate).not.toHaveBeenCalled()
   })
 })

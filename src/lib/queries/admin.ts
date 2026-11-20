@@ -51,6 +51,7 @@ import {
   createForge,
   deactivateAdminTier,
   deleteForge,
+  fetchAdminOrganizations,
   fetchAdminTierProducts,
   fetchAdminTiers,
   fetchAuthProviderSettings,
@@ -1179,5 +1180,14 @@ export function useVerifyAllAdminTiers() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
     },
+  })
+}
+
+/** Every organization on the install, for platform admins (`GET /api/admin/v1/organizations`). */
+export function useAdminOrganizations(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.organizations,
+    queryFn: fetchAdminOrganizations,
+    enabled: options?.enabled ?? true,
   })
 }

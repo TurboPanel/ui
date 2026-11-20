@@ -2898,6 +2898,89 @@ export async function updateOrganization(
   })
 }
 
+/** The 409 codes of `DELETE /organizations/:id`, each a thing to remove first (or the root organization). */
+export type OrganizationDeleteBlockCode =
+  | 'root_organization'
+  | 'organization_has_servers'
+  | 'organization_has_tunnels'
+  | 'organization_has_dns_records'
+
+const ORGANIZATION_DELETE_BLOCK_CODES: ReadonlySet<string> = new Set<OrganizationDeleteBlockCode>([
+  'root_organization',
+  'organization_has_servers',
+  'organization_has_tunnels',
+  'organization_has_dns_records',
+])
+
+/** 409 from an organization delete: what still stands in the way, and how many of it. */
+export class OrganizationDeleteBlockedError extends Error {
+  readonly code: OrganizationDeleteBlockCode
+  /** How many servers, tunnels or DNS records remain; 0 for the root organization. */
+  readonly count: number
+
+  constructor(code: OrganizationDeleteBlockCode, message: string, count: number) {
+    super(message)
+    this.name = 'OrganizationDeleteBlockedError'
+    this.code = code
+    this.count = count
+  }
+}
+
+function organizationDeleteRefusal(
+  status: number,
+  body: Readonly<Record<string, unknown>>
+): Error | null {
+  if (status !== 409) return null
+  const code = body.code
+  if (typeof code !== 'string' || !ORGANIZATION_DELETE_BLOCK_CODES.has(code)) return null
+  const count = [body.serverCount, body.tunnelCount, body.dnsRecordCount].find(
+    (value): value is number => typeof value === 'number'
+  )
+  return new OrganizationDeleteBlockedError(
+    code as OrganizationDeleteBlockCode,
+    typeof body.message === 'string' ? body.message : code,
+    count ?? 0
+  )
+}
+
+/**
+ * Deletes an organization and everything it owns. Owner or platform admin.
+ * `confirmName` is the exact name (400 `confirm_name_required` without it);
+ * 403 `reauth_required` is answered by the step-up sheet inside `apiFetch`;
+ * 409 throws {@link OrganizationDeleteBlockedError}.
+ */
+export async function deleteOrganization(
+  organizationId: string,
+  confirmName: string
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${organizationId}${confirmNameQuery(confirmName)}`,
+    { method: 'DELETE' },
+    organizationId,
+    organizationDeleteRefusal
+  )
+}
+
+/** One row of `GET /api/admin/v1/organizations` (platform admins). */
+export type AdminOrganizationRow = {
+  id: string
+  /** Can be empty; the name to type then falls back to the id, as the control plane does. */
+  name: string | null
+  createdAt: string
+  owner: { id: string; name: string | null; email: string | null } | null
+  memberCount: number
+  serverCount: number
+  projectCount: number
+  /** The install's Root Organization: it cannot be deleted. */
+  isRoot: boolean
+}
+
+export async function fetchAdminOrganizations(): Promise<{
+  organizations: AdminOrganizationRow[]
+}> {
+  return await apiFetch('/api/admin/v1/organizations')
+}
+
 export type InstallCompleteResult = SessionInfo & {
   organizationId: string
 }

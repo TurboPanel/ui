@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { ComposeSettingsSection } from '@/components/org/compose-settings-section'
 import { DeployTimeLimitSettingsSection } from '@/components/org/deploy-time-limit-settings-section'
 import { PhpModePolicyPanel } from '@/components/org/php-mode-policy-panel'
+import { OrganizationDeleteSection } from '@/components/org/organization-delete-section'
 import { OrganizationFormSection } from '@/components/org/organization-form-section'
 import { OrganizationIconSection } from '@/components/org/organization-icon-section'
 import { ReauthSettingsSection } from '@/components/org/reauth-settings-section'
@@ -60,6 +61,7 @@ function GeneralTab({ orgId }: Readonly<{ orgId: string }>) {
       <ComposeSettingsSection orgId={orgId} />
       <DeployTimeLimitSettingsSection orgId={orgId} />
       <PhpModePolicyPanel orgId={orgId} />
+      <OrganizationDeleteSection orgId={orgId} />
     </View>
   )
 }

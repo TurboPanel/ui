@@ -493,6 +493,7 @@ export const queryKeys = {
   admin: {
     all: ['admin'] as const,
     publicUrls: ['admin', 'public-urls'] as const,
+    organizations: ['admin', 'organizations'] as const,
     instanceHostnames: ['admin', 'instance-hostnames'] as const,
     instanceCertificates: ['admin', 'instance-certificates'] as const,
     instanceAcme: ['admin', 'instance-acme'] as const,

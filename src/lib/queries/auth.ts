@@ -3,6 +3,7 @@ import {
   bootstrapInstall,
   completeInstall,
   createOrganization,
+  deleteOrganization,
   deletePasskey,
   disableTwoFactor,
   enrollTotp,
@@ -123,6 +124,21 @@ export function useCreateOrganization() {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.auth.organizations,
       })
+    },
+  })
+}
+
+/** Deletes an organization by its exact name; refreshes the organization lists on success. */
+export function useDeleteOrganization() {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({ id, confirmName }: Readonly<{ id: string; confirmName: string }>) =>
+      deleteOrganization(id, confirmName),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.auth.organizations }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.admin.organizations }),
+      ])
     },
   })
 }
