@@ -276,6 +276,6 @@ describe('reauth wrappers', () => {
     expect([first.mock.calls.length, second.mock.calls.length]).toEqual([1, 2])
     // A settle with nothing open is not news.
     broker.settle(false)
-    expect(second.mock.calls.length).toBe(2)
+    expect(second.mock.calls).toHaveLength(2)
   })
 })
