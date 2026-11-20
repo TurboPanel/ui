@@ -257,4 +257,25 @@ describe('reauth wrappers', () => {
     expect(initOf(1)?.method).toBe('PUT')
     expect(JSON.parse(String(initOf(1)?.body))).toEqual({ requireReauthForDestructive: true })
   })
+
+  it('tells any number of watchers when a prompt opens and closes', () => {
+    const challenge: StepUpChallenge = { action: 'server.delete', methods: ['password'] }
+    const broker = createStepUpBroker()
+    broker.subscribe(() => {})
+    const first = vi.fn()
+    const second = vi.fn()
+    const stopFirst = broker.watch(first)
+    broker.watch(second)
+    expect(broker.isOpen()).toBe(false)
+    broker.request(challenge).catch(() => {})
+    expect(broker.isOpen()).toBe(true)
+    expect([first.mock.calls.length, second.mock.calls.length]).toEqual([1, 1])
+    stopFirst()
+    broker.settle(false)
+    expect(broker.isOpen()).toBe(false)
+    expect([first.mock.calls.length, second.mock.calls.length]).toEqual([1, 2])
+    // A settle with nothing open is not news.
+    broker.settle(false)
+    expect(second.mock.calls).toHaveLength(2)
+  })
 })

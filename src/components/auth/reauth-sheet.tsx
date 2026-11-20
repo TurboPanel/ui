@@ -19,7 +19,8 @@ import { userErrorMessage } from '@/lib/user-error'
 /**
  * Asks the signed-in person to prove who they are again, wherever they are.
  *
- * Mounted once in `AppProviders`. It appears when a request is refused with
+ * Mounted once in `AppProviders` (its dialog is rendered only while open, so it
+ * always stacks above the dialog that asked). It appears when a request is refused with
  * `reauth_required` (an organization turned on "ask again before permanent
  * actions"), and the request that was refused is sent again as soon as the
  * proof is accepted. Closing the sheet leaves the original refusal as the
@@ -32,14 +33,14 @@ export function ReauthSheet() {
 
   const cancel = useCallback(() => stepUpBroker.settle(false), [])
 
+  // Mounted only while a challenge is open. On the web every `Modal` puts its
+  // portal at the end of `document.body` when it mounts, and later portals paint
+  // on top: an always-mounted sheet would sit under every dialog opened after
+  // the app started, including the one whose request asked for the proof.
+  if (challenge === null) return null
   return (
-    <ModalSheet
-      visible={challenge !== null}
-      title="Confirm it is you"
-      onRequestClose={cancel}
-      maxWidth={420}
-    >
-      {challenge ? <ReauthForm challenge={challenge} onCancel={cancel} /> : null}
+    <ModalSheet visible title="Confirm it is you" onRequestClose={cancel} maxWidth={420}>
+      <ReauthForm challenge={challenge} onCancel={cancel} />
     </ModalSheet>
   )
 }
@@ -72,7 +73,7 @@ function ReauthForm({
     })
   }, [submit])
 
-  const intro = `To ${stepUpActionLabel(challenge.action)}, this organization asks you to confirm it is you.`
+  const intro = `To ${stepUpActionLabel(challenge.action)}, confirm it is you.`
 
   if (method === 'signin') {
     return (

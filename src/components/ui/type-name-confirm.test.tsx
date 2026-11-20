@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { stepUpBroker } from '@/lib/step-up'
 import { TypeNameConfirmModal, TypeNameDeleteButton, typeNameHelp } from './type-name-confirm'
 
 const { setStringAsync } = vi.hoisted(() => ({ setStringAsync: vi.fn(() => Promise.resolve()) }))
@@ -242,5 +243,39 @@ describe('TypeNameDeleteButton failures', () => {
     fireEvent.click(within(screen.getByRole('dialog')).getByText('Cancel'))
     fireEvent.click(screen.getByText('Delete Project'))
     expect(screen.queryByText('Server is busy.')).toBeNull()
+  })
+})
+
+describe('while the confirm-it-is-you prompt is open', () => {
+  const challenge = { action: 'organization.delete', methods: ['password'] } as const
+
+  it('shows no spinner and nothing to press again, then returns to the working state on cancel', async () => {
+    const unsubscribe = stepUpBroker.subscribe(() => {})
+    render(
+      <TypeNameConfirmModal
+        thing="Organization"
+        name="acme"
+        pending
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+      />
+    )
+    fireEvent.change(screen.getByLabelText('Organization name'), { target: { value: 'acme' } })
+    // The request is in flight: spinner.
+    expect(confirmButton('Deleting…')).toBeTruthy()
+
+    let answer: Promise<boolean> = Promise.resolve(true)
+    act(() => {
+      answer = stepUpBroker.request(challenge)
+    })
+    // Waiting on the person: the label is back, and the button is still off.
+    const waiting = confirmButton('Delete Organization')
+    expect(waiting.disabled).toBe(true)
+    expect(screen.queryByText('Deleting…')).toBeNull()
+
+    act(() => stepUpBroker.settle(false))
+    await expect(answer).resolves.toBe(false)
+    expect(confirmButton('Deleting…')).toBeTruthy()
+    unsubscribe()
   })
 })
