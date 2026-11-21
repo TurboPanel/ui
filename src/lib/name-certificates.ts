@@ -368,13 +368,17 @@ function stateOfSite(
 /**
  * Where one name's certificate stands. The panel has no state field per name,
  * so this reads what it does send: the library row the name pins (`acme`
- * stage, warning, last error and next attempt) and the site's certificate.
+ * stage, warning, last error and next attempt) and the site's certificate. A
+ * name on a Cloudflare origin certificate never uses the site's certificate (a
+ * Test Certificate there says nothing about it), so without a row it is Ready
+ * once the tunnel checks it (`originVerified`) and Waiting until then.
  */
 export function nameState(
   name: Pick<HostingNameCertificate, 'certificate' | 'tlsId'>,
   library: readonly TlsRecord[],
   siteCertificate: HostingCertificate | null | undefined,
-  locale?: string
+  locale?: string,
+  originVerified?: boolean
 ): NameState {
   if (name.certificate === 'self_signed') {
     return {
@@ -395,6 +399,17 @@ export function nameState(
       canRetry: false,
       retryTlsId: null,
     }
+  }
+  if (name.certificate === 'cloudflare_origin') {
+    return originVerified
+      ? { label: 'Ready', tone: 'ok', detail: null, canRetry: false, retryTlsId: null }
+      : {
+          label: 'Waiting',
+          tone: 'pending',
+          detail: 'Waiting for the origin certificate to be issued and sent to the server.',
+          canRetry: false,
+          retryTlsId: null,
+        }
   }
   return stateOfSite(siteCertificate, locale)
 }

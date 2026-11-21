@@ -239,7 +239,8 @@ export function NetworkTunnelCard({
         <View style={styles.list}>
           <Text style={panelStyles.detailTitle}>Status Ports</Text>
           <Text style={panelStyles.muted}>
-            Whether the connector status ports are locked on each server, as last reported.
+            Whether the connector status ports are locked on each server, as last reported. Locked
+            is the safe state.
           </Text>
           {tunnel.statusPorts.map((ports) => (
             <StatusPortsRow
