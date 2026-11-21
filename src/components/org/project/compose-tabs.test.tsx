@@ -98,8 +98,8 @@ let draftStore: ReturnType<typeof useComposeDraftStore> | null = null
 function StaleDraft() {
   const store = useComposeDraftStore()
   const done = useRef(false)
-  draftStore = store
   useEffect(() => {
+    draftStore = store
     // Once: a re-seed after the save would hide whether the draft was dropped.
     if (done.current) return
     done.current = true
