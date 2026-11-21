@@ -132,8 +132,10 @@ describe('tunnel queries', () => {
       hostname: 'app.example.com',
     })
     expect(api.removeTunnelHostname).toHaveBeenCalledWith(orgId, 't1', 'h1')
-    expect(spy).toHaveBeenCalledTimes(5)
+    // Adding a name also refreshes the sites, whose certificate options follow the tunnels.
+    expect(spy).toHaveBeenCalledTimes(6)
     expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnels })
+    expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).hostings.all })
   })
 
   it('changing a server also refreshes the server list', async () => {

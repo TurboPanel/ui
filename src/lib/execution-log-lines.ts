@@ -385,13 +385,24 @@ const DOCKER_TIMESTAMP_RE =
   /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))\s(.*)$/
 
 /**
- * Adapt a `docker container logs --timestamps` snapshot to transcript rows.
+ * Where one entry ends and the next begins. Docker ends an entry with a line
+ * feed, but the text can arrive with a bare carriage return, or with the
+ * separator written out (`\n`, `_`) in front of the next entry's nanosecond
+ * stamp. A separator only counts when a full stamp follows it, so a message
+ * that merely contains a backslash or an underscore is left whole.
+ */
+const DOCKER_ENTRY_BREAK =
+  /\r\n|\r|\n|(?:\\r)?(?:\\n|_)(?=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{9}Z )/
+
+/**
+ * Adapt a `docker container logs --timestamps` snapshot to transcript rows,
+ * one row per entry with its timestamp kept.
  * Lines without a leading RFC3339 stamp degrade like {@link plainTextTranscriptLines}.
  */
 export function dockerTimestampTranscriptLines(text: string): LogTranscriptLine[] {
   const rows: LogTranscriptLine[] = []
   let seq = 0
-  for (const raw of text.split('\n')) {
+  for (const raw of text.split(DOCKER_ENTRY_BREAK)) {
     const stripped = stripAnsi(raw)
     if (stripped.trim().length === 0) continue
     seq += 1

@@ -349,6 +349,36 @@ describe('dockerTimestampTranscriptLines', () => {
     ])
   })
 
+  it('keeps one row per entry with its timestamp when the separators are not plain line feeds', () => {
+    const first = '2026-11-21T10:00:00.123456789Z'
+    const second = '2026-11-21T10:00:01.123456789Z'
+    const third = '2026-11-21T10:00:02.123456789Z'
+    const expected = [
+      { seq: 1, timestamp: first, message: 'listening on 3000' },
+      { seq: 2, timestamp: second, message: 'GET /health 200' },
+      { seq: 3, timestamp: third, message: 'my_app_ready' },
+    ]
+    const entries = [
+      `${first} listening on 3000`,
+      `${second} GET /health 200`,
+      `${third} my_app_ready`,
+    ]
+    for (const separator of ['\n', '\r\n', '\r', '_', '\\n']) {
+      const rows = dockerTimestampTranscriptLines(entries.join(separator))
+      expect(rows.map(({ seq, timestamp, message }) => ({ seq, timestamp, message }))).toEqual(
+        expected
+      )
+    }
+  })
+
+  it('leaves an underscore or backslash that no stamp follows inside the message', () => {
+    const rows = dockerTimestampTranscriptLines(
+      '2026-11-21T10:00:00.000000000Z snake_case\\nvalue_ and more'
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.message).toBe('snake_case\\nvalue_ and more')
+  })
+
   it('accepts an RFC3339 offset instead of Z', () => {
     const rows = dockerTimestampTranscriptLines('2026-01-01T00:00:01.5+00:00 offset line\n')
     expect(rows[0]).toMatchObject({
