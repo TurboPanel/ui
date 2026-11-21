@@ -18,6 +18,11 @@ import {
   hostingActionErrorMessage,
   hostingSaveErrorMessage,
   HOSTNAME_IN_USE_MESSAGE,
+  hostnameReleasedMessage,
+  isRowAlreadyGone,
+  REMOVE_NOW_DEPLOY_RUNNING_MESSAGE,
+  removeNowErrorMessage,
+  removeNowOutcome,
   COMPOSE_HOSTNAME_HINT,
   COMPOSE_PROXY_NOTE,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
@@ -192,12 +197,70 @@ describe('plain hosting words', () => {
   })
 
   it('says what Remove hostname really does in each state', () => {
-    expect(removeHostnamePrompt('example.test', 'deployed')).toContain('stops being served')
+    expect(removeHostnamePrompt('example.test', 'deployed')).toContain('released at once')
     expect(removeHostnamePrompt('example.test', 'adopted')).toContain(
       'managed on this screen again'
     )
     expect(removeHostnamePrompt('example.test', 'held-by-panel')).toContain('keeps being served')
     expect(removeHostnamePrompt('example.test', 'not-deployed')).toContain('not served yet')
+  })
+
+  it('says the name is released, and the route goes at the next deploy only when a server holds it', () => {
+    expect(
+      hostnameReleasedMessage('example.test', { removed: true, serverUpdate: 'next_deploy' })
+    ).toBe('example.test is released. The server stops serving it at the next deploy.')
+    expect(
+      hostnameReleasedMessage('example.test', { removed: true, serverUpdate: 'not_deployed' })
+    ).toBe('example.test is released.')
+    expect(hostnameReleasedMessage('example.test', { removed: true })).toBe(
+      'example.test is released.'
+    )
+    expect(hostnameReleasedMessage('example.test', { removed: false })).toBe(
+      'example.test is managed on this screen again.'
+    )
+  })
+
+  it('words a release refused because a deploy is running, and any other failure', () => {
+    expect(
+      removeNowErrorMessage({
+        error:
+          '/api/client/v1/hostings/abc/remove-now failed: HTTP 409: environment_deploy_running — A deploy is running.',
+      })
+    ).toBe(REMOVE_NOW_DEPLOY_RUNNING_MESSAGE)
+    expect(REMOVE_NOW_DEPLOY_RUNNING_MESSAGE).toMatch(/A deploy is running/)
+    expect(removeNowErrorMessage({ error: 'Something broke' })).toContain(
+      'could not be released now'
+    )
+  })
+
+  it('treats a 404 from the release as already gone', () => {
+    expect(
+      isRowAlreadyGone({
+        error: '/api/client/v1/hostings/abc/remove-now failed: HTTP 404: Not found',
+      })
+    ).toBe(true)
+    expect(isRowAlreadyGone({ error: 'HTTP 409: environment_deploy_running' })).toBe(false)
+    expect(isRowAlreadyGone({ error: null })).toBe(false)
+  })
+
+  it('turns the release answer into a notice or an error, a 404 counting as released', () => {
+    expect(
+      removeNowOutcome('example.test', {
+        ok: true,
+        value: { removed: true, serverUpdate: 'next_deploy' },
+      })
+    ).toEqual({
+      notice: 'example.test is released. The server stops serving it at the next deploy.',
+    })
+    expect(
+      removeNowOutcome('example.test', { ok: false, error: 'x failed: HTTP 404: Not found' })
+    ).toEqual({ notice: 'example.test is released.' })
+    expect(
+      removeNowOutcome('example.test', {
+        ok: false,
+        error: 'x failed: HTTP 409: environment_deploy_running',
+      })
+    ).toEqual({ error: REMOVE_NOW_DEPLOY_RUNNING_MESSAGE })
   })
 
   it('says what a move keeps, and that undeployed changes stay behind for a deployed hostname', () => {

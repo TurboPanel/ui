@@ -82,6 +82,7 @@ import { useOrgServers } from '@/lib/queries/servers'
 import {
   useHostingsByServices,
   useReleaseHostingFromCompose,
+  useRemoveHostingNow,
   useServices,
   useUpsertHosting,
 } from '@/lib/queries/services'
@@ -148,6 +149,7 @@ import {
   NEW_HOSTING_CERTIFICATE_HINT,
   PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
+  removeNowOutcome,
   resolveCertificateRef,
   SERVICE_NOT_SAVED_MESSAGE,
   SHARED_FILE_HOSTNAME_MESSAGE,
@@ -2683,8 +2685,11 @@ export function EnvironmentDetailBody({
   const deployEnvironmentMutation = useDeployEnvironment(orgId, environmentId)
   const upsertHostingMutation = useUpsertHosting(orgId)
   const releaseHostingMutation = useReleaseHostingFromCompose(orgId)
+  const removeHostingNowMutation = useRemoveHostingNow(orgId)
 
   const [error, setError] = useState<string | null>(null)
+  // What Remove hostname just did, in plain words; the row is gone by then.
+  const [removedNotice, setRemovedNotice] = useState<string | null>(null)
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
   const [hostingRowErrors, setHostingRowErrors] = useState<Record<string, HostingRowError>>({})
   const [hostingSavedNotes, setHostingSavedNotes] = useState<Record<string, HostingSaveNote>>({})
@@ -3095,11 +3100,39 @@ export function EnvironmentDetailBody({
   const actionsErrorSink = (row: HostingPanelRowDescriptor) => (message: string) =>
     setRowError(row.editorKey, { field: 'actions', message })
 
-  /** Remove hostname: drop the entry; the next deploy removes (or hands back) its hosting. */
+  /**
+   * Release a hostname the file no longer declares, and say what happened
+   * before anything else. A 404 means the row is already gone: the name is
+   * free, so it counts as removed.
+   */
+  const releaseRemovedHostname = async (
+    row: HostingPanelRowDescriptor & { hostingId: string },
+    hostname: string
+  ) => {
+    const serviceId = resolvedServices.find(
+      (item) => item.composeServiceName === row.composeServiceName
+    )?.id
+    const result = await removeHostingNowMutation.run({ hostingId: row.hostingId, serviceId })
+    const outcome = removeNowOutcome(hostname, result)
+    if ('notice' in outcome) setRemovedNotice(outcome.notice)
+    else setError(outcome.error)
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.org(orgId).hostings.all,
+    })
+  }
+
+  /** Remove hostname: drop the entry from the file, then release its name at once. */
   const removeComposeHostname = (row: HostingPanelRowDescriptor) =>
     runRowAction(row, async () => {
+      setRemovedNotice(null)
       const next = overlayWithoutRow(row)
-      if (next) await saveCompose(next, actionsErrorSink(row))
+      if (!next) return
+      if (!(await saveCompose(next, actionsErrorSink(row)))) return
+      // Only a row the last deploy made from the file is released here; a panel
+      // row on the same route stays, and nothing is held when nothing deployed.
+      if (row.source.kind !== 'compose' || !row.hostingId) return
+      if (row.source.state !== 'deployed' && row.source.state !== 'adopted') return
+      await releaseRemovedHostname({ ...row, hostingId: row.hostingId }, row.source.entry.hostname)
     })
 
   /** Manage on this screen instead: see `moveComposeHostnameToPanel` for the order. */
@@ -3189,6 +3222,7 @@ export function EnvironmentDetailBody({
   const body = (
     <View style={styles.body}>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {removedNotice ? <Text style={styles.savedNote}>{removedNotice}</Text> : null}
 
       {environment ? (
         <EnvironmentLoadedPanels

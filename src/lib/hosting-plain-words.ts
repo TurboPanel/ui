@@ -170,16 +170,16 @@ export function composeEntryConfigSnippet(
  */
 export type ConfiguredHostingState = 'not-deployed' | 'deployed' | 'adopted' | 'held-by-panel'
 
-/** The confirmation for Remove hostname, true to what the next deploy does. */
+/** The confirmation for Remove hostname, true to what happens now and at the next deploy. */
 export function removeHostnamePrompt(hostname: string, state: ConfiguredHostingState): string {
   if (state === 'adopted') {
-    return `Remove ${hostname} from the configuration file? After the next deploy it is managed on this screen again.`
+    return `Remove ${hostname} from the configuration file? It is managed on this screen again at once.`
   }
   if (state === 'held-by-panel') {
     return `Remove ${hostname} from the configuration file? It is already managed on this screen, so it keeps being served.`
   }
   if (state === 'not-deployed') return `Remove ${hostname}? It is not served yet and will not be.`
-  return `Remove ${hostname}? It stops being served after the next deploy.`
+  return `Remove ${hostname}? Its name is released at once; the server stops serving it after the next deploy.`
 }
 
 /** The confirmation for Manage on this screen instead. */
@@ -215,6 +215,61 @@ export const NEW_HOSTING_CERTIFICATE_HINT =
 /** A move refused because a deploy of the environment is running. */
 export const DEPLOY_RUNNING_MESSAGE =
   'A deploy of this environment is running. Try again when it has finished.'
+
+/** Remove hostname hit a running deploy after the file was saved without the entry. */
+export const REMOVE_NOW_DEPLOY_RUNNING_MESSAGE =
+  'A deploy is running, so the name is not released yet. Try again when it finishes; the next deploy releases it otherwise.'
+
+/**
+ * What the person sees right after Remove hostname released the name: that it
+ * is free, and, only when a server still holds the route, that the route goes
+ * at the next deploy. A row the panel made first is kept, so nothing is freed.
+ */
+export function hostnameReleasedMessage(
+  hostname: string,
+  result: Readonly<{ removed: boolean; serverUpdate?: string }>
+): string {
+  if (!result.removed) return `${hostname} is managed on this screen again.`
+  const released = `${hostname} is released.`
+  return result.serverUpdate === 'next_deploy'
+    ? `${released} The server stops serving it at the next deploy.`
+    : released
+}
+
+/** Remove hostname's release step refused or failed, after the file was saved without the entry. */
+export function removeNowErrorMessage(
+  result: Readonly<{ error: string | null; cause?: unknown }>
+): string {
+  if ((result.error ?? '').includes('environment_deploy_running')) {
+    return REMOVE_NOW_DEPLOY_RUNNING_MESSAGE
+  }
+  return `The hostname is out of the configuration file, but its name could not be released now. ${failedRunMessage(result, 'Try again.')}`
+}
+
+/** True when the release answered 404: the row is already gone, so the name is free. */
+export function isRowAlreadyGone(result: Readonly<{ error: string | null }>): boolean {
+  return /\bHTTP 404\b/.test(result.error ?? '')
+}
+
+/** What `useApiMutation().run` answers, as far as the release step needs it. */
+export type RemoveNowRun = Readonly<
+  | { ok: true; value: Readonly<{ removed: boolean; serverUpdate?: string }> }
+  | { ok: false; error: string | null; cause?: unknown }
+>
+
+/**
+ * What Remove hostname shows once the release step has answered: a notice that
+ * the name is released (a 404 counts, the row is already gone) or the plain
+ * words for why it was not.
+ */
+export function removeNowOutcome(
+  hostname: string,
+  run: RemoveNowRun
+): Readonly<{ notice: string } | { error: string }> {
+  if (run.ok) return { notice: hostnameReleasedMessage(hostname, run.value) }
+  if (isRowAlreadyGone(run)) return { notice: hostnameReleasedMessage(hostname, { removed: true }) }
+  return { error: removeNowErrorMessage(run) }
+}
 
 /** A hostname another hosting already serves. */
 export const HOSTNAME_IN_USE_MESSAGE =

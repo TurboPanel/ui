@@ -14,6 +14,7 @@ import {
   fetchTlsLibrary,
   fetchVisibleHostings,
   fetchVisibleServices,
+  removeHostingNow,
   updateContainer,
   updateHosting,
   updateService,
@@ -152,7 +153,7 @@ describe('instance-api resource fetch wrappers', () => {
         description: 'HTTP API',
         metadata: { catalog: 'web' },
         options: { healthCheck: { policy: 'warn' } },
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'svc-2' })
     const { url, init } = nthCall(0)
     expect(url).toContain('/api/client/v1/services')
@@ -173,7 +174,7 @@ describe('instance-api resource fetch wrappers', () => {
         name: 'api-v2',
         options: { build: { disableCache: true } },
         metadata: { catalog: 'web' },
-      }),
+      })
     ).resolves.toEqual({ ok: true })
     const { url, init } = nthCall(0)
     expect(url).toContain('/api/client/v1/services/svc-1')
@@ -194,6 +195,32 @@ describe('instance-api resource fetch wrappers', () => {
     expect(url).toContain('/api/client/v1/hostings')
     expect(url).toContain('serviceId=svc-1')
     expect(init.method).toBeUndefined()
+  })
+
+  it('removeHostingNow POSTs the remove-now route and answers what the server says', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        ok: true,
+        removed: true,
+        outcome: 'removed',
+        hostnames: ['example.test'],
+        serverUpdate: 'next_deploy',
+      })
+    )
+    await expect(removeHostingNow('host-1')).resolves.toMatchObject({
+      removed: true,
+      serverUpdate: 'next_deploy',
+    })
+    const { url, init } = nthCall(0)
+    expect(url).toContain('/api/client/v1/hostings/host-1/remove-now')
+    expect(init.method).toBe('POST')
+  })
+
+  it('removeHostingNow rejects a running deploy with the refusal code in the message', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'environment_deploy_running', message: 'A deploy is running.' }, 409)
+    )
+    await expect(removeHostingNow('host-1')).rejects.toThrow(/HTTP 409.*environment_deploy_running/)
   })
 
   it('createHosting POSTs only serviceId when optional fields are omitted', async () => {
@@ -222,7 +249,7 @@ describe('instance-api resource fetch wrappers', () => {
         },
         tlsId: 'tls-1',
         ipId: 'ip-1',
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'host-3' })
     const { url, init } = nthCall(0)
     expect(url).toContain('/api/client/v1/hostings')
@@ -256,7 +283,7 @@ describe('instance-api resource fetch wrappers', () => {
         },
         tlsId: null,
         ipId: null,
-      }),
+      })
     ).resolves.toEqual({ ok: true })
     const { url, init } = nthCall(0)
     expect(url).toContain('/api/client/v1/hostings/host-1')
@@ -294,7 +321,7 @@ describe('instance-api resource fetch wrappers', () => {
         hostnames: ['app.example.com'],
         prefer: 10,
         autoRenew: false,
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'tls-2' })
     const upload = nthCall(0)
     expect(upload.url).toContain('/api/client/v1/tls')
@@ -316,7 +343,7 @@ describe('instance-api resource fetch wrappers', () => {
         hostnames: ['app.example.com'],
         autoRenew: true,
         challengeType: 'http-01',
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'tls-3' })
     const issued = nthCall(1)
     expect(issued.url).toContain('/api/client/v1/tls')
@@ -331,11 +358,11 @@ describe('instance-api resource fetch wrappers', () => {
 
   it('requestLetsEncryptForHosting PUTs an empty body, fetchHosting and the DNS check GET', async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ hosting: HOSTING, certificate: null, needsDeploy: true }),
+      jsonResponse({ hosting: HOSTING, certificate: null, needsDeploy: true })
     )
-    await expect(
-      requestLetsEncryptForHosting('host-1'),
-    ).resolves.toMatchObject({ needsDeploy: true })
+    await expect(requestLetsEncryptForHosting('host-1')).resolves.toMatchObject({
+      needsDeploy: true,
+    })
     const put = nthCall(0)
     expect(put.url).toContain('/api/client/v1/hostings/host-1/use-letsencrypt')
     expect(put.init.method).toBe('PUT')
@@ -354,9 +381,7 @@ describe('instance-api resource fetch wrappers', () => {
 
   it('requestLetsEncryptForHosting surfaces the refusal code', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'lets_encrypt_not_enabled' }, 403))
-    await expect(requestLetsEncryptForHosting('host-1')).rejects.toThrow(
-      /lets_encrypt_not_enabled/,
-    )
+    await expect(requestLetsEncryptForHosting('host-1')).rejects.toThrow(/lets_encrypt_not_enabled/)
   })
 
   it('deleteTlsCertificate DELETEs the certificate id', async () => {
@@ -390,7 +415,7 @@ describe('instance-api resource fetch wrappers', () => {
         composeServiceName: 'api',
         metadata: { image: 'nginx:alpine' },
         options: { restart: 'always' },
-      }),
+      })
     ).resolves.toEqual({ ok: true, id: 'ctr-2' })
     const { url, init } = nthCall(0)
     expect(url).toContain('/api/client/v1/containers')
@@ -417,7 +442,7 @@ describe('instance-api resource fetch wrappers', () => {
         composeServiceName: 'api',
         metadata: null,
         options: { restart: 'unless-stopped' },
-      }),
+      })
     ).resolves.toEqual({ ok: true })
     const { url, init } = nthCall(0)
     expect(url).toContain('/api/client/v1/containers/ctr-1')
