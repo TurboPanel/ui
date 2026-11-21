@@ -21,9 +21,6 @@ export const LETS_ENCRYPT_OFF_COPY =
 export const MANAGED_HAS_BINDINGS_COPY =
   'One or more services are still connected to this cluster. Remove those connections first, then destroy it.'
 
-export const BASE_TRACKS_REPOSITORY_COPY =
-  'This project follows the repository\u2019s compose file, so its Base cannot be edited here. Change the file in the repository, add the change to an environment, or stop following the file first.'
-
 export const ROLLBACK_BASE_UNRECORDED_COPY =
   'This release was deployed before TurboPanel recorded which compose file it used, so it cannot be rolled back while the project follows the repository. Stop following the file in the Base settings, then roll back.'
 
@@ -97,7 +94,6 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
     'That environment is not part of this project. Reload the page and try again.',
   edit_target_mixed:
     'An environment change cannot carry project settings in the same save. Save them separately.',
-  base_tracks_repository: BASE_TRACKS_REPOSITORY_COPY,
   rollback_base_unrecorded: ROLLBACK_BASE_UNRECORDED_COPY,
   compose_source_missing: 'This project was not created from a repository compose file.',
   environment_start_invalid: 'Pick whether the new environment starts as a copy or empty.',

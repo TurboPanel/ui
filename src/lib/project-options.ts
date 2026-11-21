@@ -10,6 +10,7 @@ export type ProjectOptionsPatch = {
   containerNaming?: 'uuid' | 'custom'
   defaultServerId?: string | null
   composeSource?: ProjectComposeSource
+  composeOverlays?: unknown[]
 }
 
 /**
@@ -36,6 +37,10 @@ export function buildProjectOptionsPatch(
   // Replaced wholesale on save: leaving it out would end the link to the repository.
   const composeSource = patch.composeSource ?? project.options?.composeSource
   if (composeSource) options.composeSource = composeSource
+  // Also replaced wholesale by the control plane (deploy tuning is carried over
+  // there, overlays are not): leaving them out would delete them.
+  const composeOverlays = patch.composeOverlays ?? project.options?.composeOverlays
+  if (composeOverlays) options.composeOverlays = composeOverlays
   return options
 }
 

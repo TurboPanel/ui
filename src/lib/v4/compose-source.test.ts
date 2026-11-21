@@ -1,14 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ComposeDocument } from '@/lib/compose'
-import type { DeploymentHistoryRecord, ProjectComposeSource } from '@/lib/instance-api'
+import type { ProjectComposeSource } from '@/lib/instance-api'
 import {
   baseUsedLine,
   composeSourceForCreate,
   environmentBranchRows,
   followingNote,
+  isBaseTracksRepositoryError,
   isFollowingRepository,
-  lastReadTime,
-  settingsSaveBlockedMessage,
+  reportFailedSave,
+  baseEditBlockedMessage,
   shortCommit,
 } from './compose-source'
 import { sha256Hex } from './sha256'
@@ -21,22 +22,6 @@ const SOURCE: ProjectComposeSource = {
   seededCommitSha: 'aaaaaaa1111111111111111111111111111111aa',
   seededDigest: '0'.repeat(64),
   mode: 'track',
-}
-
-function deploy(commitSha: string | null, queuedAt: string): DeploymentHistoryRecord {
-  return {
-    queuedAt,
-    startedAt: null,
-    composeBase: commitSha
-      ? {
-          sourceId: 'src-1',
-          ref: 'main',
-          path: 'deploy/compose.yaml',
-          commitSha,
-          digest: '0'.repeat(64),
-        }
-      : null,
-  } as unknown as DeploymentHistoryRecord
 }
 
 describe('isFollowingRepository', () => {
@@ -75,30 +60,12 @@ describe('followingNote', () => {
     )
   })
 
-  it('adds the time when a deploy read that commit', () => {
-    const note = followingNote(SOURCE, { readAt: '2026-01-01T00:00:00.000Z' })
+  it('adds the time of the last read from lastReadAt', () => {
+    const note = followingNote({ ...SOURCE, lastReadAt: '2026-01-01T00:00:00.000Z' })
     expect(
       note.startsWith('Following deploy/compose.yaml in the repository; last read at aaaaaaa ')
     ).toBe(true)
     expect(note.length).toBeGreaterThan(70)
-  })
-})
-
-describe('lastReadTime', () => {
-  it('is the newest deploy that read the commit', () => {
-    const sha = 'c'.repeat(40)
-    const rows = [
-      deploy(sha, '2026-01-01T00:00:00.000Z'),
-      deploy('d'.repeat(40), '2026-03-01T00:00:00.000Z'),
-      deploy(sha, '2026-02-01T00:00:00.000Z'),
-    ]
-    expect(lastReadTime(rows, sha)).toBe('2026-02-01T00:00:00.000Z')
-  })
-
-  it('is null with no match, no commit or no history', () => {
-    expect(lastReadTime([deploy(null, '2026-01-01T00:00:00.000Z')], 'c'.repeat(40))).toBeNull()
-    expect(lastReadTime([deploy('c'.repeat(40), '2026-01-01T00:00:00.000Z')], undefined)).toBeNull()
-    expect(lastReadTime(undefined, 'c'.repeat(40))).toBeNull()
   })
 })
 
@@ -117,15 +84,28 @@ describe('baseUsedLine and shortCommit', () => {
   })
 })
 
-describe('settingsSaveBlockedMessage', () => {
-  it('blocks a settings save only while following', () => {
-    expect(settingsSaveBlockedMessage({ options: { composeSource: SOURCE } })).toContain(
+describe('baseEditBlockedMessage', () => {
+  it('blocks a Base edit only while following', () => {
+    expect(baseEditBlockedMessage({ options: { composeSource: SOURCE } })).toContain(
       'Stop following'
     )
     expect(
-      settingsSaveBlockedMessage({ options: { composeSource: { ...SOURCE, mode: 'seed' } } })
+      baseEditBlockedMessage({ options: { composeSource: { ...SOURCE, mode: 'seed' } } })
     ).toBeNull()
-    expect(settingsSaveBlockedMessage({ options: {} })).toBeNull()
+    expect(baseEditBlockedMessage({ options: {} })).toBeNull()
+  })
+})
+
+describe('reportFailedSave', () => {
+  it('adds a reload for the refusal of a stale Base, and only for it', () => {
+    const cause = new Error('/p failed: HTTP 409: base_tracks_repository \u2014 Reload.')
+    const stale = vi.fn()
+    reportFailedSave(stale, { error: cause.message, cause }, 'fallback')
+    expect(stale).toHaveBeenCalledWith('Reload.', { reload: true })
+    const other = vi.fn()
+    reportFailedSave(other, { error: null }, 'fallback')
+    expect(other).toHaveBeenCalledWith('fallback', { reload: false })
+    expect(isBaseTracksRepositoryError(new Error('HTTP 409: compose_source_missing'))).toBe(false)
   })
 })
 

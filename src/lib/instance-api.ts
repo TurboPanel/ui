@@ -3930,6 +3930,8 @@ export type ProjectRecord = {
     defaultServerId?: string
     /** Set on a project created from a Git repository's compose file. */
     composeSource?: ProjectComposeSource
+    /** Project overlays on the Base, kept as stored when a save sends them back. */
+    composeOverlays?: unknown[]
   } | null
   createdAt: string
   updatedAt: string
@@ -3952,6 +3954,8 @@ export type ProjectComposeSource = {
   mode?: 'seed' | 'track'
   lastReadCommitSha?: string
   lastReadDigest?: string
+  /** ISO time of the latest tracked read; the control plane sets it. */
+  lastReadAt?: string
 }
 
 /** The compose file a deploy used as the Base (`composeBase` on deploys and previews). */
@@ -4096,7 +4100,10 @@ export type CreateProjectBody = {
      * follow it. The control plane starts it in `track` mode with the seeded
      * commit and digest as the last read.
      */
-    composeSource?: Omit<ProjectComposeSource, 'mode' | 'lastReadCommitSha' | 'lastReadDigest'>
+    composeSource?: Omit<
+      ProjectComposeSource,
+      'mode' | 'lastReadCommitSha' | 'lastReadDigest' | 'lastReadAt'
+    >
   }
   /**
    * Pins the scaffolded primary environment (org primary name, else `production`)

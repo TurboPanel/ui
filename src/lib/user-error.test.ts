@@ -37,10 +37,16 @@ describe('apiErrorCopy', () => {
     )
   })
 
-  it('explains the two refusals of a project that follows its repository', () => {
-    expect(apiErrorCopy(new Error('HTTP 409: base_tracks_repository \u2014 x'))).toContain(
-      'cannot be edited here'
-    )
+  it('shows the control plane words for a Base edit refused while following', () => {
+    expect(apiErrorCopy(new Error('HTTP 409: base_tracks_repository \u2014 x'))).toBeNull()
+    expect(
+      userErrorMessage(
+        new Error(
+          '/projects/p failed: HTTP 409: base_tracks_repository \u2014 Reload and save again.'
+        ),
+        'x'
+      )
+    ).toBe('Reload and save again.')
     expect(apiErrorCopy(new Error('HTTP 409: rollback_base_unrecorded \u2014 x'))).toContain(
       'Stop following the file'
     )

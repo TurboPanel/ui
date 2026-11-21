@@ -257,3 +257,25 @@ describe('project header on an environment page', () => {
     expect(screen.getByRole('link', { name: 'Projects' })).toBeTruthy()
   })
 })
+
+describe('error line', () => {
+  it('offers a reload only when the error asks for one, and runs it', () => {
+    const setError = vi.fn()
+    const invalidateProject = vi.fn().mockResolvedValue(undefined)
+    setContext({ error: 'Save failed', errorReload: false, setError, invalidateProject })
+    const { rerender } = render(<ProjectShell>body</ProjectShell>)
+    expect(screen.getByText('Save failed')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    setContext({ error: 'Save failed', errorReload: true, setError, invalidateProject })
+    rerender(<ProjectShell>body</ProjectShell>)
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    expect(setError).toHaveBeenCalledWith(null)
+    expect(invalidateProject).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows no reload without an error', () => {
+    setContext({ error: null, errorReload: true })
+    render(<ProjectShell>body</ProjectShell>)
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+  })
+})

@@ -16,7 +16,7 @@ import {
   useProjectRepositoryId,
   type ProjectDraft,
 } from '@/components/org/project/project-context'
-import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
+import { baseEditBlockedMessage, reportFailedSave } from '@/lib/v4/compose-source'
 import { ComposeSourceGate } from '@/components/org/project/compose-source-panel'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import { ComposeInheritedPanel } from '@/components/org/project/compose-inherited-panel'
@@ -110,7 +110,7 @@ import { useStorage } from '@/lib/queries/storage'
 import { isActiveContainerStatus, serviceStatusTone } from '@/lib/container-status'
 import { countDistinctProjectServers, resolveEffectiveServerId } from '@/lib/project-options'
 import { spacing } from '@/lib/theme'
-import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
+import { userErrorMessage } from '@/lib/user-error'
 
 /** Stable empty list so the facts memo does not thrash on every render. */
 const EMPTY_STORAGE: readonly StorageRecord[] = []
@@ -526,11 +526,12 @@ export function ServicesPanelBody({
   // Plain handlers (not useCallback): React Compiler could not preserve manual
   // memoization of this save path (`preserve-manual-memoization` on scopeKey).
   async function saveOverviewDraft(): Promise<void> {
-    // A draft made while the Base was editable is stale once the project follows
-    // the repository again: the Base refuses it, so drop it instead of sending.
-    const blocked = baseSelected ? settingsSaveBlockedMessage(project) : null
+    // A draft made while the Base was editable cannot be saved once the project
+    // follows the repository: the control plane refuses a changed Base, so drop
+    // the draft instead of sending it.
+    const blocked = baseSelected ? baseEditBlockedMessage(project) : null
     if (blocked) {
-      onSaveBlocked(`These edits were not saved. ${blocked}`)
+      onSaveBlocked(`These edits were dropped and not saved. ${blocked}`)
       discardOverviewDraft()
       return
     }
@@ -747,6 +748,19 @@ export function ServicesPanelBody({
   )
 }
 
+/** Saves the Base document and reports a failure, with a reload when the Base was refused as stale. */
+export async function saveBaseCompose(
+  run: (
+    compose: ComposeDocument
+  ) => Promise<{ ok: true } | { ok: false; error: string | null; cause?: unknown }>,
+  compose: ComposeDocument,
+  setError: (message: string | null, options?: { reload: boolean }) => void
+): Promise<void> {
+  setError(null)
+  const result = await run(compose)
+  if (!result.ok) reportFailedSave(setError, result, 'Failed to save compose')
+}
+
 export function ComposeServicesTab() {
   const pathname = usePathname()
   const router = useRouter()
@@ -839,11 +853,7 @@ export function ComposeServicesTab() {
       if (draft) return
       // This save always names the Base, so it is only ever reachable from the Base screens.
       if (!baseSelected) return
-      setError(null)
-      const result = await persistProjectCompose.run(compose)
-      if (!result.ok && persistProjectCompose.actionError) {
-        setError(failedRunMessage(result, persistProjectCompose.actionError))
-      }
+      await saveBaseCompose(persistProjectCompose.run, compose, setError)
     },
     [draft, baseSelected, persistProjectCompose, setError]
   )

@@ -1,15 +1,17 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ComposeDocument, ProjectRecord } from '@/lib/instance-api'
 import {
   composeDraftScopeKey,
   ComposeDraftProvider,
+  isComposeDraftDirty,
+  resolveComposeDraftSnapshot,
   seedComposeDraftFromDocument,
   useComposeDraftStore,
 } from './compose-draft-context'
-import { ServicesPanelBody } from './compose-tabs'
+import { ServicesPanelBody, saveBaseCompose } from './compose-tabs'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock(
@@ -91,9 +93,16 @@ function project(mode: 'track' | 'seed'): ProjectRecord {
   } as unknown as ProjectRecord
 }
 
+let draftStore: ReturnType<typeof useComposeDraftStore> | null = null
+
 function StaleDraft() {
   const store = useComposeDraftStore()
+  const done = useRef(false)
   useEffect(() => {
+    draftStore = store
+    // Once: a re-seed after the save would hide whether the draft was dropped.
+    if (done.current) return
+    done.current = true
     const seeded = seedComposeDraftFromDocument(doc('nginx'))
     const edited = seedComposeDraftFromDocument(doc('caddy'))
     store.setSnapshot(composeDraftScopeKey('p1', null), {
@@ -147,8 +156,15 @@ describe('Overview Save on a stale Base draft', () => {
     })
     fireEvent.click(await screen.findByRole('button', { name: 'Save' }))
     await waitFor(() => expect(onSaveBlocked).toHaveBeenCalledTimes(1))
-    expect(onSaveBlocked.mock.calls[0]?.[0]).toMatch(/not saved.*Stop following/)
+    expect(onSaveBlocked.mock.calls[0]?.[0]).toMatch(/dropped and not saved.*Stop following/)
     expect(onSaveProjectCompose).not.toHaveBeenCalled()
+    // The notice says the edits are gone, so the draft must be gone.
+    const snapshot = resolveComposeDraftSnapshot(
+      draftStore!,
+      composeDraftScopeKey('p1', null),
+      doc('nginx')
+    )
+    expect(isComposeDraftDirty(snapshot)).toBe(false)
   })
 
   it('saves the edits once the project no longer follows', async () => {
@@ -162,5 +178,30 @@ describe('Overview Save on a stale Base draft', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Save' }))
     await waitFor(() => expect(onSaveProjectCompose).toHaveBeenCalledTimes(1))
     expect(onSaveBlocked).not.toHaveBeenCalled()
+  })
+})
+
+describe('saveBaseCompose', () => {
+  it('clears the error line and reports nothing when the save works', async () => {
+    const setError = vi.fn()
+    await saveBaseCompose(vi.fn().mockResolvedValue({ ok: true, error: null }), doc('x'), setError)
+    expect(setError).toHaveBeenCalledTimes(1)
+    expect(setError).toHaveBeenCalledWith(null)
+  })
+
+  it('shows the control plane words and offers a reload on a stale Base', async () => {
+    const setError = vi.fn()
+    const cause = new Error(
+      '/projects/p failed: HTTP 409: base_tracks_repository \u2014 Reload and save again.'
+    )
+    const run = vi.fn().mockResolvedValue({ ok: false, error: cause.message, cause })
+    await saveBaseCompose(run, doc('x'), setError)
+    expect(setError).toHaveBeenLastCalledWith('Reload and save again.', { reload: true })
+  })
+
+  it('reports another failure without a reload, even before any error state is set', async () => {
+    const setError = vi.fn()
+    await saveBaseCompose(vi.fn().mockResolvedValue({ ok: false, error: null }), doc('x'), setError)
+    expect(setError).toHaveBeenLastCalledWith('Failed to save compose', { reload: false })
   })
 })

@@ -50,6 +50,23 @@ describe('buildProjectOptionsPatch', () => {
   })
 })
 
+describe('composeOverlays on an options patch', () => {
+  it('sends stored overlays back so a settings save does not delete them', () => {
+    const overlays = [{ id: 'o1', name: 'o1', filename: 'o1.yml' }]
+    const current = project({ containerNaming: 'custom', composeOverlays: overlays })
+    expect(buildProjectOptionsPatch(current, { containerNaming: 'uuid' })).toEqual({
+      containerNaming: 'uuid',
+      composeOverlays: overlays,
+    })
+  })
+
+  it('adds nothing for a project without overlays', () => {
+    expect(
+      'composeOverlays' in buildProjectOptionsPatch(project({}), { containerNaming: 'uuid' })
+    ).toBe(false)
+  })
+})
+
 describe('composeSource on an options patch', () => {
   const source = {
     sourceId: 'src-1',

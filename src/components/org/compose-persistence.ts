@@ -8,7 +8,7 @@ import {
 import type { AccountWrite } from '@/lib/compose/principal-required'
 import { buildProjectOptionsPatch, mergeProjectOptionsLocal } from '@/lib/project-options'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
-import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
+import { baseEditBlockedMessage } from '@/lib/v4/compose-source'
 
 export function usePersistProjectCompose(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
@@ -21,7 +21,7 @@ export function usePersistProjectCompose(orgId: string, projectId: string) {
       if (!project) {
         throw new Error('Project not loaded')
       }
-      const blocked = settingsSaveBlockedMessage(project)
+      const blocked = baseEditBlockedMessage(project)
       if (blocked) throw new Error(blocked)
       const options = buildProjectOptionsPatch(project, { compose })
       // Saved from the Base screens, so it always names the Base.
@@ -93,13 +93,14 @@ export function usePersistAccountWrites(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: async (writes: readonly AccountWrite[]) => {
-      // A tracking project refuses every Base write, so refuse before any
-      // document goes out rather than saving only the environment half.
+      // A tracking project refuses a changed Base (an unchanged echo is
+      // accepted), and these writes change it, so refuse before any document
+      // goes out rather than saving only the environment half.
       if (writes.some((write) => write.target.kind === 'base')) {
         const tracked = queryClient.getQueryData<{ project: ProjectRecord }>(
           queryKeys.org(orgId).projects.detail(projectId)
         )
-        const blocked = settingsSaveBlockedMessage(tracked?.project)
+        const blocked = baseEditBlockedMessage(tracked?.project)
         if (blocked) throw new Error(blocked)
       }
       await Promise.all(

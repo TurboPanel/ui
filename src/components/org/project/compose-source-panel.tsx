@@ -4,8 +4,6 @@ import { ActionButton } from '@/components/ui/v4/action-button'
 import { Notice } from '@/components/ui/v4/notice'
 import { useRepositories } from '@/lib/queries/releases'
 import { useSetComposeSource } from '@/lib/queries/projects'
-import { useEnvironmentDeployments } from '@/lib/queries/execution-logs'
-import { primaryEnvironmentOf } from '@/lib/v4/primary-environment'
 import { colors, spacing } from '@/lib/theme'
 import { composeFullYaml } from '@/components/org/project/compose-draft-context'
 import { emptyComposeDocument } from '@/lib/compose'
@@ -14,7 +12,6 @@ import {
   environmentBranchRows,
   followingNote,
   isFollowingRepository,
-  lastReadTime,
   type EnvironmentBranchRow,
 } from '@/lib/v4/compose-source'
 import type { EnvironmentRecord, ProjectComposeSource, ProjectRecord } from '@/lib/instance-api'
@@ -141,11 +138,6 @@ export function ComposeSourceControl({
 }>) {
   const source = project.options?.composeSource
   const setMode = useSetComposeSource(orgId, project.id)
-  const primary = primaryEnvironmentOf(environments)
-  const deployments = useEnvironmentDeployments(orgId, primary?.id ?? '', {
-    enabled: mode === 'panel' && Boolean(primary),
-    limit: 20,
-  })
   const repositories = useRepositories(orgId, { enabled: mode === 'panel' && Boolean(source) })
   if (!source) return null
   const defaultBranch =
@@ -163,11 +155,7 @@ export function ComposeSourceControl({
       />
     )
   }
-  const commit = source.lastReadCommitSha ?? source.seededCommitSha
-  const note = followingNote(source, {
-    defaultBranch,
-    readAt: lastReadTime(deployments.data?.deployments, commit),
-  })
+  const note = followingNote(source, { defaultBranch })
   return (
     <FollowingPanel
       note={note}
