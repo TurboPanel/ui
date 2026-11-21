@@ -178,7 +178,11 @@ import { projectComposeHref, projectEnvironmentComposeHref } from '@/lib/project
 import { hostPickerLabel, pickHostKey } from '@/lib/hosting-host-label'
 import { HostingHostPicker } from '@/components/org/project/hosting-host-picker'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
-import { deployErrorMessage, networkSharesRefusalServers } from '@/lib/deploy-error-message'
+import {
+  deployErrorMessage,
+  deployRefusalClosesPreview,
+  networkSharesRefusalServers,
+} from '@/lib/deploy-error-message'
 import { NetworkSharesRefusalLinks } from '@/components/org/network-shares-refusal-links'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
@@ -2985,6 +2989,7 @@ export function EnvironmentDetailBody({
         )
         return
       }
+      if (deployRefusalClosesPreview(err)) setPreviewOpen(null)
       setShareRefusalServers(networkSharesRefusalServers(err))
       setDeployStatus(deployErrorMessage(err))
     }

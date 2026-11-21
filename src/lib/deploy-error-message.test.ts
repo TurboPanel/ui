@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deployErrorMessage,
+  deployRefusalClosesPreview,
   networkSharesRefusalServers,
   deployRefusalMessage,
   isHostingAccountRefusal,
@@ -130,6 +131,7 @@ describe('network share refusals', () => {
     const message = deployRefusalMessage(err)
     expect(message).toContain('Deploy network shares permission')
     expect(message).toContain('organization owner or manager')
+    expect(message).toContain('an owner can grant you')
     expect(networkSharesRefusalServers(err)).toEqual([])
   })
 
@@ -138,7 +140,23 @@ describe('network share refusals', () => {
     const message = deployRefusalMessage(err)
     expect(message).toContain('automated deploy')
     expect(message).toContain('manual deploy must approve these shares first')
+    expect(message).not.toContain('turned off and on again')
     expect(networkSharesRefusalServers(err)).toEqual([])
+  })
+
+  it('names the servers whose switch was turned off and on again', () => {
+    const err = new DeployNetworkSharesRefusedError('approval', ['media'], servers)
+    expect(deployRefusalMessage(err)).toContain(
+      'turned off and on again on "web-1", "web-2" since the last approval'
+    )
+    expect(networkSharesRefusalServers(err)).toEqual(servers)
+  })
+
+  it('closes the deploy preview for a share refusal and no other error', () => {
+    expect(
+      deployRefusalClosesPreview(new DeployNetworkSharesRefusedError('permission', [], []))
+    ).toBe(true)
+    expect(deployRefusalClosesPreview(new Error('x'))).toBe(false)
   })
 
   it('falls back to the server sentence, then to plain words, for an untyped refusal', () => {

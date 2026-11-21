@@ -32,6 +32,7 @@ import {
   useTeams,
 } from '@/lib/queries/access'
 import { getAccessManagementPermissionKey, useCan } from '@/lib/query-client'
+import { PERMISSIONS_BY_SCOPE, grantPermissionLabel } from '@/lib/access-permissions'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -48,16 +49,6 @@ const SUBJECT_KIND_OPTIONS = [
   { value: 'team', label: 'team' },
   { value: 'organization', label: 'organization' },
 ] as const
-
-const PERMISSIONS_BY_SCOPE: Record<AccessScopeKind, PermissionKey[]> = {
-  organization: ['organization:own', 'organization:manage', 'environments.deploy_network_shares'],
-  team: ['team:own', 'team:manage'],
-}
-
-/** A grant's permission in words where it has a display name; the key for the older ones. */
-function grantPermissionLabel(key: string): string {
-  return key === 'environments.deploy_network_shares' ? 'Deploy network shares' : key
-}
 
 type ScopeItem = {
   id: string

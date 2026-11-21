@@ -43,16 +43,23 @@ export function networkSharesRefusalMessage(err: DeployNetworkSharesRefusedError
     return `${head} Network shares are not allowed on ${where}. Turn on "Allow Network Shares" in the server's settings, then deploy again.`
   }
   if (err.reason === 'approval') {
-    return `${head} This was an automated deploy (a git push or a schedule), and a manual deploy must approve these shares first. Deploy once from the web interface as an organization owner or manager, or as someone with the Deploy network shares permission; automated deploys of the same shares then run.`
+    const turnedBack =
+      err.servers.length > 0
+        ? ` Allow Network Shares was turned off and on again on ${quotedList(err.servers.map((server) => server.name))} since the last approval, which voids it.`
+        : ''
+    return `${head} This was an automated deploy (a git push or a schedule), and a manual deploy must approve these shares first.${turnedBack} Deploy once from the web interface as an organization owner or manager, or as someone with the Deploy network shares permission; automated deploys of the same shares then run.`
   }
-  return `${head} You do not have the Deploy network shares permission. An organization owner or manager can deploy it, or grant you the permission under Access.`
+  return `${head} You do not have the Deploy network shares permission. An organization owner or manager can deploy it, and an owner can grant you the permission under Access.`
 }
 
-/** The servers a share refusal asks to turn "Allow Network Shares" on for; empty for any other error. */
+/** The servers a share refusal names (the ones with Allow Network Shares off, or turned off and on again); empty for any other error. */
 export function networkSharesRefusalServers(err: unknown): { id: string; name: string }[] {
-  return err instanceof DeployNetworkSharesRefusedError && err.reason === 'server_setting'
-    ? err.servers
-    : []
+  return err instanceof DeployNetworkSharesRefusedError ? err.servers : []
+}
+
+/** A refusal the person must see at once: the deploy preview closes so it is not hidden under it. */
+export function deployRefusalClosesPreview(err: unknown): boolean {
+  return err instanceof DeployNetworkSharesRefusedError
 }
 
 /** The deploy was refused because an app has no Hosting Account to run as. */
