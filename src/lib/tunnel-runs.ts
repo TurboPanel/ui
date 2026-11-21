@@ -361,7 +361,7 @@ export function peerHopState(hop: Pick<TunnelPeerHop, 'mode' | 'downgraded'>): {
     return {
       label: 'No Mode Reported',
       tone: 'pending',
-      note: 'This server has no mode on record for how it checks other servers.',
+      note: 'This server has not reported a mode yet. It reports one once it holds a forwarding table for this tunnel’s hostnames.',
     }
   }
   if (hop.mode === 'verify') {

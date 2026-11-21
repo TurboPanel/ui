@@ -284,6 +284,14 @@ describe('nameState', () => {
     expect(expired.canRetry).toBe(true)
   })
 
+  it('does not read the site certificate for a Cloudflare origin name', () => {
+    const origin = { certificate: 'cloudflare_origin' as const, tlsId: null }
+    const test = site('test_certificate')
+    expect(nameState(origin, [], test).label).toBe('Waiting')
+    expect(nameState(origin, [], test, undefined, false).label).toBe('Waiting')
+    expect(nameState(origin, [], test, undefined, true).label).toBe('Ready')
+  })
+
   it('says a library certificate that left the library is missing', () => {
     expect(nameState({ certificate: 'library', tlsId: 'gone' }, [], null).label).toBe('Missing')
   })

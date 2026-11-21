@@ -78,7 +78,7 @@ function NameRow({
   const choice = currentChoice(name, edits)
   const changed = !sameChoice(choice, savedChoice(name))
   // A changed choice has no state of its own until it is saved.
-  const state = nameState(name, library, hosting.certificate)
+  const state = nameState(name, library, hosting.certificate, undefined, tunnel?.originVerified)
 
   async function runRetry(tlsId: string) {
     setRetryNote(null)
