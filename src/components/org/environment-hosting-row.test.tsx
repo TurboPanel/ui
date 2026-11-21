@@ -128,6 +128,7 @@ function drawRow(props: Partial<Parameters<typeof HostingPanelRow>[0]> = {}) {
       onSave={vi.fn()}
       onRemoveHostname={vi.fn()}
       onManageHere={vi.fn()}
+      onReleaseNow={vi.fn()}
       {...props}
     />
   )
@@ -230,6 +231,7 @@ describe('the hosting form around a save', () => {
         }}
         onRemoveHostname={vi.fn()}
         onManageHere={vi.fn()}
+        onReleaseNow={vi.fn()}
       />
     )
   }
@@ -318,6 +320,23 @@ describe('a hostname removed from the configuration file, before the next deploy
     cleanup()
     drawRow({ hostingId: 'h1', composeEditable: false, removalNote: pendingRemovalNote(false) })
     expect(screen.getByTestId('certificate-panel').dataset.disabled).toBe('true')
+  })
+
+  it('offers Release now, which frees the name without waiting for the deploy', () => {
+    const onReleaseNow = vi.fn()
+    drawRow({
+      hostingId: 'h1',
+      composeEditable: false,
+      removalNote: pendingRemovalNote(false),
+      onReleaseNow,
+    })
+    fireEvent.click(screen.getByText('Release now'))
+    expect(onReleaseNow).toHaveBeenCalledTimes(1)
+  })
+
+  it('has no Release now on a hostname that is still in the file', () => {
+    drawRow()
+    expect(screen.queryByText('Release now')).toBeNull()
   })
 
   it('has no note on an ordinary hostname', () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
 import { CONTROL_PLANE_UNREACHABLE_COPY } from '@/lib/user-error'
 import {
@@ -19,10 +19,9 @@ import {
   hostingSaveErrorMessage,
   HOSTNAME_IN_USE_MESSAGE,
   hostnameReleasedMessage,
-  isRowAlreadyGone,
+  releaseHostnameNow,
   REMOVE_NOW_DEPLOY_RUNNING_MESSAGE,
   removeNowErrorMessage,
-  removeNowOutcome,
   COMPOSE_HOSTNAME_HINT,
   COMPOSE_PROXY_NOTE,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
@@ -220,47 +219,70 @@ describe('plain hosting words', () => {
     )
   })
 
-  it('words a release refused because a deploy is running, and any other failure', () => {
+  it('names the hostnames the control plane freed', () => {
+    expect(
+      hostnameReleasedMessage('fallback.test', {
+        removed: true,
+        hostnames: ['example.test', 'www.example.test'],
+        serverUpdate: 'next_deploy',
+      })
+    ).toBe(
+      'example.test, www.example.test are released. The server stops serving them at the next deploy.'
+    )
+    expect(hostnameReleasedMessage('fallback.test', { removed: true, hostnames: [] })).toBe(
+      'fallback.test is released.'
+    )
+  })
+
+  it('words a release refused because a deploy is running, pointing at Release now', () => {
     expect(
       removeNowErrorMessage({
         error:
           '/api/client/v1/hostings/abc/remove-now failed: HTTP 409: environment_deploy_running — A deploy is running.',
       })
     ).toBe(REMOVE_NOW_DEPLOY_RUNNING_MESSAGE)
-    expect(REMOVE_NOW_DEPLOY_RUNNING_MESSAGE).toMatch(/A deploy is running/)
-    expect(removeNowErrorMessage({ error: 'Something broke' })).toContain(
-      'could not be released now'
-    )
+    expect(REMOVE_NOW_DEPLOY_RUNNING_MESSAGE).toMatch(/A deploy is running.*Release now/)
+    const other = removeNowErrorMessage({ error: 'Something broke' })
+    expect(other).toContain('could not be released now')
+    expect(other).toContain('Release now')
   })
 
-  it('treats a 404 from the release as already gone', () => {
-    expect(
-      isRowAlreadyGone({
-        error: '/api/client/v1/hostings/abc/remove-now failed: HTTP 404: Not found',
-      })
-    ).toBe(true)
-    expect(isRowAlreadyGone({ error: 'HTTP 409: environment_deploy_running' })).toBe(false)
-    expect(isRowAlreadyGone({ error: null })).toBe(false)
-  })
+  describe('releaseHostnameNow', () => {
+    const refresh = () => vi.fn(async () => undefined)
 
-  it('turns the release answer into a notice or an error, a 404 counting as released', () => {
-    expect(
-      removeNowOutcome('example.test', {
-        ok: true,
-        value: { removed: true, serverUpdate: 'next_deploy' },
+    it('says released, and refreshes the list', async () => {
+      const done = refresh()
+      const outcome = await releaseHostnameNow('example.test', {
+        run: async () => ({
+          ok: true,
+          value: { removed: true, hostnames: ['example.test'], serverUpdate: 'not_deployed' },
+        }),
+        refresh: done,
       })
-    ).toEqual({
-      notice: 'example.test is released. The server stops serving it at the next deploy.',
+      expect(outcome).toEqual({ tone: 'ok', message: 'example.test is released.' })
+      expect(done).toHaveBeenCalledTimes(1)
     })
-    expect(
-      removeNowOutcome('example.test', { ok: false, error: 'x failed: HTTP 404: Not found' })
-    ).toEqual({ notice: 'example.test is released.' })
-    expect(
-      removeNowOutcome('example.test', {
-        ok: false,
-        error: 'x failed: HTTP 409: environment_deploy_running',
+
+    it('shows the running-deploy refusal and still refreshes the list', async () => {
+      const done = refresh()
+      const outcome = await releaseHostnameNow('example.test', {
+        run: async () => ({
+          ok: false,
+          error: 'x failed: HTTP 409: environment_deploy_running',
+        }),
+        refresh: done,
       })
-    ).toEqual({ error: REMOVE_NOW_DEPLOY_RUNNING_MESSAGE })
+      expect(outcome).toEqual({ tone: 'error', message: REMOVE_NOW_DEPLOY_RUNNING_MESSAGE })
+      expect(done).toHaveBeenCalledTimes(1)
+    })
+
+    it('treats a 404 as an error, not as released', async () => {
+      const outcome = await releaseHostnameNow('example.test', {
+        run: async () => ({ ok: false, error: 'x failed: HTTP 404: Not found' }),
+        refresh: refresh(),
+      })
+      expect(outcome.tone).toBe('error')
+    })
   })
 
   it('says what a move keeps, and that undeployed changes stay behind for a deployed hostname', () => {

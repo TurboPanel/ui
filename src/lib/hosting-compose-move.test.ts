@@ -12,6 +12,8 @@ import {
   moveComposeHostnameToPanel,
   panelCertificateForMovedRoute,
   panelRowsBesideDeclarations,
+  releasesAtOnce,
+  removeHostnameThenRelease,
   withoutComposeHostingRoute,
 } from './hosting-compose-move'
 
@@ -254,4 +256,48 @@ describe('findPanelRowForRoute and configuredHostingState', () => {
     expect(configuredHostingState(undefined, held)).toBe('held-by-panel')
     expect(configuredHostingState(undefined, undefined)).toBe('not-deployed')
   })
+})
+
+describe('removeHostnameThenRelease', () => {
+  function run(saved: boolean) {
+    return {
+      saveFile: vi.fn(async () => saved),
+      release: vi.fn(async () => undefined),
+    }
+  }
+
+  it('makes no release call when the file did not save', async () => {
+    const steps = run(false)
+    expect(await removeHostnameThenRelease({ hostingId: 'h1', state: 'deployed' }, steps)).toBe(
+      'not_saved'
+    )
+    expect(steps.release).not.toHaveBeenCalled()
+  })
+
+  it.each(['held-by-panel', 'not-deployed'] as const)(
+    'makes no call for a %s row',
+    async (state) => {
+      const steps = run(true)
+      expect(await removeHostnameThenRelease({ hostingId: 'h1', state }, steps)).toBe('skipped')
+      expect(steps.release).not.toHaveBeenCalled()
+    }
+  )
+
+  it('makes no call without a hosting id', async () => {
+    const steps = run(true)
+    expect(await removeHostnameThenRelease({ hostingId: null, state: 'deployed' }, steps)).toBe(
+      'skipped'
+    )
+    expect(steps.release).not.toHaveBeenCalled()
+  })
+
+  it.each(['deployed', 'adopted'] as const)(
+    'releases a %s row after the file saved',
+    async (state) => {
+      const steps = run(true)
+      expect(await removeHostnameThenRelease({ hostingId: 'h1', state }, steps)).toBe('released')
+      expect(steps.release).toHaveBeenCalledWith('h1')
+      expect(releasesAtOnce(state)).toBe(true)
+    }
+  )
 })

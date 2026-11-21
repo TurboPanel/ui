@@ -203,3 +203,31 @@ export function declaredHostingByService(document: ComposeDocument): DeclaredSer
     }))
     .filter((service) => service.entries.length > 0)
 }
+
+/**
+ * Whether Remove hostname releases the name right after the file is saved: only
+ * a row the last deploy made from the file (`deployed`, or `adopted` from the
+ * panel, which is handed back). A panel row on the same route stays, and with
+ * nothing deployed there is no row to release.
+ */
+export function releasesAtOnce(state: ConfiguredHostingState): boolean {
+  return state === 'deployed' || state === 'adopted'
+}
+
+/**
+ * Remove hostname: save the file without the entry, then release the row.
+ * Answers `not_saved` when the file save failed (nothing is released then),
+ * `skipped` when there is no row to release, else `released`.
+ */
+export async function removeHostnameThenRelease(
+  input: Readonly<{ hostingId: string | null; state: ConfiguredHostingState }>,
+  steps: Readonly<{
+    saveFile: () => Promise<boolean>
+    release: (hostingId: string) => Promise<void>
+  }>
+): Promise<'not_saved' | 'skipped' | 'released'> {
+  if (!(await steps.saveFile())) return 'not_saved'
+  if (!input.hostingId || !releasesAtOnce(input.state)) return 'skipped'
+  await steps.release(input.hostingId)
+  return 'released'
+}

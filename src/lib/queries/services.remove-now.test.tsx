@@ -37,7 +37,7 @@ describe('useRemoveHostingNow', () => {
 
     expect(removeHostingNow).toHaveBeenCalledWith('h1')
     expect(invalidate).toHaveBeenCalledWith({
-      queryKey: expect.arrayContaining(['org', 'org-1', 'hostings']),
+      queryKey: ['org', 'org-1', 'hostings', 'svc-1'],
     })
   })
 
@@ -66,8 +66,6 @@ describe('useRemoveHostingNow', () => {
 
     await result.current.run({ hostingId: 'h1' })
 
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: expect.arrayContaining(['org', 'org-1', 'hostings']),
-    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'hostings'] })
   })
 })

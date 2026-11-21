@@ -149,7 +149,8 @@ import {
   NEW_HOSTING_CERTIFICATE_HINT,
   PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
-  removeNowOutcome,
+  releaseHostnameNow,
+  type RemoveNowOutcome,
   resolveCertificateRef,
   SERVICE_NOT_SAVED_MESSAGE,
   SHARED_FILE_HOSTNAME_MESSAGE,
@@ -161,11 +162,16 @@ import {
   configuredHostingState,
   findPanelRowForRoute,
   moveComposeHostnameToPanel,
+  removeHostnameThenRelease,
   panelCertificateForMovedRoute,
   panelRowsBesideDeclarations,
   withoutComposeHostingRoute,
 } from '@/lib/hosting-compose-move'
 import { ComposeHostnameActions } from '@/components/org/project/compose-hostname-actions'
+import {
+  HostingReleaseNotice,
+  RemovedHostnameRelease,
+} from '@/components/org/project/removed-hostname-release'
 import { COMPOSE_HOSTING_FOCUS_PARAM } from '@/components/org/compose-hosting-readonly'
 import { projectComposeHref, projectEnvironmentComposeHref } from '@/lib/project-navigation'
 import { hostPickerLabel, pickHostKey } from '@/lib/hosting-host-label'
@@ -449,8 +455,11 @@ type HostingRowActions = {
   environmentComposeHref: string
   /** The Compose editor for the project's shared file (the Base tab). */
   baseComposeHref: string
+  /** What the last release said, shown with the hostings. */
+  releaseNotice: RemoveNowOutcome | null
   onRemoveHostname: (row: HostingPanelRowDescriptor) => void
   onManageHere: (row: HostingPanelRowDescriptor) => void
+  onReleaseNow: (row: HostingPanelRowDescriptor) => void
 }
 
 function rowErrorFor(
@@ -1427,6 +1436,7 @@ export function HostingPanelRow({
   savedNote = null,
   onRemoveHostname,
   onManageHere,
+  onReleaseNow,
   composeEditable = true,
   removalNote = null,
   focused = false,
@@ -1466,6 +1476,7 @@ export function HostingPanelRow({
   savedNote?: HostingSaveNote | null
   onRemoveHostname: () => void
   onManageHere: () => void
+  onReleaseNow: () => void
   /**
    * False when the declaration lives in the project compose. The route still
    * renders — it is what will deploy — but this surface only authors the
@@ -1568,6 +1579,9 @@ export function HostingPanelRow({
         />
       ) : null}
       <HostingHintText hint={removalNote} />
+      {awaitingRemoval ? (
+        <RemovedHostnameRelease busy={saving} disabled={disabled} onRelease={onReleaseNow} />
+      ) : null}
       <HostingHintText hint={dockerBridgeHint} />
 
       <HostingProtocolPicker
@@ -2100,6 +2114,7 @@ function EnvironmentHostingSectionPanel({
   }))
   return (
     <Section title="Hosting" note="Point each service at a hostname, or open a raw port for it">
+      <HostingReleaseNotice notice={hostingRowActions.releaseNotice} />
       {hostingRows.length === 0 ? (
         <EmptyState title="Add services to Compose before configuring hostnames." />
       ) : (
@@ -2136,6 +2151,7 @@ function EnvironmentHostingSectionPanel({
                   savedNote={hostingRowActions.savedNotes[row.editorKey] ?? null}
                   onRemoveHostname={() => hostingRowActions.onRemoveHostname(row)}
                   onManageHere={() => hostingRowActions.onManageHere(row)}
+                  onReleaseNow={() => hostingRowActions.onReleaseNow(row)}
                   composeEditable={isEditableRow(row)}
                   removalNote={removalNoteFor(row)}
                   focused={focused}
@@ -2688,8 +2704,8 @@ export function EnvironmentDetailBody({
   const removeHostingNowMutation = useRemoveHostingNow(orgId)
 
   const [error, setError] = useState<string | null>(null)
-  // What Remove hostname just did, in plain words; the row is gone by then.
-  const [removedNotice, setRemovedNotice] = useState<string | null>(null)
+  // What the last release said, in plain words; the row may be gone by then.
+  const [releaseNotice, setReleaseNotice] = useState<RemoveNowOutcome | null>(null)
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
   const [hostingRowErrors, setHostingRowErrors] = useState<Record<string, HostingRowError>>({})
   const [hostingSavedNotes, setHostingSavedNotes] = useState<Record<string, HostingSaveNote>>({})
@@ -3061,6 +3077,7 @@ export function EnvironmentDetailBody({
   const runRowAction = async (row: HostingPanelRowDescriptor, action: () => Promise<void>) => {
     setSavingHosting(row.editorKey)
     setError(null)
+    setReleaseNotice(null)
     setRowError(row.editorKey, null)
     setSavedNote(row.editorKey, null)
     try {
@@ -3101,38 +3118,48 @@ export function EnvironmentDetailBody({
     setRowError(row.editorKey, { field: 'actions', message })
 
   /**
-   * Release a hostname the file no longer declares, and say what happened
-   * before anything else. A 404 means the row is already gone: the name is
-   * free, so it counts as removed.
+   * Release a hostname the file no longer declares and say what happened,
+   * next to the hostings, before anything else.
    */
   const releaseRemovedHostname = async (
-    row: HostingPanelRowDescriptor & { hostingId: string },
+    hostingId: string,
+    composeServiceName: string,
     hostname: string
   ) => {
     const serviceId = resolvedServices.find(
-      (item) => item.composeServiceName === row.composeServiceName
+      (item) => item.composeServiceName === composeServiceName
     )?.id
-    const result = await removeHostingNowMutation.run({ hostingId: row.hostingId, serviceId })
-    const outcome = removeNowOutcome(hostname, result)
-    if ('notice' in outcome) setRemovedNotice(outcome.notice)
-    else setError(outcome.error)
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.org(orgId).hostings.all,
-    })
+    setReleaseNotice(
+      await releaseHostnameNow(hostname, {
+        run: () => removeHostingNowMutation.run({ hostingId, serviceId }),
+        refresh: () =>
+          queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all }),
+      })
+    )
   }
 
   /** Remove hostname: drop the entry from the file, then release its name at once. */
   const removeComposeHostname = (row: HostingPanelRowDescriptor) =>
     runRowAction(row, async () => {
-      setRemovedNotice(null)
       const next = overlayWithoutRow(row)
-      if (!next) return
-      if (!(await saveCompose(next, actionsErrorSink(row)))) return
-      // Only a row the last deploy made from the file is released here; a panel
-      // row on the same route stays, and nothing is held when nothing deployed.
-      if (row.source.kind !== 'compose' || !row.hostingId) return
-      if (row.source.state !== 'deployed' && row.source.state !== 'adopted') return
-      await releaseRemovedHostname({ ...row, hostingId: row.hostingId }, row.source.entry.hostname)
+      if (!next || row.source.kind !== 'compose') return
+      const { entry, state } = row.source
+      await removeHostnameThenRelease(
+        { hostingId: row.hostingId, state },
+        {
+          saveFile: () => saveCompose(next, actionsErrorSink(row)),
+          release: (hostingId) =>
+            releaseRemovedHostname(hostingId, row.composeServiceName, entry.hostname),
+        }
+      )
+    })
+
+  /** Release now, on a row whose entry already left the file: free the name instead of waiting. */
+  const releaseNow = (row: HostingPanelRowDescriptor) =>
+    runRowAction(row, async () => {
+      if (row.source.kind !== 'removing' || !row.hostingId) return
+      const hostname = (hostingEditors[row.editorKey] ?? row.seed).hostnames
+      await releaseRemovedHostname(row.hostingId, row.composeServiceName, hostname)
     })
 
   /** Manage on this screen instead: see `moveComposeHostnameToPanel` for the order. */
@@ -3205,6 +3232,7 @@ export function EnvironmentDetailBody({
   const hostingRowActions: HostingRowActions = {
     rowErrors: hostingRowErrors,
     savedNotes: hostingSavedNotes,
+    releaseNotice,
     environmentComposeHref: projectEnvironmentComposeHref(orgId, projectId, environmentId),
     baseComposeHref: projectComposeHref(orgId, projectId),
     onRemoveHostname: (row) => {
@@ -3212,6 +3240,9 @@ export function EnvironmentDetailBody({
     },
     onManageHere: (row) => {
       void moveRowToPanel(row)
+    },
+    onReleaseNow: (row) => {
+      void releaseNow(row)
     },
   }
 
@@ -3222,7 +3253,6 @@ export function EnvironmentDetailBody({
   const body = (
     <View style={styles.body}>
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      {removedNotice ? <Text style={styles.savedNote}>{removedNotice}</Text> : null}
 
       {environment ? (
         <EnvironmentLoadedPanels

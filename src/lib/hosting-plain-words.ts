@@ -216,60 +216,71 @@ export const NEW_HOSTING_CERTIFICATE_HINT =
 export const DEPLOY_RUNNING_MESSAGE =
   'A deploy of this environment is running. Try again when it has finished.'
 
-/** Remove hostname hit a running deploy after the file was saved without the entry. */
+/** A release refused because a deploy of the environment is running. */
 export const REMOVE_NOW_DEPLOY_RUNNING_MESSAGE =
-  'A deploy is running, so the name is not released yet. Try again when it finishes; the next deploy releases it otherwise.'
+  'A deploy is running, so the name is not released yet. Try again with Release now when it finishes; the next deploy releases it otherwise.'
+
+/** What the control plane's remove-now answer says, as far as the screen needs it. */
+export type RemoveNowAnswer = Readonly<{
+  removed: boolean
+  /** The names the removed hosting served. */
+  hostnames?: readonly string[]
+  serverUpdate?: string
+}>
 
 /**
- * What the person sees right after Remove hostname released the name: that it
- * is free, and, only when a server still holds the route, that the route goes
- * at the next deploy. A row the panel made first is kept, so nothing is freed.
+ * What the person sees right after a hostname was released: that the name is
+ * free, and, only when a server still holds the route, that the route goes at
+ * the next deploy. The names are the ones the control plane freed, else
+ * `fallback`. A row the panel made first is kept, so nothing is freed.
  */
-export function hostnameReleasedMessage(
-  hostname: string,
-  result: Readonly<{ removed: boolean; serverUpdate?: string }>
-): string {
-  if (!result.removed) return `${hostname} is managed on this screen again.`
-  const released = `${hostname} is released.`
-  return result.serverUpdate === 'next_deploy'
-    ? `${released} The server stops serving it at the next deploy.`
+export function hostnameReleasedMessage(fallback: string, answer: RemoveNowAnswer): string {
+  const names = answer.hostnames?.length ? answer.hostnames : [fallback]
+  if (!answer.removed) {
+    return `${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} managed on this screen again.`
+  }
+  const released = `${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} released.`
+  return answer.serverUpdate === 'next_deploy'
+    ? `${released} The server stops serving ${names.length > 1 ? 'them' : 'it'} at the next deploy.`
     : released
 }
 
-/** Remove hostname's release step refused or failed, after the file was saved without the entry. */
+/** A release that failed, in words that say where to try again. */
 export function removeNowErrorMessage(
   result: Readonly<{ error: string | null; cause?: unknown }>
 ): string {
   if ((result.error ?? '').includes('environment_deploy_running')) {
     return REMOVE_NOW_DEPLOY_RUNNING_MESSAGE
   }
-  return `The hostname is out of the configuration file, but its name could not be released now. ${failedRunMessage(result, 'Try again.')}`
-}
-
-/** True when the release answered 404: the row is already gone, so the name is free. */
-export function isRowAlreadyGone(result: Readonly<{ error: string | null }>): boolean {
-  return /\bHTTP 404\b/.test(result.error ?? '')
+  return `The name could not be released now. ${failedRunMessage(result, 'Something went wrong.')} Use Release now to try again.`
 }
 
 /** What `useApiMutation().run` answers, as far as the release step needs it. */
 export type RemoveNowRun = Readonly<
-  | { ok: true; value: Readonly<{ removed: boolean; serverUpdate?: string }> }
-  | { ok: false; error: string | null; cause?: unknown }
+  { ok: true; value: RemoveNowAnswer } | { ok: false; error: string | null; cause?: unknown }
 >
 
+export type RemoveNowOutcome = Readonly<{ tone: 'ok' | 'error'; message: string }>
+
 /**
- * What Remove hostname shows once the release step has answered: a notice that
- * the name is released (a 404 counts, the row is already gone) or the plain
- * words for why it was not.
+ * Release a hostname's name and say what happened. The list is refreshed
+ * whatever the answer was, so the screen matches the control plane. Any
+ * failure, a 404 for a malformed or foreign id included, is an error: a row
+ * that is already gone answers 200 with `alreadyGone`, which is a release.
  */
-export function removeNowOutcome(
+export async function releaseHostnameNow(
   hostname: string,
-  run: RemoveNowRun
-): Readonly<{ notice: string } | { error: string }> {
-  if (run.ok) return { notice: hostnameReleasedMessage(hostname, run.value) }
-  if (isRowAlreadyGone(run)) return { notice: hostnameReleasedMessage(hostname, { removed: true }) }
-  return { error: removeNowErrorMessage(run) }
+  steps: Readonly<{ run: () => Promise<RemoveNowRun>; refresh: () => Promise<unknown> }>
+): Promise<RemoveNowOutcome> {
+  const result = await steps.run()
+  await steps.refresh()
+  if (result.ok) return { tone: 'ok', message: hostnameReleasedMessage(hostname, result.value) }
+  return { tone: 'error', message: removeNowErrorMessage(result) }
 }
+
+/** The note on a row waiting for the next deploy, with the way to release it now. */
+export const RELEASE_NOW_HINT =
+  'Release now frees the name at once instead of waiting for the deploy.'
 
 /** A hostname another hosting already serves. */
 export const HOSTNAME_IN_USE_MESSAGE =
