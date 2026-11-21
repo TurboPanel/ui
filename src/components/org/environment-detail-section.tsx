@@ -1416,6 +1416,7 @@ export function HostingPanelRow({
   serviceContext,
   hostingId,
   serverId = null,
+  canManage = false,
   composeRoute = null,
   composeEntry = null,
   composeState = 'not-deployed',
@@ -1444,6 +1445,8 @@ export function HostingPanelRow({
   hostingId: string | null
   /** The environment's server (its own or the project's default), for the tunnels that run on it. */
   serverId?: string | null
+  /** Whether the person can put a name on a tunnel (organization manager). */
+  canManage?: boolean
   /**
    * `hostingEntryKey` of the `x-turbopanel.hosting` entry this row renders, or
    * null for a panel-authored row. Non-null means compose owns the route: the
@@ -1603,6 +1606,7 @@ export function HostingPanelRow({
           hostingId={hostingId}
           serverId={serverId}
           locked={disabled}
+          canManage={canManage}
         />
       ) : null}
 
@@ -2044,6 +2048,7 @@ function EnvironmentDeployChromePanels({
 function EnvironmentHostingSectionPanel({
   orgId,
   serverId,
+  canManage,
   hostingRows,
   hostingEditors,
   setHostingEditors,
@@ -2057,6 +2062,7 @@ function EnvironmentHostingSectionPanel({
   orgId: string
   /** The environment's server (its own or the project's default); null when none is set. */
   serverId: string | null
+  canManage: boolean
   /**
    * One descriptor per rendered route — every `x-turbopanel.hosting` entry a
    * service declares, or its single panel row when it declares none. Built by
@@ -2119,6 +2125,7 @@ function EnvironmentHostingSectionPanel({
                   serviceContext={row.serviceContext}
                   hostingId={row.hostingId}
                   serverId={serverId}
+                  canManage={canManage}
                   composeRoute={row.source.kind === 'compose' ? row.source.route : null}
                   composeEntry={row.source.kind === 'compose' ? row.source.entry : null}
                   composeState={row.source.kind === 'compose' ? row.source.state : undefined}
@@ -2409,6 +2416,7 @@ function EnvironmentLoadedPanels({
         <EnvironmentHostingSectionPanel
           orgId={orgId}
           serverId={placementServerId}
+          canManage={canManage}
           hostingRows={hostingRows}
           hostingEditors={hostingEditors}
           setHostingEditors={setHostingEditors}

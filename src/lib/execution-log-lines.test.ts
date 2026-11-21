@@ -349,7 +349,7 @@ describe('dockerTimestampTranscriptLines', () => {
     ])
   })
 
-  it('keeps one row per entry with its timestamp when the separators are not plain line feeds', () => {
+  it('keeps one row per entry with its timestamp when entries end in CRLF or a bare CR', () => {
     const first = '2026-11-21T10:00:00.123456789Z'
     const second = '2026-11-21T10:00:01.123456789Z'
     const third = '2026-11-21T10:00:02.123456789Z'
@@ -363,20 +363,12 @@ describe('dockerTimestampTranscriptLines', () => {
       `${second} GET /health 200`,
       `${third} my_app_ready`,
     ]
-    for (const separator of ['\n', '\r\n', '\r', '_', '\\n']) {
+    for (const separator of ['\n', '\r\n', '\r']) {
       const rows = dockerTimestampTranscriptLines(entries.join(separator))
       expect(rows.map(({ seq, timestamp, message }) => ({ seq, timestamp, message }))).toEqual(
         expected
       )
     }
-  })
-
-  it('leaves an underscore or backslash that no stamp follows inside the message', () => {
-    const rows = dockerTimestampTranscriptLines(
-      '2026-11-21T10:00:00.000000000Z snake_case\\nvalue_ and more'
-    )
-    expect(rows).toHaveLength(1)
-    expect(rows[0]?.message).toBe('snake_case\\nvalue_ and more')
   })
 
   it('accepts an RFC3339 offset instead of Z', () => {

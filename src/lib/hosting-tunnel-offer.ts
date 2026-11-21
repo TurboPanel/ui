@@ -28,3 +28,8 @@ export function noTunnelHint(input: { serverKnown: boolean; tunnelCount: number 
   }
   return 'No tunnel runs on this environment’s server. Place a tunnel on it under Network, then Tunnels.'
 }
+
+/** Whether a failed call was refused for lack of permission (HTTP 403). */
+export function isForbidden(cause: unknown): boolean {
+  return cause instanceof Error && /HTTP 403\b/.test(cause.message)
+}

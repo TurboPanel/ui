@@ -10,6 +10,8 @@ type Option = { value: string; label: string }
 const state = vi.hoisted(() => ({
   hosting: null as unknown,
   tunnels: [] as unknown[],
+  hostingError: false,
+  tunnelsError: false,
   add: vi.fn(async (_body: unknown) => ({ ok: true }) as { ok: boolean; cause?: unknown }),
   addTunnelId: '',
 }))
@@ -46,10 +48,13 @@ vi.mock('@/components/org/network/network-tunnel-hostnames', () => ({
   RemovedRecords: () => null,
 }))
 vi.mock('@/lib/queries/hosting-certificate', () => ({
-  useHostingCertificate: () => ({ data: state.hosting ? { hosting: state.hosting } : undefined }),
+  useHostingCertificate: () => ({
+    data: state.hosting ? { hosting: state.hosting } : undefined,
+    isError: state.hostingError,
+  }),
 }))
 vi.mock('@/lib/queries/tunnel-routes', () => ({
-  useTunnels: () => ({ data: { tunnels: state.tunnels } }),
+  useTunnels: () => ({ data: { tunnels: state.tunnels }, isError: state.tunnelsError }),
   useAddTunnelHostname: (_org: string, tunnelId: string) => {
     state.addTunnelId = tunnelId
     return { run: state.add, isPending: false }
@@ -68,13 +73,23 @@ function names(...hostnames: string[]) {
   return hostnames.map((hostname) => ({ hostname }))
 }
 
-function draw(serverId: string | null = 'server-a') {
-  return render(<HostingTunnelNames orgId="o1" hostingId="h1" serverId={serverId} locked={false} />)
+function draw(serverId: string | null = 'server-a', canManage = true) {
+  return render(
+    <HostingTunnelNames
+      orgId="o1"
+      hostingId="h1"
+      serverId={serverId}
+      locked={false}
+      canManage={canManage}
+    />
+  )
 }
 
 beforeEach(() => {
   state.hosting = { names: names('app.example.net'), tunnels: [] }
   state.tunnels = []
+  state.hostingError = false
+  state.tunnelsError = false
   state.add.mockClear()
   state.add.mockResolvedValue({ ok: true })
 })
@@ -123,13 +138,52 @@ describe('HostingTunnelNames', () => {
     expect(screen.getByText(/No tunnel runs on this environment/)).toBeTruthy()
   })
 
-  it('shows the failure when adding is refused', async () => {
+  it('shows the refusal wording when the name is already on a tunnel', async () => {
     state.tunnels = [tunnel('t1', 'Edge', ['server-a'])]
-    state.add.mockResolvedValue({ ok: false, cause: new Error('boom') })
+    state.add.mockResolvedValue({ ok: false, cause: new Error('HTTP 409: hostname_in_use') })
     draw()
     await act(async () => {
       fireEvent.click(screen.getByLabelText('Serve Through Tunnel: app.example.net'))
     })
-    expect(screen.getByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toBe('This hostname is already on a tunnel.')
+  })
+
+  it('says the person lacks permission when the call is a 403', async () => {
+    state.tunnels = [tunnel('t1', 'Edge', ['server-a'])]
+    state.add.mockResolvedValue({ ok: false, cause: new Error('HTTP 403: forbidden') })
+    draw()
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Serve Through Tunnel: app.example.net'))
+    })
+    expect(screen.getByRole('alert').textContent).toMatch(/do not have permission/)
+  })
+
+  it('shows only which tunnel carries a name to a person who cannot manage', () => {
+    state.hosting = {
+      names: names('app.example.net', 'other.example.net'),
+      tunnels: [{ hostname: 'app.example.net', tunnelId: 't1', tunnelName: 'Edge' }],
+    }
+    state.tunnels = []
+    draw('server-a', false)
+    expect(screen.getByText('Carried by Edge')).toBeTruthy()
+    expect(screen.queryByText('Serve Through Tunnel')).toBeNull()
+    expect(screen.queryByText(/No tunnel exists yet/)).toBeNull()
+    expect(screen.queryByText('other.example.net')).toBeNull()
+  })
+
+  it('shows nothing to a person who cannot manage when no tunnel carries a name', () => {
+    const { container } = draw('server-a', false)
+    expect(container.textContent).toBe('')
+  })
+
+  it('shows an inline error when the site or the tunnels fail to load', () => {
+    state.hostingError = true
+    draw()
+    expect(screen.getByRole('alert').textContent).toMatch(/Could not load the tunnels/)
+    cleanup()
+    state.hostingError = false
+    state.tunnelsError = true
+    draw()
+    expect(screen.getByRole('alert').textContent).toMatch(/Could not load the tunnels/)
   })
 })

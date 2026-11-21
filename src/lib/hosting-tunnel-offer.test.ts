@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { noTunnelHint, tunnelsForServer } from './hosting-tunnel-offer'
+import { isForbidden, noTunnelHint, tunnelsForServer } from './hosting-tunnel-offer'
 
 const tunnel = (name: string, status: string, carryingServerIds: string[]) => ({
   name,
@@ -30,5 +30,13 @@ describe('noTunnelHint', () => {
     expect(noTunnelHint({ serverKnown: false, tunnelCount: 2 })).toMatch(/Pick a server/)
     expect(noTunnelHint({ serverKnown: true, tunnelCount: 0 })).toMatch(/No tunnel exists yet/)
     expect(noTunnelHint({ serverKnown: true, tunnelCount: 2 })).toMatch(/server/)
+  })
+})
+
+describe('isForbidden', () => {
+  it('recognises a 403 and nothing else', () => {
+    expect(isForbidden(new Error('HTTP 403: forbidden'))).toBe(true)
+    expect(isForbidden(new Error('HTTP 409: hostname_in_use'))).toBe(false)
+    expect(isForbidden('HTTP 403')).toBe(false)
   })
 })

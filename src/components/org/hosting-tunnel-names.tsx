@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { ExistingRecords, RemovedRecords } from '@/components/org/network/network-tunnel-hostnames'
 import { Badge, Button, ButtonRow, Select } from '@/components/ui'
 import {
+  isForbidden,
   noTunnelHint,
   SERVE_THROUGH_TUNNEL_LABEL,
   tunnelsForServer,
@@ -67,7 +68,11 @@ function NameRow({
       else setError(result.cause.message)
       return
     }
-    setError(tunnelErrorMessage(result.cause, 'Failed to add the hostname to the tunnel'))
+    setError(
+      isForbidden(result.cause)
+        ? 'You do not have permission to put names on tunnels.'
+        : tunnelErrorMessage(result.cause, 'Failed to add the hostname to the tunnel')
+    )
   }
 
   let body
@@ -151,9 +156,12 @@ export function HostingTunnelNames({
   hostingId,
   serverId,
   locked,
+  canManage,
 }: Readonly<{
   orgId: string
   hostingId: string
+  /** Only people who manage the organization can put a name on a tunnel. */
+  canManage: boolean
   /** The environment's server (its own or the project's default); null when none is set. */
   serverId: string | null
   locked: boolean
@@ -162,13 +170,27 @@ export function HostingTunnelNames({
   const tunnelsQuery = useTunnels(orgId)
   const hosting = hostingQuery.data?.hosting
   const tunnels = tunnelsQuery.data?.tunnels
+  if (hostingQuery.isError || (canManage && tunnelsQuery.isError)) {
+    return (
+      <View style={styles.wrap}>
+        <Text style={styles.title}>Tunnels</Text>
+        <Text style={styles.error} accessibilityRole="alert">
+          Could not load the tunnels for this site. Reload to try again.
+        </Text>
+      </View>
+    )
+  }
   if (!hosting?.names || hosting.names.length === 0 || !tunnels) return null
-  const candidates = tunnelsForServer(tunnels, serverId)
+  const candidates = canManage ? tunnelsForServer(tunnels, serverId) : []
+  const names = canManage
+    ? hosting.names
+    : hosting.names.filter((name) => tunnelPathFor(name.hostname, hosting.tunnels))
+  if (names.length === 0) return null
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Tunnels</Text>
-      {hosting.names.map((name) => (
+      {names.map((name) => (
         <NameRow
           key={name.hostname}
           orgId={orgId}
