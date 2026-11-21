@@ -170,16 +170,16 @@ export function composeEntryConfigSnippet(
  */
 export type ConfiguredHostingState = 'not-deployed' | 'deployed' | 'adopted' | 'held-by-panel'
 
-/** The confirmation for Remove hostname, true to what the next deploy does. */
+/** The confirmation for Remove hostname, true to what happens now and at the next deploy. */
 export function removeHostnamePrompt(hostname: string, state: ConfiguredHostingState): string {
   if (state === 'adopted') {
-    return `Remove ${hostname} from the configuration file? After the next deploy it is managed on this screen again.`
+    return `Remove ${hostname} from the configuration file? It is managed on this screen again at once.`
   }
   if (state === 'held-by-panel') {
     return `Remove ${hostname} from the configuration file? It is already managed on this screen, so it keeps being served.`
   }
   if (state === 'not-deployed') return `Remove ${hostname}? It is not served yet and will not be.`
-  return `Remove ${hostname}? It stops being served after the next deploy.`
+  return `Remove ${hostname}? Its name is released at once; the server stops serving it after the next deploy.`
 }
 
 /** The confirmation for Manage on this screen instead. */
@@ -215,6 +215,73 @@ export const NEW_HOSTING_CERTIFICATE_HINT =
 /** A move refused because a deploy of the environment is running. */
 export const DEPLOY_RUNNING_MESSAGE =
   'A deploy of this environment is running. Try again when it has finished.'
+
+/** A release refused because a deploy of the environment is running. */
+export const REMOVE_NOW_DEPLOY_RUNNING_MESSAGE =
+  'A deploy is running, so the name is not released yet. Try again with Release now when it finishes; the next deploy releases it otherwise.'
+
+/** What the control plane's remove-now answer says, as far as the screen needs it. */
+export type RemoveNowAnswer = Readonly<{
+  removed: boolean
+  /** The names the removed hosting served. */
+  hostnames?: readonly string[]
+  serverUpdate?: string
+}>
+
+/**
+ * What the person sees right after a hostname was released: that the name is
+ * free, and, only when a server still holds the route, that the route goes at
+ * the next deploy. The names are the ones the control plane freed, else
+ * `fallback`. A row the panel made first is kept, so nothing is freed.
+ */
+export function hostnameReleasedMessage(fallback: string, answer: RemoveNowAnswer): string {
+  const names = answer.hostnames?.length ? answer.hostnames : [fallback]
+  const many = names.length > 1
+  const list = names.join(', ')
+  const verb = many ? 'are' : 'is'
+  if (!answer.removed) return `${list} ${verb} managed on this screen again.`
+  const released = `${list} ${verb} released.`
+  if (answer.serverUpdate !== 'next_deploy') return released
+  const pronoun = many ? 'them' : 'it'
+  return `${released} The server stops serving ${pronoun} at the next deploy.`
+}
+
+/** A release that failed, in words that say where to try again. */
+export function removeNowErrorMessage(
+  result: Readonly<{ error: string | null; cause?: unknown }>
+): string {
+  if ((result.error ?? '').includes('environment_deploy_running')) {
+    return REMOVE_NOW_DEPLOY_RUNNING_MESSAGE
+  }
+  return `The name could not be released now. ${failedRunMessage(result, 'Something went wrong.')} Use Release now to try again.`
+}
+
+/** What `useApiMutation().run` answers, as far as the release step needs it. */
+export type RemoveNowRun = Readonly<
+  { ok: true; value: RemoveNowAnswer } | { ok: false; error: string | null; cause?: unknown }
+>
+
+export type RemoveNowOutcome = Readonly<{ tone: 'ok' | 'error'; message: string }>
+
+/**
+ * Release a hostname's name and say what happened. The list is refreshed
+ * whatever the answer was, so the screen matches the control plane. Any
+ * failure, a 404 for a malformed or foreign id included, is an error: a row
+ * that is already gone answers 200 with `alreadyGone`, which is a release.
+ */
+export async function releaseHostnameNow(
+  hostname: string,
+  steps: Readonly<{ run: () => Promise<RemoveNowRun>; refresh: () => Promise<unknown> }>
+): Promise<RemoveNowOutcome> {
+  const result = await steps.run()
+  await steps.refresh()
+  if (result.ok) return { tone: 'ok', message: hostnameReleasedMessage(hostname, result.value) }
+  return { tone: 'error', message: removeNowErrorMessage(result) }
+}
+
+/** The note on a row waiting for the next deploy, with the way to release it now. */
+export const RELEASE_NOW_HINT =
+  'Release now frees the name at once instead of waiting for the deploy.'
 
 /** A hostname another hosting already serves. */
 export const HOSTNAME_IN_USE_MESSAGE =
