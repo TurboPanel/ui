@@ -6,12 +6,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '../query-client'
 import { queryKeys } from '../query-keys'
 import {
-  useClearServerSealingKey,
   useInstanceIdentity,
   useApproveKeysetStatement,
   useCancelWaitingKeyChange,
   usePrepareKeysetStatement,
-  useSealedSecrets,
 } from './admin'
 
 const {
@@ -19,16 +17,12 @@ const {
   approveKeysetStatement,
   prepareKeysetStatement,
   cancelWaitingKeyChange,
-  fetchSealedSecrets,
-  clearServerSealingKey,
   loginWithPasskey,
 } = vi.hoisted(() => ({
   prepareKeysetStatement: vi.fn(),
   cancelWaitingKeyChange: vi.fn(),
   fetchInstanceIdentity: vi.fn(),
   approveKeysetStatement: vi.fn(),
-  fetchSealedSecrets: vi.fn(),
-  clearServerSealingKey: vi.fn(),
   loginWithPasskey: vi.fn(),
 }))
 
@@ -42,8 +36,6 @@ vi.mock('../instance-api', async (importOriginal) => {
     approveKeysetStatement,
     prepareKeysetStatement,
     cancelWaitingKeyChange,
-    fetchSealedSecrets,
-    clearServerSealingKey,
   }
 })
 
@@ -235,32 +227,5 @@ describe('control plane identity hooks', () => {
     const outcome = await act(async () => await again.result.current.run(revoke))
     expect(outcome.ok).toBe(false)
     expect(approveKeysetStatement).not.toHaveBeenCalled()
-  })
-
-  it('useSealedSecrets reads the list under its key, and stays idle when disabled', async () => {
-    fetchSealedSecrets.mockResolvedValue({ ok: true, receivingPlaintext: 0, servers: [] })
-    const { queryClient, wrapper } = setup()
-    const { result } = renderHook(() => useSealedSecrets(), { wrapper })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(queryClient.getQueryData(queryKeys.admin.sealedSecrets)).toEqual({
-      ok: true,
-      receivingPlaintext: 0,
-      servers: [],
-    })
-    fetchSealedSecrets.mockClear()
-    renderHook(() => useSealedSecrets({ enabled: false }), { wrapper: setup().wrapper })
-    expect(fetchSealedSecrets).not.toHaveBeenCalled()
-  })
-
-  it('clearing a sealing key sends the typed name and refreshes the list', async () => {
-    clearServerSealingKey.mockResolvedValue({ ok: true, cleared: true })
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
-    const { result } = renderHook(() => useClearServerSealingKey(), { wrapper })
-    await act(async () => {
-      await result.current.run({ serverId: 'srv-1', confirmName: 'web-1' })
-    })
-    expect(clearServerSealingKey).toHaveBeenCalledWith('srv-1', 'web-1')
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.admin.sealedSecrets })
   })
 })

@@ -4,16 +4,9 @@ import { Link, useLocalSearchParams, usePathname, useRouter, type Href } from 'e
 import { AuthFloatingField } from '@/components/auth/auth-floating-field'
 import { AuthPrimaryButton } from '@/components/auth/auth-primary-button'
 import { AuthScreenShell } from '@/components/auth/auth-screen-shell'
-import {
-  authAccentStyles,
-  authFormStyles,
-  webPointer,
-} from '@/components/auth/auth-form-styles'
+import { authAccentStyles, authFormStyles, webPointer } from '@/components/auth/auth-form-styles'
 import { TwoFactorStep } from '@/components/auth/two-factor-step'
-import {
-  authAccentForRuntime,
-  resolveControlPlaneRuntime,
-} from '@/lib/auth-accent'
+import { authAccentForRuntime, resolveControlPlaneRuntime } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
 import { isRemoteCookieClient, usesSameOriginApi } from '@/lib/control-plane'
 import {
@@ -40,9 +33,7 @@ const PROVIDER_LABEL: Record<OAuthProvider, string> = {
   google: 'Google',
 }
 
-function firstSearchParam(
-  value: string | string[] | undefined,
-): string | undefined {
+function firstSearchParam(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0]
   return value
 }
@@ -57,10 +48,7 @@ export function SignInScreenContent() {
     email?: string | string[]
     org?: string | string[]
   }>()
-  const currentRedirect = useMemo(
-    () => signInOAuthRedirect(pathname, params),
-    [pathname, params],
-  )
+  const currentRedirect = useMemo(() => signInOAuthRedirect(pathname, params), [pathname, params])
   const { resolveDashboardHref, bootstrapError, signInWithPasskey } = useAuth()
   const signInMutation = useSignIn()
   const { data: instanceInfo, isLoading: instanceInfoLoading } = useAuthStatus()
@@ -74,7 +62,7 @@ export function SignInScreenContent() {
         email: firstSearchParam(params.email),
         org: firstSearchParam(params.org),
       }),
-    [params.redirectTo, params.email, params.org],
+    [params.redirectTo, params.email, params.org]
   )
   const [email, setEmail] = useState(() => invitationContext?.email ?? '')
   const [password, setPassword] = useState('')
@@ -88,9 +76,8 @@ export function SignInScreenContent() {
   const oauthOnWeb = usesSameOriginApi()
 
   const accent = useMemo(
-    () =>
-      authAccentForRuntime(resolveControlPlaneRuntime(instanceInfo)),
-    [instanceInfo],
+    () => authAccentForRuntime(resolveControlPlaneRuntime(instanceInfo)),
+    [instanceInfo]
   )
   const tint = useMemo(() => authAccentStyles(accent), [accent])
 
@@ -106,7 +93,7 @@ export function SignInScreenContent() {
 
   const returnTo = useMemo(
     () => safeAuthReturnPath(firstSearchParam(params.redirectTo)),
-    [params.redirectTo],
+    [params.redirectTo]
   )
 
   const goAfterAuth = useCallback(async () => {
@@ -170,16 +157,15 @@ export function SignInScreenContent() {
     }
   }, [instanceInfoLoading, isInstallMode, router])
 
-  if (instanceInfoLoading || (isInstallMode && !isRemoteCookieClient())) {
+  // The form paints while status loads (defaults until it answers); an
+  // install-mode answer then redirects.
+  if (isInstallMode && !isRemoteCookieClient()) {
     return null
   }
 
   if (challenge) {
     return (
-      <AuthScreenShell
-        title={TWO_FACTOR_PROMPT_TITLE}
-        accentColor={accent.accent}
-      >
+      <AuthScreenShell title={TWO_FACTOR_PROMPT_TITLE} accentColor={accent.accent}>
         <TwoFactorStep
           challenge={challenge}
           accent={accent}
@@ -201,9 +187,7 @@ export function SignInScreenContent() {
         >
           <Text style={authFormStyles.footerLink}>
             Don&apos;t have an account?{' '}
-            <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>
-              Sign up
-            </Text>
+            <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>Sign up</Text>
           </Text>
         </Pressable>
       </Link>
@@ -254,7 +238,11 @@ export function SignInScreenContent() {
           child's style straight to the DOM, which rejects a style array. */}
       <View style={authFormStyles.forgotPasswordLink}>
         <Link href="/forgot-password" asChild>
-          <Pressable accessibilityRole="link" accessibilityLabel="Forgot password" style={webPointer}>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Forgot password"
+            style={webPointer}
+          >
             <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>
               Forgot password?
             </Text>
@@ -304,9 +292,7 @@ export function SignInScreenContent() {
           style={webPointer}
         >
           <Text style={authFormStyles.footerLink}>
-            <Text
-              style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}
-            >
+            <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>
               {passkeyBusy ? 'Waiting for passkey…' : 'Sign in with a passkey'}
             </Text>
           </Text>
@@ -322,9 +308,7 @@ export function SignInScreenContent() {
             <Pressable
               key={provider}
               onPress={() => {
-                void Linking.openURL(
-                  oauthStartUrl(provider, { redirectTo: currentRedirect }),
-                )
+                void Linking.openURL(oauthStartUrl(provider, { redirectTo: currentRedirect }))
               }}
               disabled={loading || passkeyBusy}
               accessibilityRole="link"
@@ -332,12 +316,7 @@ export function SignInScreenContent() {
               style={webPointer}
             >
               <Text style={authFormStyles.footerLink}>
-                <Text
-                  style={[
-                    authFormStyles.footerLinkAccent,
-                    tint.footerLinkAccent,
-                  ]}
-                >
+                <Text style={[authFormStyles.footerLinkAccent, tint.footerLinkAccent]}>
                   Sign in with {PROVIDER_LABEL[provider]}
                 </Text>
               </Text>

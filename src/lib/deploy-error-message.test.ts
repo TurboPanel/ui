@@ -97,13 +97,6 @@ describe('tunnel deploy refusals', () => {
       "A tunnel-only name cannot use a public certificate (a.example.com). Choose Self-signed for this site's certificate, then deploy again."
     )
     expect(deployErrorMessage(cert)).toBe(deployRefusalMessage(cert))
-    const old = new DeployTunnelRefusedError('tunnel_daemon_too_old', [
-      'a.example.com',
-      'b.example.com',
-    ])
-    expect(deployRefusalMessage(old)).toMatch(
-      /Update this server .*\(a\.example\.com, b\.example\.com\)/
-    )
   })
   it('still reads a coded message that lost its type', () => {
     expect(
@@ -111,9 +104,6 @@ describe('tunnel deploy refusals', () => {
         new Error('/environments/e1/deploy failed: HTTP 409: tunnel_name_public_certificate')
       )
     ).toMatch(/cannot use a public certificate\. Choose Self-signed/)
-    expect(deployErrorMessage(new Error('HTTP 409: tunnel_daemon_too_old'))).toMatch(
-      /Update this server/
-    )
   })
 })
 

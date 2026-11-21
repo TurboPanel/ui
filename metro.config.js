@@ -1,5 +1,6 @@
 const path = require('node:path');
 const { getDefaultConfig } = require('expo/metro-config');
+const { withUniwindConfig } = require('uniwind/metro');
 const {
   installMetroPollWatch,
 } = require('./scripts/metro-virtfs-poll-watch.cjs');
@@ -43,4 +44,8 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   return resolve(context, moduleName, platform);
 };
 
-module.exports = config;
+// Uniwind wraps last: it has to be the outermost wrapper of the config.
+module.exports = withUniwindConfig(config, {
+  cssEntryFile: './global.css',
+  dtsFile: './src/uniwind-types.d.ts',
+});

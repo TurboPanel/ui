@@ -244,25 +244,6 @@ export function letsEncryptRefusal(err: unknown): LetsEncryptRefusal {
   }
 }
 
-/**
- * After a hosting saved: ask for the certificate when the box was ticked. Any
- * successful save replaces what an earlier answer said, so a save without the
- * box clears an old refusal. Null when the hosting has no id yet.
- */
-export async function certificateAfterSave(
-  input: Readonly<{
-    hostingId: string | null
-    wantsCertificate: boolean
-    request: (hostingId: string) => Promise<{ ok: true } | { ok: false; cause?: unknown }>
-  }>
-): Promise<{ hostingId: string; refusal: LetsEncryptRefusal | null } | null> {
-  const { hostingId } = input
-  if (hostingId === null) return null
-  if (!input.wantsCertificate) return { hostingId, refusal: null }
-  const requested = await input.request(hostingId)
-  return { hostingId, refusal: requested.ok ? null : letsEncryptRefusal(requested.cause) }
-}
-
 /** The refusals by hosting id after one save: a new refusal replaces the old, a success clears it. */
 export function withCertificateRefusal(
   current: Readonly<Record<string, LetsEncryptRefusal>>,
@@ -336,20 +317,3 @@ export type HostingSaveNote = Readonly<{
   message: string
   field?: 'hostnames'
 }>
-
-/** What a saved hosting says next to its save button, including the Let's Encrypt step. */
-export function hostingSaveNote(
-  wantsCertificate: boolean,
-  refusal: LetsEncryptRefusal | null
-): HostingSaveNote {
-  if (refusal) {
-    return {
-      tone: 'error',
-      message: `Saved the hostname, but Let\u2019s Encrypt did not start: ${refusal.message}`,
-    }
-  }
-  if (wantsCertificate) {
-    return { tone: 'ok', message: 'Saved. Let\u2019s Encrypt was asked for a certificate.' }
-  }
-  return { tone: 'ok', message: 'Saved.' }
-}

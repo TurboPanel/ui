@@ -1,15 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   CERTIFICATE_DNS_POLL_MS,
   CERTIFICATE_ISSUING_POLL_MS,
   certificatePollInterval,
-  hostingSaveNote,
   describeCertificate,
   waitingLabel,
   dnsResultHeadline,
   dnsSummaryLines,
   formatDaysLeft,
-  certificateAfterSave,
   failedTimingLine,
   letsEncryptRefusal,
   waitingTimingLine,
@@ -290,37 +288,6 @@ describe('withCertificateRefusal', () => {
   })
 })
 
-describe('certificateAfterSave', () => {
-  const off = new Error('/hostings/h1/use-letsencrypt failed: HTTP 403: lets_encrypt_not_enabled')
-
-  it('asks for the certificate when the box was ticked and keeps the refusal', async () => {
-    const request = vi.fn(() => Promise.resolve({ ok: false as const, cause: off }))
-    const step = await certificateAfterSave({ hostingId: 'h1', wantsCertificate: true, request })
-    expect(request).toHaveBeenCalledWith('h1')
-    expect(step?.hostingId).toBe('h1')
-    expect(step?.refusal?.openSettings).toBe(true)
-  })
-
-  it('clears an old refusal on a save without the box, without asking again', async () => {
-    const request = vi.fn()
-    const step = await certificateAfterSave({ hostingId: 'h1', wantsCertificate: false, request })
-    expect(request).not.toHaveBeenCalled()
-    expect(step).toEqual({ hostingId: 'h1', refusal: null })
-    const before = withCertificateRefusal({}, 'h1', letsEncryptRefusal(off))
-    expect(withCertificateRefusal(before, 'h1', step?.refusal ?? null)).toEqual({})
-  })
-
-  it('clears it after a request that went through, and skips a hosting with no id', async () => {
-    const ok = vi.fn(() => Promise.resolve({ ok: true as const }))
-    expect(
-      await certificateAfterSave({ hostingId: 'h1', wantsCertificate: true, request: ok })
-    ).toEqual({ hostingId: 'h1', refusal: null })
-    expect(
-      await certificateAfterSave({ hostingId: null, wantsCertificate: true, request: ok })
-    ).toBeNull()
-  })
-})
-
 describe('certificatePollInterval', () => {
   it('follows a certificate the server is still issuing or waiting on', () => {
     expect(certificatePollInterval(cert({ state: 'issuing' }))).toBe(CERTIFICATE_ISSUING_POLL_MS)
@@ -335,22 +302,5 @@ describe('certificatePollInterval', () => {
     expect(certificatePollInterval(cert({}))).toBe(false)
     expect(certificatePollInterval(null)).toBe(false)
     expect(certificatePollInterval(undefined)).toBe(false)
-  })
-})
-
-describe('hostingSaveNote', () => {
-  it('says the save went through, and that Let\u2019s Encrypt was asked', () => {
-    expect(hostingSaveNote(false, null)).toEqual({ tone: 'ok', message: 'Saved.' })
-    expect(hostingSaveNote(true, null)).toEqual({
-      tone: 'ok',
-      message: 'Saved. Let\u2019s Encrypt was asked for a certificate.',
-    })
-  })
-
-  it('says the hostname saved but the certificate did not start, with the reason', () => {
-    const note = hostingSaveNote(true, { message: 'DNS is not ready yet.', openSettings: false })
-    expect(note.tone).toBe('error')
-    expect(note.message).toContain('Saved the hostname')
-    expect(note.message).toContain('DNS is not ready yet.')
   })
 })

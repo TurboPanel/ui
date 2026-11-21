@@ -11,6 +11,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type ViewStyle,
+  type ScrollViewInstance,
 } from 'react-native'
 import { themedStyles, usePalette, useTouch } from '@/components/ui/v4/use-palette'
 import { typeStyle } from '@/components/ui/v4/type-styles'
@@ -127,7 +128,7 @@ function ScrollingTabBar({
   spans: Readonly<Record<string, TabSpan>>
 }>) {
   const s = styles(usePalette())
-  const scrollRef = useRef<ScrollView>(null)
+  const scrollRef = useRef<ScrollViewInstance>(null)
   const scrollX = useRef(0)
   const [viewport, setViewport] = useState(0)
   const [content, setContent] = useState(0)

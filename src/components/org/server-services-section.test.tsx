@@ -29,12 +29,7 @@ vi.mock('@/components/org/server-blocker-items', () => ({
     return (
       <>
         {items.map(
-          (item: {
-            id: string
-            name: string
-            projectId?: string
-            projectName?: string
-          }) => (
+          (item: { id: string; name: string; projectId?: string; projectName?: string }) => (
             <a
               key={item.id}
               href={
@@ -292,6 +287,27 @@ describe('ServerServicesSection', () => {
     render(<ServerServicesSection orgId="org-1" serverId="srv-1" />)
     expect(screen.getAllByText(/Delete server → Host is gone/).length).toBeGreaterThan(0)
     expect(screen.queryByText(/Clear the items below first/)).toBeNull()
+  })
+
+  it('notes a shared PHP pool only when the app says so', () => {
+    const app = (serviceId: string, name: string, extra: Record<string, unknown>) => ({
+      serviceId,
+      name,
+      project: 'Store',
+      environment: 'Live',
+      domains: capped([], 0),
+      containers: capped([], 0),
+      ...extra,
+    })
+    state.result = {
+      isLoading: false,
+      error: null,
+      data: emptyRecord({
+        apps: capped([app('svc-1', 'shop', { phpShared: true }), app('svc-2', 'blog', {})], 0),
+      }),
+    }
+    render(<ServerServicesSection orgId="org-1" serverId="srv-1" />)
+    expect(screen.getAllByText('Shared PHP pool')).toHaveLength(1)
   })
 
   it('renders attached inventory, grouped database users, caps, and lsphp/compose labels', () => {

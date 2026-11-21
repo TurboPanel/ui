@@ -76,13 +76,20 @@ function aria(props: Props) {
     'aria-expanded': (props['aria-expanded'] as boolean | undefined) ?? state.expanded,
     'aria-live': props.accessibilityLiveRegion as string | undefined,
     'aria-hidden': props.accessibilityElementsHidden ? true : undefined,
+    'data-testid': props.testID as string | undefined,
     'data-style': JSON.stringify(flatten(props.style)),
   }
 }
 
 function dom(tag: string) {
   return function Stub(props: Props) {
-    return createElement(tag, aria(props), props.children)
+    // Pointer and focus handlers, for the components that react to them.
+    const { onPointerEnter, onPointerLeave, onFocus, onBlur } = props as Record<string, never>
+    return createElement(
+      tag,
+      { ...aria(props), onPointerEnter, onPointerLeave, onFocus, onBlur },
+      props.children
+    )
   }
 }
 

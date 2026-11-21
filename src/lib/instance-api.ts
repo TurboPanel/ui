@@ -995,6 +995,8 @@ export type OrgServerRecord = {
   /** Effective Via header on site responses (server → org → off). */
   sendViaHeader: boolean
   sendViaHeaderSource: HostDefaultsSource | null
+  /** This server's own build limits; `null` parts are not set. */
+  buildLimits?: { cores: number | null; memoryBytes: number | null; swap: boolean | null }
   /** Datacenter memberships (IP pins); a server may belong to many. */
   datacenters: ServerDatacenterRef[]
 }
@@ -1121,6 +1123,8 @@ export type ServerServicesAppContainer = {
 }
 
 export type ServerServicesApp = {
+  /** True when the app's PHP runs in the shared pool; absent when unknown. */
+  phpShared?: true
   serviceId: string
   name: string
   project: string
@@ -1234,6 +1238,8 @@ export async function updateServer(
       hideWebServerNames?: boolean | null
       /** `null` follows the organization setting. */
       sendViaHeader?: boolean | null
+      /** Replaces this server's build limits; `{}` clears both. */
+      buildLimits?: { cores?: number | null; memoryBytes?: number | null; swap?: boolean | null }
       hosting?: { enabled: boolean }
     }
     /** Location override; `null` resets every field to the detected value. */
@@ -1745,6 +1751,28 @@ export async function saveOrgHostDefaults(
   })
 }
 
+/** The most cores and memory one build of the organization may use; `null` is not set. */
+export type OrgBuildLimits = {
+  cores: number | null
+  memoryBytes: number | null
+  /** Allow swap for builds; `null` is not set (off). */
+  swap: boolean | null
+}
+
+export async function fetchOrgBuildLimits(orgId: string): Promise<OrgBuildLimits> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/build-limits`)
+}
+
+export async function saveOrgBuildLimits(
+  orgId: string,
+  limits: OrgBuildLimits
+): Promise<OrgBuildLimits & { ok: true }> {
+  return await apiFetch(`${CLIENT_API}/organizations/${orgId}/build-limits`, {
+    method: 'PUT',
+    body: JSON.stringify(limits),
+  })
+}
+
 export type OrgServerCapacity = {
   maxServers: number | null
   serverCount: number
@@ -1912,15 +1940,11 @@ export async function updateOrganizationDockerNetworking(
  * (`null` = inheriting the platform default, `partial`); `effectiveNameScheme`
  * is what new principals get. `schemeLocked` forces that scheme for every new
  * principal (creators cannot choose). Existing principals are never renamed.
- * `randomizedUsernames` / `effectiveRandomizedUsernames` are the legacy toggle
- * the scheme replaces.
  */
 export type OrgPrincipalDefaults = {
   nameScheme: NameScheme | null
   effectiveNameScheme: NameScheme
   schemeLocked: boolean
-  randomizedUsernames: boolean | null
-  effectiveRandomizedUsernames: boolean
 }
 
 export type OrgPrincipalDefaultsUpdate = {
@@ -2874,6 +2898,89 @@ export async function updateOrganization(
   })
 }
 
+/** The 409 codes of `DELETE /organizations/:id`, each a thing to remove first (or the root organization). */
+export type OrganizationDeleteBlockCode =
+  | 'root_organization'
+  | 'organization_has_servers'
+  | 'organization_has_tunnels'
+  | 'organization_has_dns_records'
+
+const ORGANIZATION_DELETE_BLOCK_CODES: ReadonlySet<string> = new Set<OrganizationDeleteBlockCode>([
+  'root_organization',
+  'organization_has_servers',
+  'organization_has_tunnels',
+  'organization_has_dns_records',
+])
+
+/** 409 from an organization delete: what still stands in the way, and how many of it. */
+export class OrganizationDeleteBlockedError extends Error {
+  readonly code: OrganizationDeleteBlockCode
+  /** How many servers, tunnels or DNS records remain; 0 for the root organization. */
+  readonly count: number
+
+  constructor(code: OrganizationDeleteBlockCode, message: string, count: number) {
+    super(message)
+    this.name = 'OrganizationDeleteBlockedError'
+    this.code = code
+    this.count = count
+  }
+}
+
+function organizationDeleteRefusal(
+  status: number,
+  body: Readonly<Record<string, unknown>>
+): Error | null {
+  if (status !== 409) return null
+  const code = body.code
+  if (typeof code !== 'string' || !ORGANIZATION_DELETE_BLOCK_CODES.has(code)) return null
+  const count = [body.serverCount, body.tunnelCount, body.dnsRecordCount].find(
+    (value): value is number => typeof value === 'number'
+  )
+  return new OrganizationDeleteBlockedError(
+    code as OrganizationDeleteBlockCode,
+    typeof body.message === 'string' ? body.message : code,
+    count ?? 0
+  )
+}
+
+/**
+ * Deletes an organization and everything it owns. Owner or platform admin.
+ * `confirmName` is the exact name (400 `confirm_name_required` without it);
+ * 403 `reauth_required` is answered by the step-up sheet inside `apiFetch`;
+ * 409 throws {@link OrganizationDeleteBlockedError}.
+ */
+export async function deleteOrganization(
+  organizationId: string,
+  confirmName: string
+): Promise<{ ok: true; id: string }> {
+  return await apiFetch(
+    `${CLIENT_API}/organizations/${organizationId}${confirmNameQuery(confirmName)}`,
+    { method: 'DELETE' },
+    organizationId,
+    organizationDeleteRefusal
+  )
+}
+
+/** One row of `GET /api/admin/v1/organizations` (platform admins). */
+export type AdminOrganizationRow = {
+  id: string
+  /** Can be empty; the name to type then falls back to the id, as the control plane does. */
+  name: string | null
+  createdAt: string
+  owner: { id: string; name: string | null; email: string | null } | null
+  memberCount: number
+  serverCount: number
+  projectCount: number
+  /** The install's Root Organization: it cannot be deleted. */
+  isRoot: boolean
+}
+
+export async function fetchAdminOrganizations(): Promise<{
+  organizations: AdminOrganizationRow[]
+}> {
+  return await apiFetch('/api/admin/v1/organizations')
+}
+
 export type InstallCompleteResult = SessionInfo & {
   organizationId: string
 }
@@ -3108,9 +3215,6 @@ type LicenseCreateErrorBody = {
   tiers?: unknown
   provisioning?: number
   unusedKeys?: number
-  /** Deprecated aliases from before `inUse` / `ending`. */
-  releasing?: number
-  held?: number
 }
 
 function readLicenseTiers(raw: unknown): LicenseTierAvailability[] {
@@ -3134,11 +3238,11 @@ function readLicenseTiers(raw: unknown): LicenseTierAvailability[] {
   })
 }
 
-/** Normalises a `409 no_license_available` body, reading the deprecated aliases when the new fields are absent. */
+/** Normalises a `409 no_license_available` body. */
 export function licenseAvailabilityFromBody(body: LicenseCreateErrorBody): LicenseAvailability {
   return {
     purchased: readCount(body.purchased),
-    inUse: readCount(body.inUse ?? body.held),
+    inUse: readCount(body.inUse),
     ending: readCount(body.ending),
     endsAt: readText(body.endsAt),
     available: readCount(body.available),
@@ -3251,14 +3355,13 @@ export async function deleteLicense(id: string): Promise<{ ok: true }> {
 /**
  * A one-hour, single-use install ticket. The secret is shown once and stored
  * hashed, so it cannot be read again. `installCommand` is the whole command
- * the control plane built; an older control plane returns only `licenseArg`.
+ * the control plane built.
  */
 export type ReenrollTicket = {
   ticketId: string
   expiresAt: string
   licenseToken: string
-  licenseArg: string
-  installCommand?: string
+  installCommand: string
 }
 
 /** `POST /servers/:id/reenroll-ticket` (owner; step-up). Retires any earlier unused ticket. */
@@ -3298,8 +3401,7 @@ export type ReissuedLicenseTicket = {
   joinId: string
   joinExpiresAt: string
   licenseToken: string
-  licenseArg: string
-  installCommand?: string
+  installCommand: string
 }
 
 /** `POST /licenses/:id/ticket` (owner; step-up): burn an unused key's token and issue a fresh one-hour ticket. */
@@ -3376,8 +3478,6 @@ export type BillingTierSummary = {
   endsAt: string | null
   /** `purchased − ending − inUse`, floored at 0 (advisory; the mint gate is the org-wide total). */
   available: number
-  /** @deprecated Use `ending` — this also counts pending downgrades. */
-  releasing?: number
   priceCents: number | null
   currency: string | null
 }
@@ -3398,10 +3498,6 @@ export type BillingLicenseSummary = {
   unusedKeys?: number
   /** How many more servers can be added right now. */
   available: number
-  /** @deprecated Use `ending`. */
-  releasing?: number
-  /** @deprecated Use `inUse`. */
-  held?: number
 }
 
 /** Where each licensed server landed: the tier the control plane assigned it, or `null` when nothing bought covers it. */
@@ -3832,9 +3928,44 @@ export type ProjectRecord = {
     compose?: ComposeDocument
     containerNaming?: 'uuid' | 'custom'
     defaultServerId?: string
+    /** Set on a project created from a Git repository's compose file. */
+    composeSource?: ProjectComposeSource
+    /** Project overlays on the Base, kept as stored when a save sends them back. */
+    composeOverlays?: unknown[]
   } | null
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * How a Git project's Base relates to the repository's compose file.
+ * `track`: every deploy reads `path` at the commit it deploys and uses it as
+ * the Base, which cannot be edited. `seed`: the file was copied once and the
+ * Base is the operator's to edit. Absent `mode` means `seed`. `lastRead*` is
+ * what the latest deploy read; only a deploy writes them.
+ */
+export type ProjectComposeSource = {
+  sourceId: string
+  /** The branch the file is read on; the repository's default branch when absent. */
+  ref?: string
+  path: string
+  seededCommitSha: string
+  seededDigest: string
+  mode?: 'seed' | 'track'
+  lastReadCommitSha?: string
+  lastReadDigest?: string
+  /** ISO time of the latest tracked read; the control plane sets it. */
+  lastReadAt?: string
+}
+
+/** The compose file a deploy used as the Base (`composeBase` on deploys and previews). */
+export type ComposeBaseRecord = {
+  sourceId: string
+  ref: string
+  path: string
+  commitSha: string
+  /** SHA-256 of the file's bytes. */
+  digest: string
 }
 
 export type CatalogSummary = {
@@ -3962,7 +4093,18 @@ export type CreateProjectBody = {
    * the compose it drafted so a compose project lands with its YAML already
    * saved instead of needing a follow-up PATCH.
    */
-  options?: { compose?: ComposeDocument }
+  options?: {
+    compose?: ComposeDocument
+    /**
+     * Send with the repository's compose file as `compose` to make the project
+     * follow it. The control plane starts it in `track` mode with the seeded
+     * commit and digest as the last read.
+     */
+    composeSource?: Omit<
+      ProjectComposeSource,
+      'mode' | 'lastReadCommitSha' | 'lastReadDigest' | 'lastReadAt'
+    >
+  }
   /**
    * Pins the scaffolded primary environment (org primary name, else `production`)
    * when creating a managed project.
@@ -4022,6 +4164,12 @@ export type ServiceOptions = {
   instances?: number
   build?: {
     disableCache?: boolean
+    /** Most CPU cores one build of this service may use (1 to 999). */
+    cores?: number
+    /** Most memory one build of this service may use, in bytes (1 GiB to 1 TiB). */
+    memoryBytes?: number
+    /** Allow swap for a build of this service; absent follows the server, then the organization (off). */
+    swap?: boolean
   }
   operations?: {
     stopGracePeriodSeconds?: number
@@ -4111,8 +4259,43 @@ export type HostingRecord = {
   certificate?: HostingCertificate | null
   /** The names a tunnel carries, one entry per name; absent on older control planes. */
   tunnels?: HostingTunnelPath[]
+  /** The certificate choice of every name the site answers on, www names included; absent on older control planes. */
+  names?: HostingNameCertificate[]
   createdAt: string
   updatedAt: string
+}
+
+/** What a name's certificate can be. `library` is one the organization already holds (a pin). */
+export type HostnameCertificate =
+  'cloudflare_origin' | 'letsencrypt_http' | 'letsencrypt_dns' | 'self_signed' | 'library'
+
+/** One thing the panel offers for a name; an option it cannot do right now comes with its `reason`. */
+export type HostingNameCertificateOption = {
+  certificate: HostnameCertificate
+  /** A library option names the certificate that covers the name. */
+  tlsId?: string | null
+  label?: string
+  available: boolean
+  /** Why it is not available, in plain words. */
+  reason?: string
+}
+
+/** One name the site answers on and the certificate it has. */
+export type HostingNameCertificate = {
+  hostname: string
+  certificate: HostnameCertificate
+  tlsId: string | null
+  certificateOptions: {
+    default: HostnameCertificate
+    options: HostingNameCertificateOption[]
+  }
+}
+
+/** One certificate choice sent on a save; names left out keep theirs. `self_signed` carries no `tlsId`, `library` needs one. */
+export type HostingNameChoice = {
+  hostname: string
+  certificate: HostnameCertificate
+  tlsId?: string
 }
 
 /**
@@ -4219,7 +4402,14 @@ export type TlsMetadata = {
     /** Expiry of the certificate Caddy is serving, as the daemon's probe read it (ISO 8601). */
     notAfter?: string
     /** `panel`: TurboPanel orders it itself with a DNS challenge (the row's source stays `upload`). */
-    managedBy?: 'caddy' | 'panel'
+    managedBy?: 'caddy' | 'panel' | 'server'
+    /** Where an order stands: `waiting` for something it needs, an ordering step, or `backoff` after a failure. */
+    stage?: string
+    /** What the order waits for, in plain words. */
+    warning?: string
+    /** When the order is tried again after a failure (ISO 8601). */
+    nextAttemptAt?: string
+    attempts?: number
   }
 }
 
@@ -4425,15 +4615,15 @@ export type DatacenterOptions = {
   priority?: number
   /**
    * Whether the datacenter's L2 is under the operator's control. Absent means
-   * `true`; `false` marks a shared / provider-owned segment.
+   * `false` (untrusted); `true` marks a network the operator controls.
    */
   trusted?: boolean
 }
 
 /** Default `DatacenterOptions.priority` when absent (mirrors the instance). */
 export const DEFAULT_DATACENTER_PRIORITY = 100
-/** Default `DatacenterOptions.trusted` when absent (mirrors the instance). */
-export const DEFAULT_DATACENTER_TRUSTED = true
+/** Default `DatacenterOptions.trusted` when absent (mirrors the instance: new networks start untrusted). */
+export const DEFAULT_DATACENTER_TRUSTED = false
 
 export type DatacenterNameSuggestion = {
   name: string
@@ -4454,7 +4644,7 @@ export type DatacenterRecord = {
   options: DatacenterOptions | null
   /** Effective `options.priority` with the default (`100`) applied; lower wins. */
   priority: number
-  /** Effective `options.trusted` with the default (`true`) applied. */
+  /** Effective `options.trusted` with the default (`false`) applied. */
   trusted: boolean
   /** Effective (override ?? detected) location; absent on older control planes. */
   location?: ResolvedLocation | null
@@ -4629,6 +4819,11 @@ export async function updateProject(
       containerNaming?: 'uuid' | 'custom'
       /** Optional default placement; `null` clears it. */
       defaultServerId?: string | null
+      /**
+       * Options replace wholesale, so send the stored source back on every
+       * save. The control plane ignores `mode` and `lastRead*` here.
+       */
+      composeSource?: ProjectComposeSource
     }
     workspaceId?: string
     /**
@@ -4643,6 +4838,21 @@ export async function updateProject(
   return await apiFetch(`${CLIENT_API}/projects/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(body),
+  })
+}
+
+/**
+ * Follow (`track`) or stop following (`seed`) the repository's compose file.
+ * 409 `compose_source_missing` when the project was not made from one. Seed
+ * keeps the last-read content as an editable Base.
+ */
+export async function setProjectComposeSource(
+  id: string,
+  mode: 'seed' | 'track'
+): Promise<{ ok: true; composeSource: ProjectComposeSource }> {
+  return await apiFetch(`${CLIENT_API}/projects/${id}/compose-source`, {
+    method: 'PATCH',
+    body: JSON.stringify({ mode }),
   })
 }
 
@@ -5048,6 +5258,7 @@ export async function createHosting(
     options?: Record<string, unknown>
     tlsId?: string | null
     ipId?: string | null
+    names?: HostingNameChoice[]
   }
 ): Promise<{ ok: true; id: string }> {
   return await apiFetch(`${CLIENT_API}/hostings`, {
@@ -5060,6 +5271,7 @@ export async function createHosting(
       ...(body?.options !== undefined ? { options: body.options } : {}),
       ...(body?.tlsId !== undefined ? { tlsId: body.tlsId } : {}),
       ...(body?.ipId !== undefined ? { ipId: body.ipId } : {}),
+      ...(body?.names !== undefined ? { names: body.names } : {}),
     }),
   })
 }
@@ -5073,6 +5285,7 @@ export async function updateHosting(
     options?: Record<string, unknown>
     tlsId?: string | null
     ipId?: string | null
+    names?: HostingNameChoice[]
   }
 ): Promise<{ ok: true }> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`, {
@@ -5790,7 +6003,6 @@ export type InstanceDaemonCapabilities = {
   connected?: boolean
   serverId?: string | null
   version?: string | null
-  capabilities?: Record<string, boolean>
 }
 
 export type PlatformCaInfo =
@@ -6830,49 +7042,6 @@ export async function fetchKeysetStatement(keyset: number): Promise<unknown> {
   return await apiFetch(`${ADMIN_API}/instance/identity/statements/${keyset}`)
 }
 
-/** One server's row in the sealed-secrets read (public values only). */
-export type SealedSecretsServer = {
-  id: string
-  name: string | null
-  /** Omitted by an older control plane. */
-  hostname?: string | null
-  organizationId: string | null
-  isConnected: boolean
-  /** The stored hello lists `daemon-sealed-secrets-v1`. */
-  advertisesSealedSecrets: boolean
-  sealingKey: { kid: string; reportedAt: string | null } | null
-  plaintextSecretsAt: string | null
-  /** True while no sealing key is on file, so decrypt answers go in plaintext. */
-  receivesPlaintext: boolean
-}
-
-export type SealedSecretsState = {
-  ok: true
-  receivingPlaintext: number
-  servers: SealedSecretsServer[]
-}
-
-/** Superadmin. Which servers still receive secrets in plaintext. */
-export async function fetchSealedSecrets(): Promise<SealedSecretsState> {
-  return await apiFetch(`${ADMIN_API}/instance/identity/sealed-secrets`)
-}
-
-/**
- * Clear Sealing Key (superadmin): `confirmName` is the server name as typed
- * (name, else hostname, else id). A stale session opens the re-authentication
- * sheet. Refusals throw: 400 `confirm_name_required`, 409
- * `daemon_seals_secrets` while a connected daemon opens sealed secrets.
- */
-export async function clearServerSealingKey(
-  serverId: string,
-  confirmName: string
-): Promise<{ ok: true; cleared: boolean }> {
-  return await apiFetch(
-    `${ADMIN_API}/instance/identity/sealed-secrets/${encodeURIComponent(serverId)}/key${confirmNameQuery(confirmName)}`,
-    { method: 'DELETE' }
-  )
-}
-
 export async function fetchPlatformCa(): Promise<PlatformCaInfo> {
   return await apiFetch(`${ADMIN_API}/instance/platform-ca`)
 }
@@ -7596,6 +7765,12 @@ export type DaemonSupport = {
   status: 'supported' | 'unsupported' | 'unknown'
   version: string | null
   minVersion: string
+  /** Set with `unsupported` by control planes that send it; absent otherwise. */
+  code?: 'daemon_update_required'
+  /** Required wire features the daemon's hello does not list. */
+  missingFeatures?: string[]
+  /** The control plane's sentence for why commands are refused. */
+  reason?: string
 }
 
 export type ServerUpdateStatus = {
@@ -7989,7 +8164,8 @@ export type CommandRecord = {
   status: CommandStatus
   payload: Record<string, unknown> | null
   result: Record<string, unknown> | null
-  error: string | null
+  /** Canonical human-readable error for terminal failures. */
+  errorMessage: string | null
   /** The one line of the error that says what went wrong; absent on an older control plane. */
   errorLine?: string | null
   attempts: number
@@ -8215,6 +8391,15 @@ export type ContainerLogEventRecord = {
   message: string
 }
 
+/** A post-deploy command that failed after the new release went live. */
+export type DeploymentPostDeployFailure = {
+  program: string | null
+  /** A plain sentence naming the program; the program's own output is in the deploy log. */
+  message: string
+  /** True when a previous release is named, so Roll Back is offered. */
+  rollBackAvailable: boolean
+}
+
 /**
  * One deploy attempt against one server, read from the append-only `command`
  * table. `id` **is** the command id — pass it to {@link fetchCommandLog} for the
@@ -8226,6 +8411,8 @@ export type DeploymentHistoryRecord = {
   commandId: string
   generation: number | null
   desiredHash: string | null
+  /** The repository compose file this attempt used as the Base; null when the project does not follow one, or for older rows. */
+  composeBase?: ComposeBaseRecord | null
   /** Per-service replica counts captured at enqueue; null for older rows. */
   replicaCounts: Record<string, number> | null
   serverId: string
@@ -8250,6 +8437,8 @@ export type DeploymentHistoryRecord = {
   strategyOutcome?: DeploymentStrategyOutcome | null
   /** Why it rolled back or needs attention. */
   strategyOutcomeReason?: string | null
+  /** Set when a post-deploy command failed after the new release was already live; null or absent otherwise. */
+  postDeployFailure?: DeploymentPostDeployFailure | null
   /** What set the attempt off when it was a git push; null for a deploy a person started. */
   trigger?: DeploymentTriggerRecord | null
   /**
@@ -8302,6 +8491,7 @@ export type DeploymentDetailRecord = {
   environmentId: string
   generation: number | null
   desiredHash: string | null
+  composeBase?: ComposeBaseRecord | null
   replicaCounts: Record<string, number>
   totalReplicas: number
   commands: DeploymentHistoryRecord[]
@@ -8815,13 +9005,9 @@ export type ReleaseRecord = {
    * told apart in the list.
    */
   imageTag?: string
-  /** Build tool and plan versions; older instances send the `railpack*` names. */
+  /** Build tool and plan versions. */
   builderFrontendVersion?: string
   builderPlanVersion?: string
-  /** Previous name of {@link builderFrontendVersion}; still read from older instances. */
-  railpackFrontendVersion?: string
-  /** Previous name of {@link builderPlanVersion}; still read from older instances. */
-  railpackPlanVersion?: string
   /** Aggregate status across every host in {@link ReleaseRecord.attempts}. */
   status: CommandStatus
   queuedAt: string | null
@@ -8910,11 +9096,11 @@ export class DeployResourceLimitExceededError extends Error {
 }
 
 /**
- * A deploy the panel refused because of a tunnel-only hostname: the server's
- * daemon is too old to lock the name, or the site is pinned to a public
- * certificate. The body names the site and the hostnames that are locked.
+ * A deploy the panel refused because of a tunnel-only hostname: the site is
+ * pinned to a public certificate. The body names the site and the hostnames
+ * that are locked.
  */
-export type DeployTunnelRefusalCode = 'tunnel_daemon_too_old' | 'tunnel_name_public_certificate'
+export type DeployTunnelRefusalCode = 'tunnel_name_public_certificate'
 
 export class DeployTunnelRefusedError extends Error {
   readonly code: DeployTunnelRefusalCode
@@ -8953,10 +9139,7 @@ async function throwIfDeployConflict(response: Response): Promise<void> {
         Array.isArray(errorBody.violations) ? errorBody.violations : []
       )
     }
-    if (
-      errorBody.error === 'tunnel_daemon_too_old' ||
-      errorBody.error === 'tunnel_name_public_certificate'
-    ) {
+    if (errorBody.error === 'tunnel_name_public_certificate') {
       throw new DeployTunnelRefusedError(
         errorBody.error,
         Array.isArray(errorBody.hostnames)
@@ -9031,6 +9214,7 @@ export type DeployPreviewWarning = {
     | 'fabric_reconcile_failed'
     | 'fabric_reconcile_pending'
     | 'site_principal_ambiguous'
+    | 'compose_base_unreadable'
   message: string
   details?: Record<string, unknown>
 }
@@ -9126,6 +9310,26 @@ export type DeployPreviewNativeAppVariable = {
   reason?: NativeAppVariableReason
 }
 
+/**
+ * One variable of one service by the name a person set it under (never the
+ * service-prefixed `.env` key). `value` is `null` for a secret.
+ */
+export type DeployPreviewServiceVariable = {
+  name: string
+  source: string
+  isSecret: boolean
+  value: string | null
+  forBuild: boolean
+  forRuntime: boolean
+  /** `true` when a source build never receives it, because the host refuses its name. */
+  droppedFromBuild?: true
+}
+
+export type DeployPreviewServiceVariables = {
+  composeServiceName: string
+  variables: DeployPreviewServiceVariable[]
+}
+
 /** Every environment variable one Node app's process gets (or is refused). */
 export type DeployPreviewNativeAppVariables = {
   composeServiceName: string
@@ -9157,12 +9361,16 @@ export type DeployPreviewResponse = {
     volumeName: string
   }[]
   warnings: DeployPreviewWarning[]
+  /** The repository compose file the preview used as the Base; null or absent when the project does not follow one. */
+  composeBase?: ComposeBaseRecord | null
   /** Non-secret Compose project `.env` (real values; secrets are omitted). */
   envFile?: string
   /** Host/container secret file plan — no envelopes or plaintext. */
   secretPlan?: DeployPreviewSecretPlanEntry[]
   /** Environment variables each Node app (native service) would get; secrets masked. */
   nativeAppVariables?: DeployPreviewNativeAppVariables[]
+  /** Each service's variables by the names a person set, split by build and runtime use. Absent on an older control plane. */
+  serviceVariables?: DeployPreviewServiceVariables[]
 }
 
 /**
@@ -9916,8 +10124,7 @@ export type CancelDeploymentResponse = {
 /**
  * Ask the control plane to cancel a running or queued deploy (the whole deploy,
  * every host). `deploymentId` is the deploy command id. No step-up: a re-deploy
- * fully reverses it. **409** `deploy_not_cancellable` (already finished) or
- * `cancel_unsupported` (the server's agent is too old).
+ * fully reverses it. **409** `deploy_not_cancellable` (already finished).
  */
 export async function cancelDeployment(
   environmentId: string,
@@ -9932,8 +10139,7 @@ export async function cancelDeployment(
 /**
  * Destroy also deletes the data volumes: the environment name typed exactly.
  * The control plane answers 400 `confirm_name_required` without it, 403 for
- * someone who could not delete the environment, and 409
- * `delete_volumes_needs_daemon_update` when a server runs an older daemon.
+ * someone who could not delete the environment.
  */
 export type DestroyDataOptions = {
   deleteVolumes: true
@@ -9979,8 +10185,8 @@ export type KeptEnvironmentDataVolume = EnvironmentDataVolume & {
 export type EnvironmentDataVolumesResponse = {
   volumes: RemovableEnvironmentDataVolume[]
   kept: KeptEnvironmentDataVolume[]
-  /** Servers whose daemon must be updated before data can be deleted. */
-  outdatedServers: NamedServer[]
+  /** Still sent, always empty; nothing reads it. */
+  outdatedServers?: NamedServer[]
 }
 
 export async function fetchEnvironmentDataVolumes(
@@ -11216,7 +11422,7 @@ export async function createManagedUser(
     grantMode?: 'recipe' | 'self'
     /** A database tool uses this login: always the primary, no read splitting. */
     tool?: boolean
-    /** Places the login may connect from; omit (or `any`) for anywhere. 400 `managed_login_source*` when a place is wrong; 409 `managed_login_limits_need_daemon_update`. */
+    /** Places the login may connect from; omit (or `any`) for anywhere. 400 `managed_login_source*` when a place is wrong. */
     allowedSources?: string[]
     /** Most connections at once, 1 to 10000; omit for no cap. */
     maxConnections?: number
@@ -11409,7 +11615,7 @@ export async function fetchManagedAdminTools(
  * deploy the returned `environmentId` next. Refusals: 400 `admin_tool_unknown`,
  * `invalid_hostname`, `admin_tool_access_invalid`, `admin_tool_engine_mismatch`,
  * `admin_tool_email_invalid`; 409 `admin_tool_needs_database`,
- * `admin_tool_needs_daemon_update`, `admin_tool_hostname_in_use`,
+ * `admin_tool_hostname_in_use`,
  * `hostname_in_use`, `managed_destroy_in_progress`.
  */
 export async function createManagedAdminTool(
@@ -11467,7 +11673,7 @@ export async function fetchManagedBackupLogin(
  * Create the cluster's backup login: read-only rights a backup tool needs to
  * copy every database, always routed to the primary. `allowedSources` is
  * required and never `any` (400 `managed_backup_login_sources_required`); 409
- * `managed_backup_login_exists` / `managed_backup_login_needs_daemon_update`.
+ * `managed_backup_login_exists`.
  * The returned `password` is **show-once**.
  */
 export async function createManagedBackupLogin(
@@ -13173,12 +13379,37 @@ export type TunnelRecord = {
   carryingServerIds: string[]
   warnings: string[]
   doorwayCount: number
-  /** The verified connection to your web server (see `setTunnelVerifyOrigin`). Missing from an older panel, which means off. */
-  verifyOrigin?: VerifyOriginState
+  /** Names whose hop to the web server the connector verifies, as last written to the provider. Every other name skips the check. */
+  verifiedNames?: string[]
   /** The last or current run-token rotation; null when there was none, missing from an older panel. */
   runTokenRotation?: TunnelRunTokenRotation | null
   /** Why Rotate Run Token would be refused now, or null when it can start; missing from an older panel. */
   runTokenRotationBlock?: TunnelRotationBlock | null
+  /** What each server that carries the tunnel or runs one of its sites last reported about the peer hop; missing from an older panel. */
+  peerHop?: TunnelPeerHop[]
+  /** Whether the connector status ports are locked on each carrying server, as last reported; missing from an older panel. */
+  statusPorts?: TunnelStatusPorts[]
+}
+
+/** One carrying server's report on the lock for the connector status ports. */
+export type TunnelStatusPorts = {
+  serverId: string
+  /** True when the last lock load worked, false when it failed, null when not reported yet (an older daemon). Null never means locked. */
+  locked: boolean | null
+  /** Why the last load failed; null unless `locked` is false. */
+  reason: string | null
+  /** When the last load ran; null when unknown. */
+  checkedAt: string | null
+}
+
+/** One server's report on the client-certificate check between servers. */
+export type TunnelPeerHop = {
+  serverId: string
+  /** `require` checks a client certificate, `verify` admits a peer without one, `none` means no mode reported yet. */
+  mode: 'require' | 'verify' | 'none'
+  /** `require` was asked for but `verify` is what runs, because the peer certificate lacks client use. */
+  downgraded: boolean
+  reportedAt: string | null
 }
 
 /** Where a run-token rotation is. The token itself is never returned. */
@@ -13201,14 +13432,6 @@ export type TunnelRotationBlock = {
   code: string
   message: string
   serverIds?: string[]
-}
-
-/** Asked for, in effect, and which names still wait for a site or a certificate. */
-export type VerifyOriginState = {
-  enabled: boolean
-  /** Every name is served with a covering origin certificate, so the connector verifies. */
-  active: boolean
-  pendingNames: string[]
 }
 
 /** An origin certificate TurboPanel issued. The key stays sealed on the panel and is never returned. */
@@ -13252,6 +13475,8 @@ export type TunnelHostnameRecord = {
   status: string
   /** `created` when a DNS name was made, `none` when no zone the token can edit holds it. */
   dns: 'created' | 'none'
+  /** Why the name is not being forwarded to its site right now; null when routed or unknown, missing from an older panel. */
+  routingNote?: string | null
   createdAt: string
 }
 
@@ -13286,7 +13511,7 @@ export async function createTunnel(
 /**
  * Give the tunnel a new run token; servers move to it one at a time. **409**
  * `rotation_single_server` (send `confirmSingleServer: true`),
- * `tunnel_daemon_too_old`, `server_not_ready`, `rotation_in_progress`,
+ * `server_not_ready`, `rotation_in_progress`,
  * `tunnel_removing`. A stopped rotation resumes.
  */
 export async function rotateTunnelRunToken(
@@ -13311,26 +13536,29 @@ export async function updateTunnelPlacement(
   })
 }
 
-export type TunnelVerifyOriginBody = { enabled: boolean; wildcard?: boolean }
+/** What opening or closing a tunnel name for direct visitors did. */
+export type TunnelHostnameReachResult = {
+  hostname: TunnelHostnameRecord
+  /** Names whose certificate moved to the default of a name reached both ways; a picked certificate is never changed. */
+  certificateChangedNames: string[]
+  /** The site's servers pick the change up with its next deploy. */
+  needsDeploy: boolean
+}
 
 /**
- * Turn the verified connection on or off for a tunnel. Safe to repeat. **409**
- * `verify_origin_public_names`, `verify_origin_zones`, `verify_origin_names`,
- * `badge_cannot_certify`, `badge_cannot_dns`, `badge_cannot_tunnel`.
+ * Open (`isLocalOnly: false`) or close (`true`) a tunnel name for direct
+ * visitors on the site's datacenter address. **409** `doorway_bind_not_datacenter`,
+ * `doorway_no_site`, `doorway_removing`.
  */
-export async function setTunnelVerifyOrigin(
+export async function setTunnelHostnameReach(
   orgId: string,
   tunnelId: string,
-  body: TunnelVerifyOriginBody
-): Promise<{
-  tunnel: TunnelRecord
-  verifyOrigin: VerifyOriginState
-  pinnedHostingIds: string[]
-  needsDeploy: boolean
-}> {
-  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/verify-origin`, {
-    method: 'PUT',
-    body: JSON.stringify(body),
+  doorwayId: string,
+  isLocalOnly: boolean
+): Promise<TunnelHostnameReachResult> {
+  return await apiFetch(`${tunnelsPath(orgId)}/${tunnelId}/hostnames/${doorwayId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isLocalOnly }),
   })
 }
 
@@ -13522,10 +13750,9 @@ export async function setServerTunnelCarrying(
 }
 
 // ---------------------------------------------------------------------------
-// Certificates ordered through a DNS challenge. The control plane no longer
-// orders or renews them: order, check and retry answer 422
-// `certificate_ordering_off`; the list stays. The three calls have no screen
-// now and stay as the mirror of the routes, which are still mounted.
+// Certificates ordered through a DNS challenge: list, order, check and retry
+// mirror the panel's routes. Retry answers 409 `rate_limited` while the
+// certificate authority asks for a wait.
 
 /** One certificate TurboPanel ordered itself, proven by a DNS record in the connected account. */
 export type DnsCertificate = {
@@ -13569,7 +13796,7 @@ export async function fetchDnsCertificates(
   return await apiFetch(dnsCertificatesPath(orgId))
 }
 
-/** Refused: 422 `certificate_ordering_off`. */
+/** Order a certificate for one name, several names or a wildcard. */
 export async function orderDnsCertificate(
   orgId: string,
   body: OrderDnsCertificateBody
@@ -13577,7 +13804,7 @@ export async function orderDnsCertificate(
   return await apiFetch(dnsCertificatesPath(orgId), { method: 'POST', body: JSON.stringify(body) })
 }
 
-/** Move an order on now. Refused: 422 `certificate_ordering_off`. */
+/** Move an order on now. */
 export async function checkDnsCertificate(
   orgId: string,
   id: string
@@ -13585,10 +13812,31 @@ export async function checkDnsCertificate(
   return await apiFetch(`${dnsCertificatesPath(orgId)}/${id}/check`, { method: 'POST' })
 }
 
-/** Try again a certificate that gave up. Refused: 422 `certificate_ordering_off`. */
+/** 409 `rate_limited`: the certificate authority asked for a wait; `retryAt` is when to try again. */
+export class DnsCertificateRateLimitedError extends Error {
+  readonly code = 'rate_limited'
+  readonly retryAt: string | null
+
+  constructor(retryAt: string | null) {
+    super('The certificate authority asked for a wait before this order is tried again.')
+    this.name = 'DnsCertificateRateLimitedError'
+    this.retryAt = retryAt
+  }
+}
+
+/** Try a certificate order that gave up again. 409 `rate_limited` (see `DnsCertificateRateLimitedError`) while the authority is rate limiting the organization. */
 export async function retryDnsCertificate(
   orgId: string,
   id: string
 ): Promise<{ certificate: DnsCertificate }> {
-  return await apiFetch(`${dnsCertificatesPath(orgId)}/${id}/retry`, { method: 'POST' })
+  return await apiFetch(
+    `${dnsCertificatesPath(orgId)}/${id}/retry`,
+    { method: 'POST' },
+    undefined,
+    (status, body) => {
+      if (status !== 409 || body.error !== 'rate_limited') return null
+      const retryAt = typeof body.retryAt === 'string' ? body.retryAt : null
+      return new DnsCertificateRateLimitedError(retryAt)
+    }
+  )
 }

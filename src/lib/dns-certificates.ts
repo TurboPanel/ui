@@ -2,7 +2,7 @@
  * Certificates TurboPanel ordered itself through a DNS challenge: the rules for
  * the order form, and the words for where a certificate stands. The control
  * plane no longer orders or renews them; those already issued keep working
- * until they expire. Pure; the transport lives in `instance-api.ts`.
+ * until they expire, and the server that runs the site orders new ones. Pure; the transport lives in `instance-api.ts`.
  */
 import type { BadgeTone } from '@/components/ui/badge'
 import type { DnsCertificate, TunnelCarrier } from '@/lib/instance-api'
@@ -10,8 +10,9 @@ import { parseFailure } from '@/lib/tunnels'
 import { realDate } from '@/lib/tls-managed-dates'
 
 // The order-form rules below (names, wildcard choice, accounts) have no screen
-// while ordering is turned off. They stay, with their tests, for the form that
-// comes back when the server that runs the site orders these certificates.
+// of their own: each name now picks its certificate in the per-name picker, and
+// the server that runs the site orders it. The rules stay, with their tests,
+// for a standalone order form if one comes back.
 
 export const MAX_NAMES = 10
 

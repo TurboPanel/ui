@@ -4,14 +4,17 @@
 > (command transcript) surface.
 
 **Surfaces:**
+
 - Project → environment **Deployments** → a deployment — the deploy's own **log
   page** (`/environments/:environmentId/deployments/:deploymentId`,
   `src/components/logs/deployment-log-screen.tsx`). This is where a build and
   deploy log lives. A Deployments row opens it; there is no expandable
   transcript in the history list any more.
-- Project → environment **Overview** — the deploy-progress card for the deploy
-  that was just enqueued (`overview-environments-panel.tsx`): step rail, the
-  last output and **Open full log**, which goes to the log page above.
+- Project → environment **Deployments** — a deploy that is running shows its
+  progress card at the top of the tab, and only there
+  (`RunningDeploySection` in `overview-environments-panel.tsx`): step rail and
+  the live output. When the deploy ends the card goes away and the finished
+  deploy is the newest row of the list. No other tab shows it.
 - Project → **Services** → a service → **Runtime log** — the same viewer,
   ungrouped, reading the running app's output on demand (rules in
   `container-logs.md`).
@@ -66,19 +69,19 @@ Do not fork either per surface; add a prop instead.
 `theme.ts` + `org-panel-styles.ts` only — the log tokens that already exist and
 were reserved for exactly this:
 
-| Role | Token | Notes |
-|------|-------|-------|
-| stdout line | `colors.stdout` | Default body colour for transcript text |
-| stderr line | `colors.errorText` | Never `colors.error` (too hot at 12px on a dark log surface) |
-| phase header | `colors.command` | Phase name; the rule above it is `borderArea` |
-| timestamp / seq | `colors.log` → `colors.textFaint` | Muted, never the same weight as the message |
-| truncation banner | `orgPanelStyles.calloutWarning` | Existing warning callout, not a new banner |
-| controls | `SegmentedControl` + `Button` (`sm`) | Same visual weight as the managed log controls |
+| Role              | Token                                | Notes                                                        |
+| ----------------- | ------------------------------------ | ------------------------------------------------------------ |
+| stdout line       | `colors.stdout`                      | Default body colour for transcript text                      |
+| stderr line       | `colors.errorText`                   | Never `colors.error` (too hot at 12px on a dark log surface) |
+| phase header      | `colors.command`                     | Phase name; the rule above it is `borderArea`                |
+| timestamp / seq   | `colors.log` → `colors.textFaint`    | Muted, never the same weight as the message                  |
+| truncation banner | `orgPanelStyles.calloutWarning`      | Existing warning callout, not a new banner                   |
+| controls          | `SegmentedControl` + `Button` (`sm`) | Same visual weight as the managed log controls               |
 
 Stderr is **never** signalled by colour alone — the row carries a monospace
 `stderr` marker chip, matching the console-wide "no colour-only status" rule.
 
-**The stream is not the verdict.** Docker writes *all* progress to stderr —
+**The stream is not the verdict.** Docker writes _all_ progress to stderr —
 stdout is reserved for command results — so `stream === 'stderr'` alone would
 paint an entire successful image pull red. A row is an error only when it came
 from stderr **and** is not a recognised Compose/BuildKit progress line
@@ -126,8 +129,11 @@ at the end as empty headers.
 - Two filter styles, switched next to the field: **Highlight matches (keep
   context)** (the default: each match with 2 lines either side, "…" between
   runs) and **Only matching lines**.
-- **Errors and warnings** narrows to error and warning rows. The person turns
-  it on; it is never on by default. **Jump to first error** opens that step and
+- **All Steps** (a picker beside the search field, shown when the log has
+  more than one step) limits the log to one step; picking a step opens it.
+  **Jump to first error** and the step strip go back to All Steps.
+- **Errors Only** narrows to the error rows and the warnings the build wrote
+  to stderr. The person turns it on; it is never on by default. **Jump to first error** opens that step and
   scrolls to the row.
 - Matches are marked with a `warnSoft` background; the field and each step
   header also say the count in words.
@@ -144,7 +150,7 @@ bottom of the screen on the web) with 48 pt buttons:
 
 - **Live** (only while the log is being written; shows On or Paused/Off),
   **Jump to error** (only when there is one), **Filter** and **More**.
-- **Filter** opens a panel with Errors and warnings and, while a search is
+- **Filter** opens a panel with the step picker, Errors Only and, while a search is
   typed, Highlight / Only matching. The Filter button is marked while either
   narrows the log.
 - **More** opens a panel with Wrap, Timestamps, Open / Close all steps, Copy
@@ -177,15 +183,15 @@ bottom of the screen on the web) with 48 pt buttons:
 
 ## State matrix
 
-| State | Meaning | Render |
-|-------|---------|--------|
-| `idle` | Nothing enqueued / no command id yet | `EmptyState` — "No transcript yet." |
-| `waiting` | Command queued, `exists: false` — daemon has not uploaded a first chunk | `LoadingState` "Waiting for output…" |
-| `streaming` | Live, chunks arriving, not sealed | Lines + follow toggle + live chip |
-| `sealed` | Command terminal, transcript final | Lines, follow off, Copy / Download enabled |
-| `truncated` | Retained-size cap hit | `calloutWarning` above the lines, then the retained lines |
+| State         | Meaning                                                                 | Render                                                          |
+| ------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `idle`        | Nothing enqueued / no command id yet                                    | `EmptyState` — "No transcript yet."                             |
+| `waiting`     | Command queued, `exists: false` — daemon has not uploaded a first chunk | `LoadingState` "Waiting for output…"                            |
+| `streaming`   | Live, chunks arriving, not sealed                                       | Lines + follow toggle + live chip                               |
+| `sealed`      | Command terminal, transcript final                                      | Lines, follow off, Copy / Download enabled                      |
+| `truncated`   | Retained-size cap hit                                                   | `calloutWarning` above the lines, then the retained lines       |
 | `unavailable` | No execution-log store configured, or transcript expired past retention | `EmptyState` panel — "Transcript unavailable." + retention hint |
-| `forbidden` | Session cannot read this command | `EmptyState` panel — permission copy, no retry button |
+| `forbidden`   | Session cannot read this command                                        | `EmptyState` panel — permission copy, no retry button           |
 
 `waiting` and `unavailable` are distinct on purpose: the control plane returns
 `exists: false` for "not started" and never 404s a poll loop, so the viewer must

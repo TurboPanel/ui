@@ -39,7 +39,7 @@ describe('parseSizeOutput', () => {
   })
 
   it('tolerates the older "-> S2" suffix, a prompt around it and odd spacing', () => {
-    expect(parseSizeOutput('root@adrastea:~# 4 cores ,  7.6 GiB RAM -> S1\n')).toEqual({
+    expect(parseSizeOutput('root@host-a:~# 4 cores ,  7.6 GiB RAM -> S1\n')).toEqual({
       cores: 4,
       memoryBytes: Math.round(7.6 * GIB),
     })
@@ -83,9 +83,9 @@ describe('sizeBandRows', () => {
 
 describe('describeSizeFit', () => {
   it('names the tier the server needs', () => {
-    expect(describeSizeFit({ cores: 8, memoryBytes: Math.round(31.3 * GIB) }, { label: 'S2' })).toBe(
-      '8 cores, 31.3 GiB RAM → S2'
-    )
+    expect(
+      describeSizeFit({ cores: 8, memoryBytes: Math.round(31.3 * GIB) }, { label: 'S2' })
+    ).toBe('8 cores, 31.3 GiB RAM → S2')
     expect(describeSizeFit({ cores: 1, memoryBytes: 2 * GIB }, { label: 'S1' })).toBe(
       '1 core, 2 GiB RAM → S1'
     )

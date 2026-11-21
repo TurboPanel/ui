@@ -11,7 +11,7 @@ import { stringify } from 'yaml'
 import type { ComposeHostingExtensionEntry } from '@/lib/compose/hosting-extension'
 import { wwwResultLines } from '@/lib/hosting-www'
 import type { TlsRecord } from '@/lib/instance-api'
-import { apiErrorCopy } from '@/lib/user-error'
+import { apiErrorCopy, failedRunMessage } from '@/lib/user-error'
 
 /** The Let's Encrypt choice, as every picker and summary names it. */
 export const LETS_ENCRYPT_CHOICE_TEXT = 'Let’s Encrypt (free, renews automatically)'
@@ -208,19 +208,9 @@ export function pendingRemovalNote(handedBack: boolean): string {
 export const PENDING_REMOVAL_CERTIFICATE_HINT =
   'The certificate stays as it is until the next deploy removes this hostname.'
 
-/**
- * The certificate picker's explanation for a hostname managed on this screen.
- * It mentions the Let’s Encrypt box only while the box is shown (Self-signed
- * picked and a hostname typed), and otherwise says how to get it.
- */
-export function panelCertificateHint(letsEncryptBoxShown: boolean): string {
-  const base =
-    'Until a real certificate is in place the site uses a basic self-signed one. Pick a library certificate to use an upload or an org self-signed one'
-  return letsEncryptBoxShown
-    ? base + ', or tick the box below to get a free Let’s Encrypt certificate when you save.'
-    : base +
-        '. For a free Let’s Encrypt certificate, enter a hostname and keep Self-signed picked: a box to ask for one shows up below.'
-}
+/** Under Certificate on a site that is not saved yet: no names exist for the panel to pick for. */
+export const NEW_HOSTING_CERTIFICATE_HINT =
+  'Each name gets a certificate when you save, chosen for how visitors reach it. Save, then pick a different one for any name.'
 
 /** A move refused because a deploy of the environment is running. */
 export const DEPLOY_RUNNING_MESSAGE =
@@ -278,4 +268,21 @@ export function hostingActionErrorMessage(error: string | null | undefined): str
   const mapped = apiErrorCopy(text)
   if (mapped) return mapped
   return readableErrorText(text) || HOSTING_ACTION_FAILED_MESSAGE
+}
+
+/**
+ * The words for a failed hostname save: a refusal carrying a hosting code is
+ * worded by `hostingActionErrorMessage` (so a 409 `hostname_in_use` names the
+ * fix); every other failure keeps the shared wording (unreachable panel, the
+ * mapped code, the server's words, then the caller's fallback).
+ */
+export function hostingSaveErrorMessage(
+  result: Readonly<{ error: string | null; cause?: unknown }>,
+  fallback: string
+): string {
+  const error = result.error ?? ''
+  if (HOSTING_ERROR_COPY.some(([code]) => error.includes(code))) {
+    return hostingActionErrorMessage(error)
+  }
+  return failedRunMessage(result, fallback)
 }

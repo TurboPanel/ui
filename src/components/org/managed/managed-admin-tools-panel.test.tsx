@@ -31,7 +31,7 @@ vi.mock('@/lib/queries/environments', () => ({
   useDeployEnvironmentById: () => ({ run: mocks.deploy }),
 }))
 vi.mock('@/lib/queries/servers', () => ({
-  useOrgServers: () => ({ data: { servers: [{ id: 's1', name: 'omicron' }] } }),
+  useOrgServers: () => ({ data: { servers: [{ id: 's1', name: 'server-f' }] } }),
 }))
 vi.mock('@/lib/queries/environment-cards', () => ({
   useLatestDeployments: () => ({ latest: mocks.latest }),
@@ -211,7 +211,7 @@ describe('ManagedAdminToolsPanel', () => {
     renderPanel()
     fireEvent.click(screen.getByText('Add Admin Tool'))
     expect(
-      screen.getByText('Point this name at omicron before you deploy, like any site.')
+      screen.getByText('Point this name at server-f before you deploy, like any site.')
     ).toBeTruthy()
     expect(screen.getByText(/Anyone who reaches this address/)).toBeTruthy()
   })

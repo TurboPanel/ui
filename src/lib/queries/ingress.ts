@@ -155,10 +155,14 @@ export function useRemoveHostnameIngress() {
   })
 }
 
-function useAccountMutation<TData, TVariables>(mutationFn: (input: TVariables) => Promise<TData>) {
+function useAccountMutation<TData, TVariables>(
+  mutationFn: (input: TVariables) => Promise<TData>,
+  options: Readonly<{ gcTime?: number }> = {}
+) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn,
+    ...options,
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.ingressAccounts })
     },
@@ -166,7 +170,8 @@ function useAccountMutation<TData, TVariables>(mutationFn: (input: TVariables) =
 }
 
 export function useAddIngressAccount() {
-  return useAccountMutation(addIngressAccount)
+  // The API token it sends must leave the mutation cache at once.
+  return useAccountMutation(addIngressAccount, { gcTime: 0 })
 }
 
 export function useRecheckIngressAccount() {

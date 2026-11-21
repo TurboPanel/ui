@@ -494,11 +494,9 @@ describe('instance-api managed-engine fetch wrappers', () => {
       allowedSources: null,
       maxConnections: null,
     })
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: 'managed_login_limits_need_daemon_update' }, 409)
-    )
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'managed_login_not_editable' }, 409))
     await expect(updateManagedUser('env-1', 'p1', { maxConnections: 3 })).rejects.toThrow(
-      'HTTP 409: managed_login_limits_need_daemon_update'
+      'HTTP 409: managed_login_not_editable'
     )
   })
 
@@ -632,7 +630,7 @@ describe('instance-api managed-engine fetch wrappers', () => {
             projectName: 'DB',
             workspaceId: 'ws-1',
             workspaceName: 'Default',
-            serverName: 'Huey',
+            serverName: 'Server A',
             members: [],
           },
         ],

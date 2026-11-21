@@ -2,18 +2,17 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { TamaguiProvider, Theme } from 'tamagui'
 import '@/lib/control-plane-platform'
 import { authSpinnerColor } from '@/lib/auth-accent'
 import { AuthProvider } from '@/lib/auth-context'
 import { isRemoteCookieClient } from '@/lib/control-plane'
 import { hydrateControlPlaneStore } from '@/lib/control-plane-accounts'
 import { createAppQueryClient } from '@/lib/query-client'
-import tamaguiConfig from '@/lib/tamagui.config'
+import { DashboardWarmup } from '@/components/dashboard-warmup'
+import { FlashNoticeHost } from '@/components/flash-notice-host'
 import { ReauthSheet } from '@/components/auth/reauth-sheet'
 import { ControlPlaneUpdatingOverlay } from '@/components/admin/control-plane-updating-overlay'
 import { colors } from '@/lib/theme'
-import { useColorScheme } from '@/lib/theme-preference'
 
 /** Module-level instance — preserves Fast Refresh lifetime. */
 const queryClient = createAppQueryClient()
@@ -44,23 +43,19 @@ function ControlPlaneGate({ children }: Readonly<{ children: ReactNode }>) {
 }
 
 export function AppProviders({ children }: AppProvidersProps) {
-  const scheme = useColorScheme()
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme={scheme}>
-      {/* `defaultTheme` only seeds the provider, so the live choice goes through Theme. */}
-      <Theme name={scheme}>
-        <QueryClientProvider client={queryClient}>
-          <ControlPlaneGate>
-            <AuthProvider>
-              {children}
-              <ControlPlaneUpdatingOverlay />
-              <ReauthSheet />
-            </AuthProvider>
-          </ControlPlaneGate>
-          {Platform.OS === 'web' && <ReactQueryDevtools initialIsOpen={false} />}
-        </QueryClientProvider>
-      </Theme>
-    </TamaguiProvider>
+    <QueryClientProvider client={queryClient}>
+      <ControlPlaneGate>
+        <AuthProvider>
+          <DashboardWarmup />
+          {children}
+          <ControlPlaneUpdatingOverlay />
+          <FlashNoticeHost />
+          <ReauthSheet />
+        </AuthProvider>
+      </ControlPlaneGate>
+      {Platform.OS === 'web' && <ReactQueryDevtools initialIsOpen={false} />}
+    </QueryClientProvider>
   )
 }
 

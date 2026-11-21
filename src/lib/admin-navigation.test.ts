@@ -14,6 +14,7 @@ describe('ADMIN_AREAS', () => {
       'email',
       'auth-providers',
       'git',
+      'organizations',
       'signup',
       'tiers',
       'secrets',

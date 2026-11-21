@@ -4,7 +4,6 @@ import {
   applyPublicUrls,
   applyReencryptSecrets,
   attachInstanceCertificate,
-  clearServerSealingKey,
   fetchInstanceAcmeSettings,
   fetchInstanceCertificates,
   fetchInstanceDaemon,
@@ -31,7 +30,6 @@ import {
   type UpgradeRunServersQuery,
   fetchPlatformCa,
   fetchInstanceIdentity,
-  fetchSealedSecrets,
   approveKeysetStatement,
   cancelWaitingKeyChange,
   fetchKeyRotation,
@@ -53,6 +51,7 @@ import {
   createForge,
   deactivateAdminTier,
   deleteForge,
+  fetchAdminOrganizations,
   fetchAdminTierProducts,
   fetchAdminTiers,
   fetchAuthProviderSettings,
@@ -844,26 +843,6 @@ export function useApproveKeysetStatement() {
   })
 }
 
-export function useSealedSecrets(options?: Readonly<{ enabled?: boolean }>) {
-  return useQuery({
-    queryKey: queryKeys.admin.sealedSecrets,
-    queryFn: fetchSealedSecrets,
-    enabled: options?.enabled ?? true,
-    staleTime: 60 * 1000,
-  })
-}
-
-export function useClearServerSealingKey() {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: ({ serverId, confirmName }: { serverId: string; confirmName: string }) =>
-      clearServerSealingKey(serverId, confirmName),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.admin.sealedSecrets })
-    },
-  })
-}
-
 export function usePlatformCa(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
     queryKey: queryKeys.admin.platformCa,
@@ -893,6 +872,8 @@ export function useTrustedProxies(options?: Readonly<{ enabled?: boolean }>) {
 export function useSetInstanceTunnelToken() {
   return useApiMutation({
     mutationFn: setInstanceTunnelToken,
+    // The pasted run token must leave the mutation cache at once.
+    gcTime: 0,
   })
 }
 
@@ -1199,5 +1180,14 @@ export function useVerifyAllAdminTiers() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.admin.tiers })
     },
+  })
+}
+
+/** Every organization on the install, for platform admins (`GET /api/admin/v1/organizations`). */
+export function useAdminOrganizations(options?: Readonly<{ enabled?: boolean }>) {
+  return useQuery({
+    queryKey: queryKeys.admin.organizations,
+    queryFn: fetchAdminOrganizations,
+    enabled: options?.enabled ?? true,
   })
 }

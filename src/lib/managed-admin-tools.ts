@@ -149,8 +149,6 @@ export function adminToolBody(input: {
   return { tool: input.tool, hostname: input.hostname.trim().toLowerCase(), access: input.access }
 }
 
-const OLDER_DAEMON_NOTE =
-  "This server's daemon is older, so the tool's login got read and write access only. Update the server, then apply again."
 const NO_OWNER_ROLE_MARKER = 'work through: '
 const NO_OWNER_ROLE_END = '. The login has'
 const API_WORDING = /POST |…\/|\/managed\/|\{name\}|connectionRole/
@@ -168,7 +166,6 @@ function noOwnerRoleNote(note: string): string | null {
 }
 
 function plainAdminToolNote(note: string): string {
-  if (/is older than (owner roles|the Database admin login)/i.test(note)) return OLDER_DAEMON_NOTE
   const noOwner = noOwnerRoleNote(note)
   if (noOwner) return noOwner
   return API_WORDING.test(note) ? OTHER_NOTE_GENERIC : note

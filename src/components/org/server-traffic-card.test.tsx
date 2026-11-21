@@ -206,7 +206,7 @@ describe('ServerTrafficCard', () => {
     show()
     fireEvent.change(screen.getByLabelText('Priority for Office LAN'), { target: { value: '5' } })
     fireEvent.click(screen.getByLabelText('Save priority for Office LAN'))
-    expect(update).toHaveBeenCalledWith({ options: { priority: 5 } })
+    expect(update).toHaveBeenCalledWith({ options: { trusted: true, priority: 5 } })
   })
 
   it('refuses a number out of range without calling the server', () => {

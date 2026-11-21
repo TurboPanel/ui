@@ -203,7 +203,7 @@ describe.each(SCENARIOS)('StepRail ($name)', (scenario) => {
     const { rerender } = render(
       <StepRail steps={steps('done', 'running', 'pending')} numbered phoneLabels="current" />
     )
-    expect(screen.getByText('Step 2 / 3')).toBeTruthy()
+    expect(screen.getByText('Step 2 of 3')).toBeTruthy()
     expect(screen.getByText('Install Command')).toBeTruthy()
     expect(screen.queryByText('Name')).toBeNull()
     rerender(<StepRail steps={steps('done', 'done')} numbered phoneLabels="current" />)

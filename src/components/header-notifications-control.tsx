@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, View, useWindowDimensions } from 'react-native'
+import { StyleSheet, View, useWindowDimensions, type ViewInstance } from 'react-native'
 import { GlassSurface } from '@/components/glass/glass-surface'
 import { HEADER_MENU_WIDTH, headerMenuGroupStyles } from '@/components/header-menu-group-styles'
 import { HeaderMenuOverlay } from '@/components/header-menu-overlay'
@@ -18,7 +18,7 @@ export function HeaderNotificationsSegment() {
   const { width } = useWindowDimensions()
   const isCompact = width < layout.desktopBreakpoint
   const [open, setOpen] = useState(false)
-  const buttonRef = useRef<View>(null)
+  const buttonRef = useRef<ViewInstance>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
   const unreadCount = useUnreadNotificationCount()
   const hasUnread = unreadCount > 0

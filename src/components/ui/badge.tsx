@@ -1,7 +1,24 @@
-import { StyleSheet, Text, View } from 'react-native'
-import { colors } from '@/lib/theme'
+import { Text, View } from 'react-native'
 
 export type BadgeTone = 'ok' | 'muted' | 'danger' | 'pending' | 'info'
+
+// Whole class names, never built from parts: the class scanner reads the source
+// text. Colours come from the token theme (`global.css`), never from hex.
+const toneBox: Record<BadgeTone, string> = {
+  ok: 'border-ok bg-ok-soft',
+  muted: 'border-border-chip bg-bg-secondary',
+  danger: 'border-error bg-transparent',
+  pending: 'border-pending bg-transparent',
+  info: 'border-blue bg-bg-active-blue',
+}
+
+const toneText: Record<BadgeTone, string> = {
+  ok: 'text-ok',
+  muted: 'text-text-muted',
+  danger: 'text-error-text',
+  pending: 'text-pending',
+  info: 'text-command',
+}
 
 /**
  * Uppercase status pill. Tone is never the only cue — the label carries
@@ -15,40 +32,10 @@ export function Badge({
   tone?: BadgeTone
 }>) {
   return (
-    <View style={[styles.badge, toneStyles[tone]]}>
-      <Text style={[styles.text, toneTextStyles[tone]]}>{label}</Text>
+    <View className={`self-start rounded-[6px] border px-[8px] py-[2px] ${toneBox[tone]}`}>
+      <Text className={`text-[11px] font-bold uppercase tracking-[0.4px] ${toneText[tone]}`}>
+        {label}
+      </Text>
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  text: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-})
-
-const toneStyles = StyleSheet.create({
-  ok: { borderColor: colors.ok, backgroundColor: colors.okSoft },
-  muted: { borderColor: colors.borderChip, backgroundColor: colors.bgSecondary },
-  danger: { borderColor: colors.error, backgroundColor: 'transparent' },
-  pending: { borderColor: colors.pending, backgroundColor: 'transparent' },
-  info: { borderColor: colors.blue, backgroundColor: colors.bgActiveBlue },
-})
-
-const toneTextStyles = StyleSheet.create({
-  ok: { color: colors.ok },
-  muted: { color: colors.textMuted },
-  danger: { color: colors.errorText },
-  pending: { color: colors.pending },
-  info: { color: colors.command },
-})

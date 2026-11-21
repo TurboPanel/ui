@@ -16,6 +16,7 @@ import {
   useProjectDeletePreview,
   useProjectPrincipals,
   useProjects,
+  useSetComposeSource,
   useSetPrincipalPassword,
   useUpdateProject,
   useUpdateProjectIcon,
@@ -37,6 +38,7 @@ const {
   deleteProjectPrincipal,
   setPrincipalPassword,
   disablePrincipalPassword,
+  setProjectComposeSource,
 } = vi.hoisted(() => ({
   fetchVisibleProjects: vi.fn(),
   fetchProject: vi.fn(),
@@ -52,6 +54,7 @@ const {
   deleteProjectPrincipal: vi.fn(),
   setPrincipalPassword: vi.fn(),
   disablePrincipalPassword: vi.fn(),
+  setProjectComposeSource: vi.fn(),
 }))
 
 vi.mock('@/lib/instance-api', () => ({
@@ -69,6 +72,7 @@ vi.mock('@/lib/instance-api', () => ({
   deleteProjectPrincipal,
   setPrincipalPassword,
   disablePrincipalPassword,
+  setProjectComposeSource,
   addPrincipalSshKey: vi.fn(),
   deletePrincipalSshKey: vi.fn(),
   fetchPrincipalSshKeys: vi.fn(),
@@ -176,6 +180,24 @@ describe('projects query hooks', () => {
       const cached = client.getQueryData(queryKeys.org(orgId).projects.detail(projectId))
       expect(cached).toEqual({
         project: { id: projectId, name: 'Renamed' },
+      })
+    })
+  })
+
+  it('useSetComposeSource switches the mode and refreshes the project', async () => {
+    setProjectComposeSource.mockResolvedValueOnce({ ok: true })
+    fetchProject.mockResolvedValueOnce({ project: { id: projectId, name: 'App' } })
+    const client = createAppQueryClient()
+
+    const { result } = renderHook(() => useSetComposeSource(orgId, projectId), {
+      wrapper: createWrapper(client),
+    })
+
+    await expect(result.current.run('seed')).resolves.toMatchObject({ ok: true })
+    expect(setProjectComposeSource).toHaveBeenCalledWith(projectId, 'seed')
+    await waitFor(() => {
+      expect(client.getQueryData(queryKeys.org(orgId).projects.detail(projectId))).toEqual({
+        project: { id: projectId, name: 'App' },
       })
     })
   })

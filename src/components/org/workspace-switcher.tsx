@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   View,
+  type TextInputInstance,
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { PlatformBadge } from '@/components/org/platform-badge'
@@ -27,10 +28,7 @@ import {
   type WorkspaceScope,
 } from '@/lib/workspace-scope'
 
-function matchesWorkspaceQuery(
-  workspace: WorkspaceRecord,
-  query: string,
-): boolean {
+function matchesWorkspaceQuery(workspace: WorkspaceRecord, query: string): boolean {
   if (!query) {
     return true
   }
@@ -41,7 +39,7 @@ function matchesWorkspaceQuery(
 function triggerLabelForScope(
   scope: WorkspaceScope,
   isLoading: boolean,
-  workspaceCount: number,
+  workspaceCount: number
 ): string {
   if (isLoading && workspaceCount === 0) {
     return 'Loading…'
@@ -111,17 +109,9 @@ function WorkspaceResultsList({
   platformWorkspace: WorkspaceRecord | null
 }>) {
   return (
-    <ScrollView
-      style={styles.list}
-      keyboardShouldPersistTaps="handled"
-      nestedScrollEnabled
-    >
+    <ScrollView style={styles.list} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
       {showAllOption ? (
-        <WorkspaceMenuItem
-          active={allActive}
-          label="All workspaces"
-          onPress={onSelectAll}
-        />
+        <WorkspaceMenuItem active={allActive} label="All workspaces" onPress={onSelectAll} />
       ) : null}
 
       {emptyWithoutQuery ? (
@@ -170,30 +160,21 @@ export function WorkspaceSwitcher({
   const { workspaces, scope, isLoading, setScopeId } = useWorkspaceScope()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const searchRef = useRef<TextInput>(null)
+  const searchRef = useRef<TextInputInstance>(null)
 
   const users = useMemo(() => userWorkspaces(workspaces), [workspaces])
-  const platformWorkspace = useMemo(
-    () => findTurbopanelWorkspace(workspaces),
-    [workspaces],
-  )
+  const platformWorkspace = useMemo(() => findTurbopanelWorkspace(workspaces), [workspaces])
 
   const normalizedQuery = query.trim().toLowerCase()
   const filteredUsers = useMemo(
-    () =>
-      users.filter((workspace) =>
-        matchesWorkspaceQuery(workspace, normalizedQuery),
-      ),
-    [users, normalizedQuery],
+    () => users.filter((workspace) => matchesWorkspaceQuery(workspace, normalizedQuery)),
+    [users, normalizedQuery]
   )
 
-  const showAllOption =
-    !normalizedQuery || 'all workspaces'.includes(normalizedQuery)
+  const showAllOption = !normalizedQuery || 'all workspaces'.includes(normalizedQuery)
   const showPlatform =
-    platformWorkspace != null &&
-    matchesWorkspaceQuery(platformWorkspace, normalizedQuery)
-  const emptyWithoutQuery =
-    users.length === 0 && !platformWorkspace && !isLoading
+    platformWorkspace != null && matchesWorkspaceQuery(platformWorkspace, normalizedQuery)
+  const emptyWithoutQuery = users.length === 0 && !platformWorkspace && !isLoading
   const hasNoMatches =
     !showAllOption &&
     filteredUsers.length === 0 &&
@@ -249,11 +230,7 @@ export function WorkspaceSwitcher({
   return (
     <View style={[styles.root, open && styles.rootOpen]}>
       <Pressable
-        style={({ pressed }) => [
-          styles.trigger,
-          pressed && styles.triggerPressed,
-          webPointer,
-        ]}
+        style={({ pressed }) => [styles.trigger, pressed && styles.triggerPressed, webPointer]}
         onPress={toggleOpen}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -265,9 +242,7 @@ export function WorkspaceSwitcher({
             <Text style={styles.triggerLabel} numberOfLines={1}>
               {triggerLabel}
             </Text>
-            {scope.workspace && isTurbopanelWorkspace(scope.workspace) ? (
-              <PlatformBadge />
-            ) : null}
+            {scope.workspace && isTurbopanelWorkspace(scope.workspace) ? <PlatformBadge /> : null}
           </View>
         </View>
         <HeaderChevron color={colors.textMuted} open={open} />

@@ -30,6 +30,7 @@ import { useOrganizationRecord } from '@/lib/queries/auth'
 import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { failedRunMessage } from '@/lib/user-error'
+import { reportFailedSave } from '@/lib/v4/compose-source'
 import {
   buildProjectGeneralPatch,
   projectDescriptionProblem,
@@ -154,7 +155,9 @@ export function ProjectSettingsScreen() {
     setBusy(kind)
     const result = await update.run(body)
     setBusy(null)
-    if (!result.ok && update.actionError) setError(update.actionError)
+    if (!result.ok) {
+      reportFailedSave(setError, result, 'Could not save the project')
+    }
     return result.ok
   }
 

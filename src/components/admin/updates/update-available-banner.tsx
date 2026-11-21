@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import { readConsoleBuild } from '@/components/admin/updates/console-build'
 import { adminAreaHref } from '@/lib/admin-navigation'
+import { getInstanceRevision, getInstanceVersion } from '@/lib/instance-version'
 import { Button, InlineNotice, TextLink } from '@/components/ui'
 import { isAdminSession, isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { useInstallStatusQuery } from '@/lib/queries/auth'
@@ -13,7 +14,9 @@ import {
   isDevelopmentInstall,
 } from '@/lib/development-updates'
 import {
+  failedStepTitleOf,
   readDismissedUpdateBanner,
+  runToShow,
   showsUpdateBanner,
   updateBanner,
   updateOffered,
@@ -59,6 +62,11 @@ export function useUpdateAvailable(): Readonly<{
     enabled: development && isSuperadminSession(session),
   })
   const [dismissedKey, setDismissedKey] = useState(() => readDismissedUpdateBanner(webStorage()))
+  const shown = runToShow(active.data, {
+    version: getInstanceVersion(),
+    commit: getInstanceRevision(),
+  })
+  const failedStep = shown.finished ? failedStepTitleOf(shown.run) : null
   const offer = { updates: updates.data, activeRun: Boolean(active.data?.run), consoleBuild }
   let banner: UpdateBanner | null = null
   let available = false
@@ -66,7 +74,7 @@ export function useUpdateAvailable(): Readonly<{
     banner = developmentBanner({ development: developmentQuery.data, dismissedKey })
     available = developmentChangesPending(developmentQuery.data)
   } else if (eligible) {
-    banner = updateBanner({ ...offer, dismissedKey })
+    banner = updateBanner({ ...offer, dismissedKey, failedStep })
     available = updateOffered(offer)
   }
   return {

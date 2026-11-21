@@ -984,16 +984,23 @@ export function applyComposePlacement(
  * Merged authoring compose plus the live environment pin for deploy preview.
  * Stale embedded placement is stripped first so the pin matches the env row.
  */
+export function composePreviewMergedDocument(
+  projectCompose: unknown,
+  environmentCompose: unknown,
+  placementServerId?: string | null
+): ComposeDocument {
+  const document = stripComposePlacement(mergeComposeOverlay(projectCompose, environmentCompose))
+  return placementServerId ? applyComposePlacement(document, placementServerId) : document
+}
+
 export function composePreviewMergedYaml(
   projectCompose: unknown,
   environmentCompose: unknown,
   placementServerId?: string | null
 ): string {
-  let document = stripComposePlacement(mergeComposeOverlay(projectCompose, environmentCompose))
-  if (placementServerId) {
-    document = applyComposePlacement(document, placementServerId)
-  }
-  return composeDocumentToYaml(document)
+  return composeDocumentToYaml(
+    composePreviewMergedDocument(projectCompose, environmentCompose, placementServerId)
+  )
 }
 
 export function readComposeEditorView(document: ComposeDocument): ComposeEditorView | null {

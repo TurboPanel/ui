@@ -11,6 +11,21 @@ import {
   lifecycleFormFrom,
   type PhpLifecycleForm,
 } from '@/lib/php-site-lifecycle'
+import {
+  BUILD_CORES_HINT,
+  BUILD_CORES_LABEL,
+  BUILD_MEMORY_HINT,
+  BUILD_MEMORY_LABEL,
+  BUILD_SWAP_HINT,
+  BUILD_SWAP_LABEL,
+  BUILD_SWAP_OPTIONS,
+  type BuildSwapChoice,
+  buildSwapChoice,
+  buildSwapValue,
+  formatBuildCores,
+  formatBuildMemory,
+  parseBuildLimitDrafts,
+} from '@/lib/build-limits'
 import { mergeEditedOptions } from '@/lib/service-options-merge'
 import { useUpdateService } from '@/lib/queries/services'
 import { chrome, colors, spacing } from '@/lib/theme'
@@ -130,6 +145,9 @@ export function ServiceSettingsPanel({
   const updateMutation = useUpdateService(orgId, service?.id ?? '')
   const parsed = parseServiceOptions(service?.options)
   const [disableCache, setDisableCache] = useState(parsed.build?.disableCache === true)
+  const [buildCores, setBuildCores] = useState(formatBuildCores(parsed.build?.cores))
+  const [buildMemory, setBuildMemory] = useState(formatBuildMemory(parsed.build?.memoryBytes))
+  const [buildSwap, setBuildSwap] = useState<BuildSwapChoice>(buildSwapChoice(parsed.build?.swap))
   const [stopGrace, setStopGrace] = useState(
     parsed.operations?.stopGracePeriodSeconds?.toString() ?? ''
   )
@@ -161,6 +179,9 @@ export function ServiceSettingsPanel({
   useEffect(() => {
     const next = parseServiceOptions(service?.options)
     setDisableCache(next.build?.disableCache === true)
+    setBuildCores(formatBuildCores(next.build?.cores))
+    setBuildMemory(formatBuildMemory(next.build?.memoryBytes))
+    setBuildSwap(buildSwapChoice(next.build?.swap))
     setStopGrace(next.operations?.stopGracePeriodSeconds?.toString() ?? '')
     setMaxRestart(next.operations?.maxRestartAttempts?.toString() ?? '')
     setPreDeploy(next.preDeployCommand ?? '')
@@ -194,7 +215,15 @@ export function ServiceSettingsPanel({
     }
     if (preDeploy.trim()) options.preDeployCommand = preDeploy.trim()
     if (postDeploy.trim()) options.postDeployCommand = postDeploy.trim()
-    if (disableCache) options.build = { disableCache: true }
+    const buildLimits = parseBuildLimitDrafts(buildCores, buildMemory)
+    if (!buildLimits.ok) return { error: buildLimits.error }
+    const build: NonNullable<ServiceOptions['build']> = {}
+    if (disableCache) build.disableCache = true
+    if (buildLimits.values.cores !== null) build.cores = buildLimits.values.cores
+    if (buildLimits.values.memoryBytes !== null) build.memoryBytes = buildLimits.values.memoryBytes
+    const swapValue = buildSwapValue(buildSwap)
+    if (swapValue !== null) build.swap = swapValue
+    if (Object.keys(build).length > 0) options.build = build
 
     const operations = buildOperationsOptions(stopGrace, maxRestart)
     if (operations) options.operations = operations
@@ -247,6 +276,49 @@ export function ServiceSettingsPanel({
           disabled={!canManage || saving}
           onToggle={() => setDisableCache((current) => !current)}
         />
+
+        <View style={styles.fieldRow}>
+          <View style={styles.fieldHalf}>
+            <Text style={styles.label}>{BUILD_CORES_LABEL}</Text>
+            <TextInput
+              style={fieldInputStyle()}
+              value={buildCores}
+              onChangeText={setBuildCores}
+              placeholder="Half the cores"
+              placeholderTextColor={colors.textDim}
+              keyboardType="decimal-pad"
+              editable={canManage && !saving}
+              accessibilityLabel={`Service ${BUILD_CORES_LABEL}`}
+            />
+            <Text style={panelStyles.muted}>{BUILD_CORES_HINT}</Text>
+          </View>
+          <View style={styles.fieldHalf}>
+            <Text style={styles.label}>{BUILD_MEMORY_LABEL} (GB)</Text>
+            <TextInput
+              style={fieldInputStyle()}
+              value={buildMemory}
+              onChangeText={setBuildMemory}
+              placeholder="Memory minus 1 GB"
+              placeholderTextColor={colors.textDim}
+              keyboardType="decimal-pad"
+              editable={canManage && !saving}
+              accessibilityLabel={`Service ${BUILD_MEMORY_LABEL}`}
+            />
+            <Text style={panelStyles.muted}>{BUILD_MEMORY_HINT}</Text>
+          </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>{BUILD_SWAP_LABEL}</Text>
+          <SegmentedControl
+            accessibilityLabel={`Service ${BUILD_SWAP_LABEL}`}
+            options={BUILD_SWAP_OPTIONS}
+            value={buildSwap}
+            disabled={!canManage || saving}
+            onChange={setBuildSwap}
+          />
+          <Text style={panelStyles.muted}>{BUILD_SWAP_HINT}</Text>
+        </View>
 
         <View style={styles.fieldRow}>
           <View style={styles.fieldHalf}>

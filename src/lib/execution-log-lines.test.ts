@@ -349,6 +349,28 @@ describe('dockerTimestampTranscriptLines', () => {
     ])
   })
 
+  it('keeps one row per entry with its timestamp when entries end in CRLF or a bare CR', () => {
+    const first = '2026-11-21T10:00:00.123456789Z'
+    const second = '2026-11-21T10:00:01.123456789Z'
+    const third = '2026-11-21T10:00:02.123456789Z'
+    const expected = [
+      { seq: 1, timestamp: first, message: 'listening on 3000' },
+      { seq: 2, timestamp: second, message: 'GET /health 200' },
+      { seq: 3, timestamp: third, message: 'my_app_ready' },
+    ]
+    const entries = [
+      `${first} listening on 3000`,
+      `${second} GET /health 200`,
+      `${third} my_app_ready`,
+    ]
+    for (const separator of ['\n', '\r\n', '\r']) {
+      const rows = dockerTimestampTranscriptLines(entries.join(separator))
+      expect(rows.map(({ seq, timestamp, message }) => ({ seq, timestamp, message }))).toEqual(
+        expected
+      )
+    }
+  })
+
   it('accepts an RFC3339 offset instead of Z', () => {
     const rows = dockerTimestampTranscriptLines('2026-01-01T00:00:01.5+00:00 offset line\n')
     expect(rows[0]).toMatchObject({
@@ -423,6 +445,7 @@ describe('docker progress lines', () => {
     ' 6d2dcf61e6fc Download complete',
     ' Container web-1 Restarting',
     ' Container web-1 Recreating',
+    ' Container 01a1d5af-52e0-7e03-8717-e7cf5ec7fdd9-1 Recreate ',
     ' Container web-1 Recreated',
     ' 6d2dcf61e6fc Uploading 1.2MB',
     ' Service web Building',
@@ -476,6 +499,33 @@ describe('docker progress lines', () => {
     expect(isErrorLine(progress)).toBe(false)
     expect(isErrorLine({ ...progress, seq: 2, message: 'boom' })).toBe(true)
     expect(isErrorLine({ ...progress, seq: 3, stream: 'stdout' })).toBe(false)
+  })
+
+  it('flags no line of a real Compose up transcript, but still flags a failure', () => {
+    const base: LogTranscriptLine = {
+      seq: 1,
+      timestamp: null,
+      stream: 'stderr',
+      phase: 'compose-up',
+      message: '',
+    }
+    const id = '01a1d5af-52e0-7e03-8717-e7cf5ec7fdd9'
+    const transcript = [
+      ` Network ${id}_default Creating `,
+      ` Network ${id}_default Created `,
+      ` Container ${id}-1 Recreate `,
+      ` Container ${id}-1 Recreated `,
+      ` Container ${id}-1 Starting `,
+      ` Container ${id}-1 Started `,
+      ` Container ${id}-1 Running `,
+    ]
+    for (const message of transcript) {
+      expect(isErrorLine({ ...base, message })).toBe(false)
+    }
+    expect(isErrorLine({ ...base, message: ` Container ${id}-1 Error ` })).toBe(true)
+    expect(
+      isErrorLine({ ...base, message: 'Error response from daemon: Conflict. name in use' })
+    ).toBe(true)
   })
 
   it('does not flag git clone and Next.js build stderr as errors', () => {

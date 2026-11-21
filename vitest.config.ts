@@ -34,9 +34,8 @@ export default defineConfig({
       exclude: [
         'src/**/*.test.ts',
         'src/lib/**/*.d.ts',
-        // Theme / Tamagui / OS artwork — token tables, no unit surface
+        // Theme / OS artwork — token tables, no unit surface
         'src/lib/theme.ts',
-        'src/lib/tamagui.config.ts',
         'src/lib/os-logos.ts',
         // Barrel re-exports
         'src/lib/compose/index.ts',

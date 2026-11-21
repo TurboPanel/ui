@@ -35,7 +35,6 @@ const data = {
       message: 'Another environment uses this volume too.',
     },
   ],
-  outdatedServers: [],
 }
 
 function renderChoice(overrides: Partial<Parameters<typeof DestroyDataChoice>[0]> = {}) {
@@ -73,15 +72,8 @@ describe('DestroyDataChoice', () => {
     expect(props.onTypedName).toHaveBeenCalledWith('staging')
   })
 
-  it('names the servers that need a daemon update', () => {
-    renderChoice({ data: { ...data, outdatedServers: [{ serverId: 's', name: 'web-1' }] } })
-    expect(
-      screen.getByText('Update the daemon on web-1 before deleting data volumes.')
-    ).toBeTruthy()
-  })
-
   it('says when there is nothing to delete', () => {
-    renderChoice({ data: { volumes: [], kept: [], outdatedServers: [] } })
+    renderChoice({ data: { volumes: [], kept: [] } })
     expect(screen.getByText('This environment has no data volumes to delete.')).toBeTruthy()
   })
 })

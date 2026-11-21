@@ -24,6 +24,7 @@ import {
 import {
   hasLiveBillingSubscription,
   type BillingTier,
+  type BillingPendingChange,
   type BillingTierSummary,
   type LicenseAvailability,
 } from '@/lib/instance-api'
@@ -60,7 +61,11 @@ function orgCapOf(
 }
 
 /** The dialog row for a tier: the bought row when there is one, else the bare catalogue tier. */
-function buyRequest(tier: BillingTier, summary: BillingTierSummary | null): LicenseDialogRequest {
+function buyRequest(
+  tier: BillingTier,
+  summary: BillingTierSummary | null,
+  pendingChanges?: readonly BillingPendingChange[]
+): LicenseDialogRequest {
   return {
     mode: 'add',
     tier: {
@@ -68,7 +73,7 @@ function buyRequest(tier: BillingTier, summary: BillingTierSummary | null): Lice
       label: tier.label,
       ending: summary?.ending ?? 0,
       endsAt: summary?.endsAt ?? null,
-      removable: summary ? removableAt(summary) : 0,
+      removable: summary ? removableAt(summary, pendingChanges) : 0,
       purchased: summary?.purchased ?? 0,
       priceCents: tier.priceCents,
       currency: tier.currency,
@@ -278,7 +283,7 @@ export function AddServerTierSection({
             label={`Buy ${actingTier.label} licenses`}
             size="sm"
             variant="primary"
-            onPress={() => setBuying(buyRequest(actingTier, summary))}
+            onPress={() => setBuying(buyRequest(actingTier, summary, subscription?.pendingChanges))}
           />
         </ButtonRow>
       )

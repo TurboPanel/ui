@@ -62,9 +62,6 @@ vi.mock('@/components/ui/fingerprint-line', () => ({
     </p>
   ),
 }))
-vi.mock('@/components/admin/access/sealed-secrets-panel', () => ({
-  SealedSecretsPanel: () => <section>Sealed Secrets</section>,
-}))
 vi.mock('@/components/ui/panel-styles', () => ({
   panelStyles: { pageTitle: {}, pageCopy: {}, muted: {}, error: {} },
 }))
@@ -125,10 +122,16 @@ describe('PanelIdentitySection', () => {
     setup(
       identity({
         servers: [
-          { id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: 'install', pinPasskeys: '' },
+          {
+            id: 's1',
+            name: 'server-c',
+            organizationId: 'o1',
+            pinnedBy: 'install',
+            pinPasskeys: '',
+          },
           {
             id: 's2',
-            name: 'omicron',
+            name: 'server-f',
             organizationId: 'o1',
             pinnedBy: 'install',
             pinPasskeys: 'H'.repeat(43),
@@ -138,7 +141,7 @@ describe('PanelIdentitySection', () => {
         ],
       })
     )
-    expect(screen.getByText(/Not Rotatable Yet: kappa, sigma$/)).toBeTruthy()
+    expect(screen.getByText(/Not Rotatable Yet: server-c, sigma$/)).toBeTruthy()
   })
 
   it('warns about servers whose signed pin names another key, and only those', () => {
@@ -147,14 +150,14 @@ describe('PanelIdentitySection', () => {
         servers: [
           {
             id: 's1',
-            name: 'kappa',
+            name: 'server-c',
             organizationId: 'o1',
             pinnedBy: 'upgrade',
             pinReport: { fingerprint: 'X'.repeat(43), keyset: 1, reportedAt: null, matches: false },
           },
           {
             id: 's2',
-            name: 'omicron',
+            name: 'server-f',
             organizationId: 'o1',
             pinnedBy: 'install',
             pinReport: { fingerprint: CURRENT, keyset: 3, reportedAt: null, matches: true },
@@ -164,28 +167,18 @@ describe('PanelIdentitySection', () => {
       })
     )
     const notice = screen.getByText(/Servers Pinned to Another Key/)
-    expect(notice.textContent).toContain(`kappa (${'X'.repeat(43)})`)
-    expect(notice.textContent).not.toContain('omicron')
+    expect(notice.textContent).toContain(`server-c (${'X'.repeat(43)})`)
+    expect(notice.textContent).not.toContain('server-f')
     expect(notice.textContent).not.toContain('lambda')
   })
 
   it('shows no warning when every report matches or none has arrived', () => {
     setup(
       identity({
-        servers: [{ id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: 'install' }],
+        servers: [{ id: 's1', name: 'server-c', organizationId: 'o1', pinnedBy: 'install' }],
       })
     )
     expect(screen.queryByText(/Servers Pinned to Another Key/)).toBeNull()
-  })
-
-  it('shows the sealed-secrets list to a superadmin on both runtimes', () => {
-    setup(identity(), 'superadmin', 'workers')
-    expect(screen.getByText('Sealed Secrets')).toBeTruthy()
-  })
-
-  it('keeps the sealed-secrets list from another admin', () => {
-    setup(identity(), 'admin')
-    expect(screen.queryByText('Sealed Secrets')).toBeNull()
   })
 
   it('explains the off state when no identity key exists', () => {

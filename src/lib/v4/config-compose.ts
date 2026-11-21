@@ -203,7 +203,6 @@ function stripMarkers(body: Mapping, project: Markers): Mapping {
     const same =
       source.sourceId === project.sourceId &&
       (source.buildKind === undefined ||
-        source.buildKind === project.buildKind ||
         (isImageBuildKind(source.buildKind) && isImageBuildKind(project.buildKind)))
     if (onlyMarkers && same) delete next.source
   }

@@ -18,6 +18,8 @@ export type StepRailItem = Readonly<{
   state: StepRailState
   /** What a screen reader hears for the step; defaults to `stepRailSpoken`. */
   accessibilityLabel?: string
+  /** How long the step ran or has been running (`01:12`), drawn under its label; absent when unknown. */
+  time?: string | null
   /** The number drawn in a numbered node; null draws none. Defaults to the position. */
   number?: number | null
 }>
@@ -52,13 +54,18 @@ export function stepRailLabel(step: Pick<StepRailItem, 'label' | 'state'>): stri
   return step.label
 }
 
+/** "Step 3 of 6": the one wording for a step's place in a flow, shared by every counter. */
+export function stepCountWords(position: number, total: number): string {
+  return `Step ${position} of ${total}`
+}
+
 /** "Step 3 of 6, Enroll, in progress". */
 export function stepRailSpoken(
   step: Pick<StepRailItem, 'label' | 'state'>,
   index: number,
   total: number
 ): string {
-  return `Step ${index + 1} of ${total}, ${step.label}, ${stepRailInfo(step.state).word}`
+  return `${stepCountWords(index + 1, total)}, ${step.label}, ${stepRailInfo(step.state).word}`
 }
 
 /** True once every step has ended well: the rail's finished state. */

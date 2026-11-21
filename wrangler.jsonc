@@ -20,6 +20,8 @@
   "env": {
     "testing": {
       "name": "testing-ui",
+      // Testing and staging run on the development Cloudflare account; live stays on its own.
+      "account_id": "1ce26b585b66602feb84a68aeda5062b",
       "route": {
         "pattern": "testing.turbopanel.dev",
         "custom_domain": true
@@ -30,6 +32,8 @@
     // Worker's routes (turbopanel `env.staging`) take /api/*, /ws/* and /webhook/*.
     "staging": {
       "name": "staging-ui",
+      // Testing and staging run on the development Cloudflare account; live stays on its own.
+      "account_id": "1ce26b585b66602feb84a68aeda5062b",
       "route": {
         "pattern": "staging.turbopanel.dev",
         "custom_domain": true

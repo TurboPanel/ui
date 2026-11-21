@@ -1,3 +1,4 @@
+import '../../global.css'
 import Constants from 'expo-constants'
 import { Redirect, Stack, useLocalSearchParams, useSegments } from 'expo-router'
 import { useFonts } from 'expo-font'
@@ -5,12 +6,12 @@ import { useEffect } from 'react'
 import { ActivityIndicator, AppState, Platform, StyleSheet, View } from 'react-native'
 import type { AppStateStatus } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { focusManager } from '@tanstack/react-query'
 import { AppProviders } from '@/components/app-providers'
-import { SafeAreaRoot } from '@/components/safe-area-root'
-import { authSpinnerColor } from '@/lib/auth-accent'
+import { authSpinnerColor, useSessionHint } from '@/lib/auth-accent'
 import { useAuth } from '@/lib/auth-context'
-import { resolveAuthGuardHref } from '@/lib/auth-guard'
+import { isPrerenderedAuthRoute, resolveAuthGuardHref } from '@/lib/auth-guard'
 import { isRemoteCookieClient, usesSameOriginApi } from '@/lib/control-plane'
 import { setClientVersion } from '@/lib/instance-version'
 import { safeAuthReturnPath } from '@/lib/invitation-return'
@@ -31,10 +32,6 @@ function onAppStateChange(status: AppStateStatus) {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    Inter: require('@tamagui/font-inter/otf/Inter-Medium.otf'),
-    InterBold: require('@tamagui/font-inter/otf/Inter-Bold.otf'),
-    InterMediumItalic: require('@tamagui/font-inter/otf/Inter-MediumItalic.otf'),
-    InterBoldItalic: require('@tamagui/font-inter/otf/Inter-BoldItalic.otf'),
     // v4 type. The keys are the family names in `src/lib/v4/typography.ts`;
     // the fonts-registered test keeps the two lists equal. Each weight is its
     // own file so a phone never has to synthesise one.
@@ -60,11 +57,11 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaRoot>
+      <SafeAreaProvider>
         <AppProviders>
           <AuthGuard />
         </AppProviders>
-      </SafeAreaRoot>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   )
 }
@@ -80,8 +77,15 @@ function AuthGuard() {
   const params = useLocalSearchParams<{ redirectTo?: string | string[] }>()
   const topSegment = (segments as readonly string[])[0]
   const subSegment = (segments as readonly string[])[1]
+  const hadSession = useSessionHint()
 
-  if (isLoading) {
+  // The sign-in family paints at once (the static export pre-renders the real
+  // form) and only the redirect waits for the session. A browser that had a
+  // session keeps the spinner instead, so a signed-in person never sees the form flash.
+  const holdRedirectOnly =
+    isLoading && Platform.OS === 'web' && isPrerenderedAuthRoute(topSegment) && !hadSession
+
+  if (isLoading && !holdRedirectOnly) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color={authSpinnerColor()} />
@@ -89,17 +93,19 @@ function AuthGuard() {
     )
   }
 
-  const href = resolveAuthGuardHref({
-    session,
-    needsInstall,
-    topSegment,
-    subSegment,
-    developerDevBypass: __DEV__ && topSegment === 'developer',
-    needsControlPlane,
-    blockNativeInstall: isRemoteCookieClient() && needsInstall,
-    allowConnect: !usesSameOriginApi(),
-    returnTo: safeAuthReturnPath(firstSearchParam(params.redirectTo)),
-  })
+  const href = holdRedirectOnly
+    ? null
+    : resolveAuthGuardHref({
+        session,
+        needsInstall,
+        topSegment,
+        subSegment,
+        developerDevBypass: __DEV__ && topSegment === 'developer',
+        needsControlPlane,
+        blockNativeInstall: isRemoteCookieClient() && needsInstall,
+        allowConnect: !usesSameOriginApi(),
+        returnTo: safeAuthReturnPath(firstSearchParam(params.redirectTo)),
+      })
 
   // Keep Stack mounted while redirecting. Swapping Stack out for <Redirect />
   // leaves useSegments() empty, so signed-in users keep resolving to /welcome

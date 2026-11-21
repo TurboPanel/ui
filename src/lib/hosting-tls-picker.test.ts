@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TlsSource, TlsStatus } from './instance-api'
 import {
   coveringCertificates,
+  editorForSave,
   type PickerCertificate,
   pinnedCertificateGap,
   stalePinReset,
@@ -86,14 +87,13 @@ describe('pinnedCertificateGap', () => {
 describe('stalePinReset', () => {
   const editor = (tlsId: string | null, hostnames: string) => ({ tlsId, hostnames, www: null })
 
-  it('lets a Let’s Encrypt pin go and asks for a new certificate when the name changed', () => {
+  it('lets a Let’s Encrypt pin go when the name changed', () => {
     expect(stalePinReset(rows, editor('le', 'shop.turbopanel.io'), 'turbopanel.io')).toEqual({
       tlsId: null,
-      getLetsEncrypt: true,
     })
   })
 
-  it('lets an uploaded pin go without asking for a certificate', () => {
+  it('lets an uploaded pin go', () => {
     expect(stalePinReset(rows, editor('up-bare', 'shop.turbopanel.io'), 'turbopanel.io')).toEqual({
       tlsId: null,
     })
@@ -103,5 +103,17 @@ describe('stalePinReset', () => {
     expect(stalePinReset(rows, editor('wild', 'shop.turbopanel.io'), 'turbopanel.io')).toBeNull()
     expect(stalePinReset(rows, editor('le', ' TurboPanel.io '), 'turbopanel.io')).toBeNull()
     expect(stalePinReset(rows, editor(null, 'shop.turbopanel.io'), 'turbopanel.io')).toBeNull()
+  })
+})
+
+describe('editorForSave', () => {
+  const typed = { tlsId: 'le', hostnames: 'turbopanel.io, shop.turbopanel.io', www: null }
+
+  it('lets go of a stale pin on a site that is not saved yet', () => {
+    expect(editorForSave(rows, typed, 'turbopanel.io', false).tlsId).toBeNull()
+  })
+
+  it('does not reset the certificate of a saved site when a name is added', () => {
+    expect(editorForSave(rows, typed, 'turbopanel.io', true)).toBe(typed)
   })
 })

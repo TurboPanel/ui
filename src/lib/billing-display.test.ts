@@ -258,19 +258,6 @@ describe('license summary lines', () => {
     ).toBe('4 of 8 licenses in use · 2 held by unused keys · 2 more servers can be added')
   })
 
-  it('reads the deprecated held count from an older control plane', () => {
-    expect(
-      licenseSummaryLine({
-        purchased: 2,
-        ending: 0,
-        endsAt: null,
-        held: 2,
-        bound: 2,
-        available: 0,
-      } as unknown as Parameters<typeof licenseSummaryLine>[0])
-    ).toBe('2 of 2 licenses in use · no room for another server')
-  })
-
   it('summarises one tier, naming ending licenses with their date', () => {
     expect(tierLicensesLine(tierRow())).toBe('Licenses at S1: 6 purchased, 3 in use')
     expect(tierLicensesLine(tierRow({ ending: 1, endsAt: OCT_26 }))).toBe(
@@ -296,10 +283,27 @@ describe('removableAt / canReleaseAt', () => {
     expect(removableAt(tierRow({ purchased: 6, ending: 1, inUse: 3 }))).toBe(2)
     expect(removableAt(tierRow({ purchased: 2, ending: 0, inUse: 5 }))).toBe(0)
   })
-  it('counts a pending downgrade the older control plane reports as releasing', () => {
-    expect(removableAt(tierRow({ purchased: 6, ending: 1, releasing: 2, inUse: 3 }))).toBe(1)
-    expect(canReleaseAt(tierRow({ purchased: 2, ending: 1, releasing: 2 }))).toBe(false)
+  it('reads whether a license can still move away', () => {
+    expect(canReleaseAt(tierRow({ purchased: 2, ending: 2 }))).toBe(false)
     expect(canReleaseAt(tierRow({ purchased: 2, ending: 1 }))).toBe(true)
+  })
+  it('counts a parked downgrade from the tier like an ending license', () => {
+    const downgrade = (fromTierId: string): BillingPendingChange => ({
+      id: `c-${fromTierId}`,
+      kind: 'downgrade',
+      fromTierId,
+      toTierId: 't0',
+      createdAt: OCT_26,
+      landsAt: OCT_26,
+    })
+    const tier = tierRow({ purchased: 6, ending: 1, inUse: 3 })
+    expect(removableAt(tier, [downgrade('t1')])).toBe(1)
+    expect(removableAt(tier, [downgrade('other')])).toBe(2)
+    expect(removableAt(tier, undefined)).toBe(2)
+    const full = tierRow({ purchased: 2, ending: 1 })
+    expect(canReleaseAt(full, [downgrade('t1')])).toBe(false)
+    expect(canReleaseAt(full, [downgrade('other')])).toBe(true)
+    expect(canReleaseAt(full)).toBe(true)
   })
 })
 

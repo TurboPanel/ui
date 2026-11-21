@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
+import { CONTROL_PLANE_UNREACHABLE_COPY } from '@/lib/user-error'
 import {
   type ConfiguredHostingState,
   certificateChoiceText,
@@ -15,6 +16,7 @@ import {
   DEPLOY_RUNNING_MESSAGE,
   HOSTING_ACTION_FAILED_MESSAGE,
   hostingActionErrorMessage,
+  hostingSaveErrorMessage,
   HOSTNAME_IN_USE_MESSAGE,
   COMPOSE_HOSTNAME_HINT,
   COMPOSE_PROXY_NOTE,
@@ -22,7 +24,7 @@ import {
   LETS_ENCRYPT_CHOICE_TEXT,
   manageHereInsteadPrompt,
   missingCertificateMessage,
-  panelCertificateHint,
+  NEW_HOSTING_CERTIFICATE_HINT,
   PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
   removeHostnamePrompt,
@@ -83,8 +85,7 @@ describe('plain hosting words', () => {
       ...RAW_REFUSALS.map((refusal) => hostingActionErrorMessage(refusal)),
       pendingRemovalNote(true),
       pendingRemovalNote(false),
-      panelCertificateHint(true),
-      panelCertificateHint(false),
+      NEW_HOSTING_CERTIFICATE_HINT,
       PENDING_REMOVAL_CERTIFICATE_HINT,
       ...STATES.flatMap((state) => [
         removeHostnamePrompt('example.test', state),
@@ -101,12 +102,6 @@ describe('plain hosting words', () => {
   it('says what the next deploy does with a hostname removed from the file', () => {
     expect(pendingRemovalNote(false)).toMatch(/^This hostname will be removed on the next deploy\./)
     expect(pendingRemovalNote(true)).toMatch(/managed on this screen again/)
-  })
-
-  it('points at the Let’s Encrypt box only while it is shown', () => {
-    expect(panelCertificateHint(true)).toMatch(/tick the box below/)
-    expect(panelCertificateHint(false)).not.toMatch(/tick the box/)
-    expect(panelCertificateHint(false)).toMatch(/enter a hostname and keep Self-signed picked/)
   })
 
   it('names a library certificate by its name, then its first name on it, then its id', () => {
@@ -210,6 +205,24 @@ describe('plain hosting words', () => {
     expect(manageHereInsteadPrompt('example.test', 'deployed')).toContain('not carried over')
     expect(manageHereInsteadPrompt('example.test', 'not-deployed')).toContain('certificate choice')
     expect(manageHereInsteadPrompt('example.test', 'held-by-panel')).toContain('Finish moving')
+  })
+
+  it('words a hostname save refused with 409 hostname_in_use, and keeps the fallback otherwise', () => {
+    expect(hostingSaveErrorMessage({ error: RAW_REFUSALS[1] }, 'Could not save.')).toBe(
+      HOSTNAME_IN_USE_MESSAGE
+    )
+    expect(
+      hostingSaveErrorMessage({ error: null, cause: undefined }, 'Could not save this hostname.')
+    ).toBe('Could not save this hostname.')
+  })
+
+  it('keeps the unreachable wording for a network failure that also fills error', () => {
+    expect(
+      hostingSaveErrorMessage(
+        { error: 'Failed to fetch', cause: new TypeError('Failed to fetch') },
+        'Could not save this hostname.'
+      )
+    ).toBe(CONTROL_PLANE_UNREACHABLE_COPY)
   })
 
   it('words a refused hosting action without paths or codes', () => {

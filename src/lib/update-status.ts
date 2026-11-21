@@ -13,6 +13,7 @@ import {
 } from '@/lib/instance-updates'
 import { isDevelopmentInstall } from '@/lib/development-updates'
 import { joinWithAnd } from '@/lib/upgrade-display'
+import { UPDATE_RETRY_LATER_COPY } from '@/lib/update-automation'
 import { plainStepFailureMessage } from '@/lib/user-error'
 
 /**
@@ -283,6 +284,16 @@ export function runFailure(
   return { ...explainUpgradeFailure(step, run.channel), stepTitle: failedStepTitle(step) }
 }
 
+/**
+ * Title of the step that failed in this run ("Daemon step"), or null. Only a
+ * failed, rolled back or needs-attention step counts: a cancelled run, or a
+ * failed run with no failed step, is not backed off and retries at the next check.
+ */
+export function failedStepTitleOf(run: RunWithSteps | null): string | null {
+  if (!run?.steps.some((item) => FAILED_STEP_STATUSES.has(item.status))) return null
+  return runFailure(run)?.stepTitle ?? null
+}
+
 const WAITING_STATUSES = new Set([
   'pending',
   'waiting',
@@ -309,6 +320,15 @@ export function stallHint(
   if (quietMs < UPGRADE_STALL_HINT_MS) return null
   const minutes = Math.floor(quietMs / 60_000)
   return `Still waiting — no progress reported for ${minutes} minutes. The control plane retries on its own; to see what the server is doing, check its daemon log (${DAEMON_LOGS_COMMAND}).`
+}
+
+/** The "still waiting" line for the first step of a run that has gone quiet, or null. */
+export function stalledStepHint(run: RunWithSteps | null, nowMs: number): string | null {
+  for (const step of run?.steps ?? []) {
+    const hint = stallHint(step, nowMs)
+    if (hint !== null) return hint
+  }
+  return null
 }
 
 /** Rejects with {@link UpgradeStartTimeoutError} when `work` outlives `ms`. */
@@ -345,7 +365,12 @@ export type UpdateBanner = Readonly<{
 
 type UpdateOfferInput = Readonly<{
   updates:
-    Pick<InstanceUpdates, 'units' | 'runtime' | 'updatesManaged' | 'development'> | null | undefined
+    | Pick<
+        InstanceUpdates,
+        'units' | 'runtime' | 'updatesManaged' | 'development' | 'updatesPaused'
+      >
+    | null
+    | undefined
   activeRun: boolean
   /** This app's build, so a UI-only update counts as an offer. */
   consoleBuild?: ConsoleBuild | null
@@ -392,15 +417,33 @@ export function updateBanner(
       dismissedKey: string | null
       /** This app's build, so the web app is listed when the channel serves a newer one. */
       consoleBuild?: ConsoleBuild | null
+      /** Title of the step that failed in the last update (the update did not finish), or null. */
+      failedStep?: string | null
     }>
 ): UpdateBanner | null {
   if (!input.updates || !updateOffered(input)) return null
   const pieces = updatePieces(input.updates.units, input.consoleBuild ?? null)
   if (pieces.length === 0) return null
-  const key = pieces.map(pieceKey).join(';')
+  const paused = input.updates.updatesPaused === true
+  const failedStep = paused ? null : (input.failedStep ?? null)
+  const key = pieces.map(pieceKey).join(';') + (failedStep ? '|failed' : '')
   if (key === input.dismissedKey) return null
   const labels = pieces.map(updatePieceLabel).join(', ')
   const names = joinWithAnd(pieces.map((piece) => BODY_NAMES[piece.name]))
+  if (paused) {
+    return {
+      key,
+      title: `TurboPanel update available: ${labels}`,
+      body: `This updates ${names}. Updates are paused, so it waits until updates are resumed in Admin > Updates.`,
+    }
+  }
+  if (failedStep) {
+    return {
+      key,
+      title: `TurboPanel update failed: ${labels}`,
+      body: `The last update failed (${failedStep}). ${UPDATE_RETRY_LATER_COPY} Open Admin > Updates for the reason or to pause updates.`,
+    }
+  }
   return {
     key,
     title: `TurboPanel update available: ${labels}`,

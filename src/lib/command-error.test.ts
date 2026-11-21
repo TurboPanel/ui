@@ -15,7 +15,6 @@ describe('commandErrorLine', () => {
     expect(commandErrorLine({ errorMessage: 'Step 1\nStep 2\nsh: 1: next: not found\n\n' })).toBe(
       'sh: 1: next: not found'
     )
-    expect(commandErrorLine({ error: 'only the legacy field' })).toBe('only the legacy field')
   })
 
   it('never returns the truncation marker', () => {

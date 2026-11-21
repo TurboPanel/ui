@@ -22,7 +22,7 @@ This repository is **one component** of TurboPanel. It is **not deployed standal
 
 The UI talks to the control plane API (`/api/client/v1/*`) — never directly to daemons.
 
-Built with **Expo** (web-first today) and **Tamagui**. Native mobile is on the [roadmap](https://turbopanel.io/roadmap) — not scheduled here.
+Built with **Expo** (web-first today) and **Uniwind**. Native mobile is on the [roadmap](https://turbopanel.io/roadmap) — not scheduled here.
 
 ## Design system
 
@@ -30,7 +30,7 @@ Console visual rules live in:
 
 - [`design-system/turbopanel/MASTER.md`](./design-system/turbopanel/MASTER.md) — global tokens and patterns
 - [`design-system/turbopanel/pages/`](./design-system/turbopanel/pages/) — per-surface overrides
-- [`src/lib/theme.ts`](./src/lib/theme.ts) — runtime Tamagui tokens
+- [`src/lib/theme.ts`](./src/lib/theme.ts) — runtime colour tokens
 
 Read [AGENTS.md](./AGENTS.md) and [design-system/AGENTS.md](./design-system/AGENTS.md) before visual work — the **ui-ux-pro-max** skill is mandatory for layout and chrome changes.
 

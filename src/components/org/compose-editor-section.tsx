@@ -47,6 +47,7 @@ import {
   type ComposeLintIssue,
 } from '@/lib/compose'
 import { reachCandidates } from '@/lib/compose/reach'
+import { draftFromYaml, lintEnvironmentLayer, type EnvironmentBase } from '@/lib/compose/layer-lint'
 import {
   readComposeNetworks,
   writeComposeNetworks,
@@ -411,21 +412,6 @@ export function ComposeEditorChrome({
 }
 
 /**
- * The full document behind the YAML tab: the visible text re-joined with the
- * platform shadow the tab never showed. `null` when the text will not parse.
- */
-function draftFromYaml(yamlText: string, draft: ComposeDocument): ComposeDocument | null {
-  try {
-    return restoreComposeTurbopanelExtensions(
-      yamlToComposeDocument(yamlText),
-      hideComposeTurbopanelExtensions(draft).hidden
-    )
-  } catch {
-    return null
-  }
-}
-
-/**
  * True when the editor still holds exactly what was last saved, so a refreshed
  * server `document` can replace it without dropping an in-progress keystroke.
  *
@@ -591,6 +577,7 @@ export function ComposeEditorSection({
   renderHostingEditor,
   renderReleasesPanel,
   extraPrincipalAliases,
+  baseDocument,
   hideReach = false,
 }: Readonly<{
   document: unknown
@@ -619,6 +606,15 @@ export function ComposeEditorSection({
    * be flagged.
    */
   extraPrincipalAliases?: readonly string[]
+  /**
+   * The layers around this document, set only when it is an environment's
+   * changes (`null` while the project's Base is still loading, which keeps the
+   * save blocked). Those changes may set one field of a service the Base
+   * defines, so they are linted as a partial layer and then as the merge with
+   * the Base, where a service still needs an `image` or `build`. Omitted for the
+   * Base itself, which is held to the full rule.
+   */
+  baseDocument?: EnvironmentBase
   /**
    * Leave out a container's helper port fields. An environment layer does not
    * restate the Base's service kinds or accounts, so reach is edited on the Base.
@@ -886,18 +882,22 @@ export function ComposeEditorSection({
       // validateComposeDocument, including the one-repository-per-project rule.
       // `undefined` (no project context) leaves that rule skipped, exactly as
       // the instance does for a caller that cannot resolve a project.
+      const lintOptions = {
+        ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
+        ...(extraPrincipalAliases === undefined
+          ? {}
+          : {
+              knownPrincipalAliases: new Set([
+                ...extraPrincipalAliases,
+                ...composePrincipalAliases(next),
+              ]),
+            }),
+      }
+      const nextYaml = composeDocumentToYaml(next)
       const blocking = blockingComposeLintIssues(
-        lintComposeYaml(composeDocumentToYaml(next), {
-          ...(projectRepositoryId === undefined ? {} : { projectRepositoryId }),
-          ...(extraPrincipalAliases === undefined
-            ? {}
-            : {
-                knownPrincipalAliases: new Set([
-                  ...extraPrincipalAliases,
-                  ...composePrincipalAliases(next),
-                ]),
-              }),
-        })
+        baseDocument === undefined
+          ? lintComposeYaml(nextYaml, lintOptions)
+          : lintEnvironmentLayer(nextYaml, next, baseDocument, lintOptions)
       )
       if (blocking.length > 0) {
         setShowSaveLint(true)
@@ -1119,7 +1119,7 @@ export function ComposeEditorSection({
     // service kinds live only on the full draft shadow when hidden.
     const lintSource = tab === 'visual' ? visibleYaml(draft) : lintYaml
     const siteServices = hiddenSiteServiceNames(hideComposeTurbopanelExtensions(draft).hidden)
-    return lintComposeYaml(lintSource, {
+    const lintOptions = {
       siteServices,
       managedExtensionHidden: true,
       ...(extraPrincipalAliases === undefined
@@ -1130,8 +1130,12 @@ export function ComposeEditorSection({
               ...composePrincipalAliases(draft),
             ]),
           }),
-    })
-  }, [tab, lintYaml, draft, extraPrincipalAliases])
+    }
+    if (baseDocument === undefined) return lintComposeYaml(lintSource, lintOptions)
+    // In the YAML tab the draft lags the debounced text, so merge what was linted.
+    const layer = tab === 'editor' ? (draftFromYaml(lintSource, draft) ?? draft) : draft
+    return lintEnvironmentLayer(lintSource, layer, baseDocument, lintOptions)
+  }, [tab, lintYaml, draft, extraPrincipalAliases, baseDocument])
   const blockingLintIssues = useMemo(() => blockingComposeLintIssues(lintIssues), [lintIssues])
   const displayLintIssues = useMemo(
     () => (showSaveLint ? blockingLintIssues : liveComposeLintIssues(lintIssues)),

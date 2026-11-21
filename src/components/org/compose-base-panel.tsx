@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
+import type { EnvironmentBase } from '@/lib/compose/layer-lint'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import type { ComposeDocFacts } from '@/components/org/project/compose-document-view'
 import type { ComposeDocument, ComposeEditorView } from '@/lib/compose'
@@ -25,6 +26,7 @@ export function ComposeBasePanel({
   renderHostingEditor,
   renderReleasesPanel,
   extraPrincipalAliases,
+  baseDocument,
   hideReach,
 }: Readonly<{
   document: unknown
@@ -56,6 +58,8 @@ export function ComposeBasePanel({
    * `ComposeEditorSection`.
    */
   extraPrincipalAliases?: readonly string[]
+  /** The project's Base, when `document` is an environment's changes. See `ComposeEditorSection`. */
+  baseDocument?: EnvironmentBase
   /** Leave out the helper port fields (an environment layer lacks the Base's kinds and accounts). */
   hideReach?: boolean
 }>) {
@@ -82,6 +86,7 @@ export function ComposeBasePanel({
         {...(renderHostingEditor ? { renderHostingEditor } : {})}
         {...(renderReleasesPanel ? { renderReleasesPanel } : {})}
         {...(extraPrincipalAliases === undefined ? {} : { extraPrincipalAliases })}
+        {...(baseDocument === undefined ? {} : { baseDocument })}
         {...(hideReach ? { hideReach } : {})}
       />
     </View>

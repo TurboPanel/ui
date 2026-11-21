@@ -37,6 +37,21 @@ describe('apiErrorCopy', () => {
     )
   })
 
+  it('shows the control plane words for a Base edit refused while following', () => {
+    expect(apiErrorCopy(new Error('HTTP 409: base_tracks_repository \u2014 x'))).toBeNull()
+    expect(
+      userErrorMessage(
+        new Error(
+          '/projects/p failed: HTTP 409: base_tracks_repository \u2014 Reload and save again.'
+        ),
+        'x'
+      )
+    ).toBe('Reload and save again.')
+    expect(apiErrorCopy(new Error('HTTP 409: rollback_base_unrecorded \u2014 x'))).toContain(
+      'Stop following the file'
+    )
+  })
+
   it('maps upgrade_run_active and environment_running', () => {
     expect(apiErrorCopy(new Error('x failed: HTTP 409: upgrade_run_active'))).toBe(
       UPDATE_ALREADY_ACTIVE_COPY
@@ -46,13 +61,29 @@ describe('apiErrorCopy', () => {
 
   it('explains a certificate a Tunnel manages or a site still uses', () => {
     expect(apiErrorCopy(new Error('x failed: HTTP 409: provider_origin_managed'))).toContain(
-      'Turn off Verified Connection'
+      'Give the names that use it another certificate'
     )
     expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_in_use'))).toContain(
       'A site still uses this certificate'
     )
     expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_organization_ca'))).toContain(
       'Replace it with Rotate on the Organization CA panel.'
+    )
+  })
+
+  it('explains a delete refused while an order is open or DNS records remain', () => {
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_order_open'))).toContain('being ordered')
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: tls_dns_records_outstanding'))).toContain(
+      'DNS records to remove'
+    )
+  })
+
+  it('explains per-name certificate refusals', () => {
+    expect(apiErrorCopy(new Error('x failed: HTTP 409: name_certificates_need_update'))).toContain(
+      'newer version'
+    )
+    expect(apiErrorCopy(new Error('x failed: HTTP 400: name_not_served'))).toContain(
+      'not a name this site answers on'
     )
   })
 
@@ -172,12 +203,9 @@ describe('apiErrorSentence', () => {
 })
 
 describe('cancel deploy errors', () => {
-  it('maps the two refusals to plain sentences', () => {
+  it('maps the not-cancellable refusal to a plain sentence', () => {
     expect(userErrorMessage(new Error('HTTP 409: deploy_not_cancellable'), 'x')).toBe(
       'This deploy has already finished.'
-    )
-    expect(userErrorMessage(new Error('HTTP 409: cancel_unsupported'), 'x')).toBe(
-      "This server's TurboPanel daemon is too old to cancel deploys. Update it first."
     )
   })
 

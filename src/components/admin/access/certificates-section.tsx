@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { AttachmentEditor } from '@/components/admin/access/certificate-attachment-editor'
 import { panelStyles } from '@/components/ui/panel-styles'
 import {
   CoverageChips,
@@ -25,6 +26,7 @@ import {
 } from '@/components/ui'
 import {
   certificateSourceEligibility,
+  daemonCapabilitiesStatus,
   hostnameStatusPresentation,
   http01PreflightPresentation,
   panelHostnameHttpsUrl,
@@ -34,9 +36,7 @@ import {
   type InstanceHostnameRecord,
   type UploadedCertificateRecord,
 } from '@/lib/instance-api'
-import { parsePublicUrlEntry } from '@/lib/public-url-entry'
 import {
-  useAttachInstanceCertificate,
   useInstanceAcmeSettings,
   useInstanceCertificates,
   useInstanceDaemon,
@@ -44,7 +44,6 @@ import {
   useSaveInstanceAcmeSettings,
   useUploadInstanceCertificate,
 } from '@/lib/queries/admin'
-import { coversHostname } from '@/lib/tls-match'
 import { expiryCell, formatDay, realDate } from '@/lib/tls-managed-dates'
 import { colors, spacing } from '@/lib/theme'
 
@@ -63,15 +62,10 @@ const STAGING_KEY = 'TURBOPANEL_INSTANCE_ACME__USE_STAGING'
 const WILDCARD_COPY =
   "A name starting with *. covers one label only (*.example.com covers www.example.com). Let's Encrypt cannot issue a wildcard for this control plane. Attach only hostnames the uploaded pair already covers."
 
-const CAPABILITY_KEY = 'instance-cert-sources-per-hostname'
-
 export function CertificatesSection() {
   const certificatesQuery = useInstanceCertificates()
   const hostnamesQuery = useInstanceHostnames()
   const acmeQuery = useInstanceAcmeSettings()
-  const daemonQuery = useInstanceDaemon()
-  const capable = daemonQuery.data?.capabilities?.[CAPABILITY_KEY] === true
-  const capabilitiesKnown = daemonQuery.isSuccess || daemonQuery.isError
   const selfHosted = useAuth().controlPlaneRuntime !== 'workers'
 
   if (certificatesQuery.data && 'applicable' in certificatesQuery.data) {
@@ -79,7 +73,7 @@ export function CertificatesSection() {
       <View style={styles.root}>
         <Text style={panelStyles.pageTitle}>Certificates</Text>
         <InlineNotice
-          title="Not applicable on this runtime"
+          title="Not Applicable on This Runtime"
           body="TurboPanel High Availability never installs or manages certificates — TLS for every hostname it serves is terminated at the Cloudflare edge, so there is nothing to upload or request here."
         />
       </View>
@@ -94,18 +88,11 @@ export function CertificatesSection() {
         control plane settings. They are unrelated to any organization&apos;s Let&apos;s Encrypt
         opt-in.
       </Text>
-      {capabilitiesKnown && !capable ? (
-        <InlineNotice
-          title="Per-hostname sources need a newer daemon"
-          body={`The co-located daemon must be updated before per-hostname certificate sources can be rendered. Reported version: ${daemonQuery.data?.version ?? 'unknown'}. Sources stay visible and stay disabled until then.`}
-        />
-      ) : null}
       <UploadedPanel
         loading={certificatesQuery.isLoading}
         error={certificatesQuery.isError ? 'Failed to load uploaded certificates' : null}
         certificates={certificatesQuery.data?.certificates ?? []}
         hostnames={hostnamesQuery.data?.hostnames ?? []}
-        sourcesEnabled={capable}
       />
       <Dns01CertificatesPanel
         hostnames={hostnamesQuery.data?.hostnames ?? []}
@@ -115,7 +102,6 @@ export function CertificatesSection() {
         loading={acmeQuery.isLoading}
         settings={acmeQuery.data?.settings}
         hostnames={hostnamesQuery.data?.hostnames ?? []}
-        capabilities={daemonQuery.data?.capabilities ?? null}
         error={acmeQuery.isError ? "Failed to load Let's Encrypt settings" : null}
       />
     </View>
@@ -127,15 +113,14 @@ function UploadedPanel({
   error,
   certificates,
   hostnames,
-  sourcesEnabled,
 }: Readonly<{
   loading: boolean
   error: string | null
   certificates: readonly UploadedCertificateRecord[]
   hostnames: readonly InstanceHostnameRecord[]
-  sourcesEnabled: boolean
 }>) {
   const wildcard = certificates.some((certificate) => certificateHasWildcard(certificate.dnsNames))
+  const capabilitiesStatus = daemonCapabilitiesStatus(useInstanceDaemon())
   return (
     <SectionPanel
       title="Uploaded certificates"
@@ -160,7 +145,7 @@ function UploadedPanel({
           key={attachmentKey(certificate)}
           certificate={certificate}
           hostnames={hostnames}
-          sourcesEnabled={sourcesEnabled}
+          capabilitiesStatus={capabilitiesStatus}
         />
       ))}
       <UploadPairForm />
@@ -236,106 +221,6 @@ function CertificateRow({
         <CoverageChips dnsNames={certificate.dnsNames} hostnames={hostnames} />
       </DataTableCell>
     </DataTableRow>
-  )
-}
-
-function AttachmentEditor({
-  certificate,
-  hostnames,
-  sourcesEnabled,
-}: Readonly<{
-  certificate: UploadedCertificateRecord
-  hostnames: readonly InstanceHostnameRecord[]
-  sourcesEnabled: boolean
-}>) {
-  const attach = useAttachInstanceCertificate()
-  const [selected, setSelected] = useState<readonly string[]>(certificate.hostnames)
-  const [error, setError] = useState<string | null>(null)
-
-  const onSave = async () => {
-    setError(null)
-    const result = await attach.run({
-      id: certificate.id,
-      hosts: [...selected],
-    })
-    if (!result.ok) {
-      setError(result.error ?? 'Failed to update attachments')
-    }
-  }
-
-  return (
-    <View style={styles.attachBlock}>
-      <Text style={styles.attachTitle}>Attach {certificate.label}</Text>
-      <Text style={panelStyles.muted}>
-        Saving replaces the full attachment set. A hostname you clear stays published with the
-        Platform CA leaf.
-      </Text>
-      {hostnames.length === 0 ? (
-        <Text style={panelStyles.muted}>
-          Add a hostname on the Hostnames page before attaching this pair.
-        </Text>
-      ) : (
-        hostnames.map((record) => (
-          <HostnameAttachRow
-            key={record.id}
-            record={record}
-            certificate={certificate}
-            checked={selected.includes(record.host)}
-            sourcesEnabled={sourcesEnabled}
-            onToggle={() => {
-              setSelected((current) => toggleHost(current, record.host))
-              setError(null)
-            }}
-          />
-        ))
-      )}
-      {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      <Button
-        label="Save attachments"
-        busyLabel="Saving…"
-        variant="primary"
-        busy={attach.isPending}
-        disabled={!sourcesEnabled || hostnames.length === 0}
-        onPress={() => {
-          void onSave()
-        }}
-      />
-    </View>
-  )
-}
-
-function HostnameAttachRow({
-  record,
-  certificate,
-  checked,
-  sourcesEnabled,
-  onToggle,
-}: Readonly<{
-  record: InstanceHostnameRecord
-  certificate: UploadedCertificateRecord
-  checked: boolean
-  sourcesEnabled: boolean
-  onToggle: () => void
-}>) {
-  const name = hostnameOf(record.host)
-  const covered = coversHostname([...certificate.dnsNames], name)
-  let reason: string | null = null
-  if (!sourcesEnabled) {
-    reason = 'Waiting for a daemon that can render per-hostname sources.'
-  } else if (!covered) {
-    reason = 'This pair does not cover this hostname.'
-  }
-  return (
-    <View style={styles.attachRow}>
-      <Checkbox
-        checked={checked}
-        disabled={reason !== null}
-        label={record.host}
-        accessibilityLabel={`Attach ${record.host} to ${certificate.label}`}
-        onPress={onToggle}
-      />
-      {reason ? <Text style={styles.rowHint}>{reason}</Text> : null}
-    </View>
   )
 }
 
@@ -420,13 +305,11 @@ function LetsEncryptPanel({
   loading,
   settings,
   hostnames,
-  capabilities,
   error,
 }: Readonly<{
   loading: boolean
   settings: InstanceAcmeSettings | undefined
   hostnames: readonly InstanceHostnameRecord[]
-  capabilities: Readonly<Record<string, boolean>> | null
   error: string | null
 }>) {
   return (
@@ -437,7 +320,7 @@ function LetsEncryptPanel({
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
       {loading ? <LoadingState /> : <AcmeSettingsForm settings={settings} />}
       <Text style={panelStyles.muted}>DNS-01 orders use the same contact and terms.</Text>
-      <ReachabilityList hostnames={hostnames} capabilities={capabilities} />
+      <ReachabilityList hostnames={hostnames} />
     </SectionPanel>
   )
 }
@@ -554,10 +437,8 @@ function AcmeSettingsForm({ settings }: Readonly<{ settings: InstanceAcmeSetting
 
 function ReachabilityList({
   hostnames,
-  capabilities,
 }: Readonly<{
   hostnames: readonly InstanceHostnameRecord[]
-  capabilities: Readonly<Record<string, boolean>> | null
 }>) {
   return (
     <View style={styles.reach}>
@@ -572,9 +453,7 @@ function ReachabilityList({
       {hostnames.length === 0 ? (
         <Text style={panelStyles.muted}>No hostnames configured.</Text>
       ) : (
-        hostnames.map((record) => (
-          <ReachabilityRow key={record.id} record={record} capabilities={capabilities} />
-        ))
+        hostnames.map((record) => <ReachabilityRow key={record.id} record={record} />)
       )}
     </View>
   )
@@ -582,15 +461,12 @@ function ReachabilityList({
 
 function ReachabilityRow({
   record,
-  capabilities,
 }: Readonly<{
   record: InstanceHostnameRecord
-  capabilities: Readonly<Record<string, boolean>> | null
 }>) {
   const status = hostnameStatusPresentation(record)
   const refused = certificateSourceEligibility(record.host, {
     certificates: [],
-    capabilities,
   })['acme-http-01']
   const preflight = http01PreflightPresentation(record)
   const preflightStyle = preflight?.kind === 'failed' ? styles.rowError : styles.rowHint
@@ -644,15 +520,6 @@ function certificateHasWildcard(dnsNames: readonly string[]): boolean {
   return dnsNames.some((name) => name.trim().toLowerCase().startsWith('*.'))
 }
 
-function hostnameOf(entry: string): string {
-  return parsePublicUrlEntry(entry)?.host ?? entry.trim().toLowerCase()
-}
-
-function toggleHost(current: readonly string[], host: string): string[] {
-  if (current.includes(host)) return current.filter((item) => item !== host)
-  return [...current, host]
-}
-
 const styles = StyleSheet.create({
   root: {
     width: '100%',
@@ -672,17 +539,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
   },
-  attachBlock: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
   attachTitle: {
     color: colors.text,
     fontSize: 14,
     fontWeight: '600',
-  },
-  attachRow: {
-    gap: spacing.xs,
   },
   rowHint: {
     color: colors.textFaint,

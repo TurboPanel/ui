@@ -6,6 +6,7 @@ import {
   Button,
   ButtonRow,
   ConfirmButton,
+  InlineNotice,
   LoadingState,
   MonoText,
   TextField,
@@ -23,6 +24,7 @@ import {
 import {
   useAddTunnelHostname,
   useRemoveTunnelHostname,
+  useSetTunnelHostnameReach,
   useTunnelHostnames,
 } from '@/lib/queries/tunnel-routes'
 import { spacing } from '@/lib/theme'
@@ -35,27 +37,51 @@ import {
   dnsRecordLine,
   hostnameProblem,
   hostnameStatusLabel,
+  hostnameReach,
   hostnameStatusTone,
+  nameVerification,
   normalizeHostname,
+  reachChangeNote,
 } from '@/lib/tunnel-runs'
 
 function HostnameRow({
   orgId,
   tunnelId,
   record,
+  verifiedNames,
   onError,
 }: Readonly<{
   orgId: string
   tunnelId: string
   record: TunnelHostnameRecord
+  /** Names the connector verifies, from the tunnel; missing from an older panel. */
+  verifiedNames: readonly string[] | undefined
   onError: (message: string | null) => void
 }>) {
   const remove = useRemoveTunnelHostname(orgId, tunnelId)
+  const reachChange = useSetTunnelHostnameReach(orgId, tunnelId)
+  const [reachNote, setReachNote] = useState<string | null>(null)
+  const verification = nameVerification(verifiedNames, record.hostname)
+  const reach = hostnameReach(record)
 
   async function runRemove() {
     onError(null)
     const result = await remove.run(record.id)
     if (!result.ok) onError(tunnelErrorMessage(result.cause, 'Failed to remove the hostname'))
+  }
+
+  async function runReach() {
+    onError(null)
+    setReachNote(null)
+    const result = await reachChange.run({
+      doorwayId: record.id,
+      isLocalOnly: !record.isLocalOnly,
+    })
+    if (!result.ok) {
+      onError(tunnelErrorMessage(result.cause, 'Failed to change how this name is reached'))
+      return
+    }
+    setReachNote(reachChangeNote(result.value))
   }
 
   return (
@@ -67,6 +93,8 @@ function HostnameRow({
             label={hostnameStatusLabel(record.status)}
             tone={hostnameStatusTone(record.status)}
           />
+          <Badge label={verification.label} tone={verification.tone} />
+          <Badge label={reach.label} tone="muted" />
         </View>
         <TypeNameDeleteButton
           label="Remove"
@@ -79,12 +107,26 @@ function HostnameRow({
         />
       </View>
       <Text style={panelStyles.muted}>{dnsOutcome(record.dns)}</Text>
+      <Text style={panelStyles.muted}>{verification.line}</Text>
+      <Text style={panelStyles.muted}>{reach.line}</Text>
+      <ButtonRow>
+        <Button
+          label={reach.actionLabel}
+          size="sm"
+          busy={reachChange.isPending}
+          disabled={record.status === 'removing' || record.hostingId === null}
+          onPress={() => void runReach()}
+          accessibilityLabel={`${reach.actionLabel} for ${record.hostname}`}
+        />
+      </ButtonRow>
+      {reachNote ? <Text style={panelStyles.muted}>{reachNote}</Text> : null}
+      {record.routingNote ? <InlineNotice tone="warning" title={record.routingNote} /> : null}
     </View>
   )
 }
 
 /** The records that already hold the name, and the choice to replace them. */
-function ExistingRecords({
+export function ExistingRecords({
   hostname,
   records,
   replaceable,
@@ -132,7 +174,7 @@ function ExistingRecords({
 }
 
 /** What a failed replacement already removed, so it can be added back by hand. */
-function RemovedRecords({
+export function RemovedRecords({
   hostname,
   records,
   onDismiss,
@@ -259,7 +301,13 @@ function AddHostnameForm({ orgId, tunnelId }: Readonly<{ orgId: string; tunnelId
 export function NetworkTunnelHostnames({
   orgId,
   tunnelId,
-}: Readonly<{ orgId: string; tunnelId: string }>) {
+  verifiedNames,
+}: Readonly<{
+  orgId: string
+  tunnelId: string
+  /** Names the connector verifies, from the tunnel record. */
+  verifiedNames?: readonly string[]
+}>) {
   const query = useTunnelHostnames(orgId, tunnelId)
   const [error, setError] = useState<string | null>(null)
   const hostnames = query.data?.hostnames ?? []
@@ -287,6 +335,7 @@ export function NetworkTunnelHostnames({
           orgId={orgId}
           tunnelId={tunnelId}
           record={record}
+          verifiedNames={verifiedNames}
           onError={setError}
         />
       ))}

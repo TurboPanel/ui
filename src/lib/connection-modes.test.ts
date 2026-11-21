@@ -161,7 +161,7 @@ describe('edge gate words', () => {
   it('reads ready, held off, or how many servers still need the key', () => {
     expect(edgeGateLine({ ...CLOSED, open: true })).toBe('Edge modes are ready.')
     expect(edgeGateLine({ ...CLOSED, forcedClosed: true })).toMatch(/held off on this host/)
-    const one = { id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: null }
+    const one = { id: 's1', name: 'server-c', organizationId: 'o1', pinnedBy: null }
     expect(edgeGateLine({ ...CLOSED, waiting: [one] })).toBe(
       "1 server still needs to re-learn this control plane's key."
     )

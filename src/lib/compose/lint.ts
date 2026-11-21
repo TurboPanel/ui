@@ -48,7 +48,11 @@ export type ComposeLintLevel = 'error' | 'warning'
  * style the note as what it is rather than parse the sentence.
  */
 export type ComposeLintCode =
-  'field_unsupported' | 'turbofabric_required' | 'field_requires_org_opt_in'
+  | 'field_unsupported'
+  | 'turbofabric_required'
+  | 'field_requires_org_opt_in'
+  | 'service_missing_image_or_build'
+  | 'base_not_loaded'
 
 export type ComposeLintIssue = {
   level: ComposeLintLevel
@@ -330,7 +334,7 @@ function serviceIsNativeApp(valueNode: YAMLMap): boolean {
 }
 
 /**
- * True when `x-turbopanel.source.buildKind` is `image` (or the previous value it replaced).
+ * True when `x-turbopanel.source.buildKind` is `image`.
  *
  * Deliberately a sibling of {@link serviceIsHostNative} rather than another
  * entry in {@link HOST_NATIVE_SERVICE_KINDS}: an image-built service *is* a Docker
@@ -1208,6 +1212,7 @@ function lintService(
       message: `Service "${name}" must define "image" or "build"${
         options?.merged ? MERGED_MISSING_IMAGE_SUFFIX : ''
       }`,
+      code: 'service_missing_image_or_build',
       path,
       line: keyLine,
     })

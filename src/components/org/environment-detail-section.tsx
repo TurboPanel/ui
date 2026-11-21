@@ -17,6 +17,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type ViewInstance,
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import {
@@ -33,6 +34,7 @@ import {
   HostingCertificateActionsContext,
   HostingCertificatePanel,
 } from '@/components/org/hosting-certificate-panel'
+import { environmentBaseLayers, type EnvironmentBase } from '@/lib/compose/layer-lint'
 import { ComposeEditorSection } from '@/components/org/compose-editor-section'
 import { usePersistEnvironmentCompose } from '@/components/org/compose-persistence'
 import {
@@ -89,6 +91,7 @@ import {
   type HostingWwwMode,
   effectiveWwwMode,
   initialWwwChoice,
+  wwwCertificateNames,
   wwwChoiceFromComposeEntry,
   wwwChoiceOptions,
   wwwDnsHint,
@@ -101,7 +104,7 @@ import {
   type PinnedCertificateGap,
   coveringCertificates,
   pinnedCertificateGap,
-  stalePinReset,
+  editorForSave,
 } from '@/lib/hosting-tls-picker'
 import {
   composeHostingEntryFromEditorFields,
@@ -140,14 +143,17 @@ import {
   type ConfiguredHostingState,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
   hostingActionErrorMessage,
+  hostingSaveErrorMessage,
   missingCertificateMessage,
-  panelCertificateHint,
+  NEW_HOSTING_CERTIFICATE_HINT,
   PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
   resolveCertificateRef,
   SERVICE_NOT_SAVED_MESSAGE,
   SHARED_FILE_HOSTNAME_MESSAGE,
 } from '@/lib/hosting-plain-words'
+import { TUNNEL_ONLY_BIND_TEXT, TUNNEL_ONLY_LABEL, type TunnelOnly } from '@/lib/hosting-tunnel'
+import { useHostingTunnelOnly } from '@/lib/queries/tunnel-only'
 import {
   composeRowsAwaitingRemoval,
   configuredHostingState,
@@ -168,10 +174,10 @@ import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
-import { offersLetsEncrypt } from '@/lib/hosting-letsencrypt-choice'
+import { HostingNameCertificates } from '@/components/org/hosting-name-certificates'
+import { HostingTunnelNames } from '@/components/org/hosting-tunnel-names'
+import { nameChoicesToSend, type NameChoiceEdits } from '@/lib/name-certificates'
 import {
-  certificateAfterSave,
-  hostingSaveNote,
   withCertificateRefusal,
   type HostingSaveNote,
   type LetsEncryptRefusal,
@@ -179,7 +185,6 @@ import {
 import { RemovedServiceCard } from '@/components/org/removed-service-card'
 import { containerCardServices, removedFromComposeServiceIds } from '@/lib/directory-names'
 import { useEnvironmentFolders } from '@/lib/queries/folders'
-import { useRequestLetsEncrypt } from '@/lib/queries/hosting-certificate'
 import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 import { useLeaveWarning } from '@/components/ui/use-leave-warning'
 import { useSyncedEditors } from '@/components/org/use-synced-editors'
@@ -211,11 +216,11 @@ type HostingEditorState = {
   /** Multiline KEY=VALUE for options.web.env (HTTP hostings). */
   webEnvLines: string
   /**
-   * Ask for a free Let's Encrypt certificate as part of this save. On for a
-   * hosting that does not exist yet, off for one that does (it has the
-   * Certificate section for that).
+   * The certificate picked for each name of a saved site, keyed by name; only
+   * the names that changed. A new site has none: the panel picks a default for
+   * every name when it is saved.
    */
-  getLetsEncrypt: boolean
+  nameChoices: NameChoiceEdits
 }
 
 function formatWebEnvLines(web: unknown): string {
@@ -337,7 +342,7 @@ export function readHostingEditor(hostings: HostingRecord[]): HostingEditorState
     protocol: readHostingProtocol(optionsRecord),
     ports: formatHostingPorts(optionsRecord),
     ...readWebOptions(optionsRecord),
-    getLetsEncrypt: hostings.length === 0,
+    nameChoices: {},
     tlsAutomatic: false,
   }
 }
@@ -510,7 +515,7 @@ function readComposeHostingEditor(
     tlsId: entry.tls?.mode === 'certificate' ? (entry.tls.certificateRef ?? null) : null,
     tlsAutomatic: entry.tls?.mode === 'automatic',
     // Compose sets the certificate for a route it declares.
-    getLetsEncrypt: false,
+    nameChoices: {},
   }
 }
 
@@ -883,7 +888,20 @@ const HOSTING_BIND_LABELS: Record<HostingBind, string> = {
 }
 
 /** One-line collapsed summary: hostnames/ports + port + TLS mode + bind. */
-function hostingRowSummary(editor: HostingEditorState, tlsOptions: TlsRecord[]): string {
+function hostingRowSummary(
+  editor: HostingEditorState,
+  tlsOptions: TlsRecord[],
+  tunnelOnly: TunnelOnly | null
+): string {
+  if (tunnelOnly && editor.protocol === 'http') {
+    return [
+      editor.hostnames.trim() || 'no hostnames',
+      editor.targetPort.trim() ? `port ${editor.targetPort.trim()}` : null,
+      TUNNEL_ONLY_LABEL,
+    ]
+      .filter(Boolean)
+      .join(' · ')
+  }
   const bindLabel = HOSTING_BIND_LABELS[editor.bind]
   if (editor.protocol !== 'http') {
     return [
@@ -1029,58 +1047,73 @@ function HostingWwwField({
   )
 }
 
-/** The sentence under Certificate: who sets it, and how to get Let’s Encrypt where it applies. */
-function tlsPickerHint(
-  composeOwned: boolean,
-  awaitingRemoval: boolean,
-  letsEncryptBoxShown: boolean
-): string {
+/** The sentence under Certificate: who sets it. */
+function tlsPickerHint(composeOwned: boolean, awaitingRemoval: boolean): string {
   if (awaitingRemoval) return PENDING_REMOVAL_CERTIFICATE_HINT
-  return composeOwned ? COMPOSE_CERTIFICATE_HINT : panelCertificateHint(letsEncryptBoxShown)
+  return composeOwned ? COMPOSE_CERTIFICATE_HINT : NEW_HOSTING_CERTIFICATE_HINT
 }
 
 function HostingTlsPicker({
+  orgId,
+  hostingId,
   isHttp,
   composeOwned,
   awaitingRemoval,
   editor,
   covering,
+  library,
   pinnedGap,
   locked,
   onChange,
 }: Readonly<{
+  orgId: string
+  /** The saved hosting, when the row has one: its names carry the certificate choices. */
+  hostingId: string | null
   isHttp: boolean
   composeOwned: boolean
-  /** Waiting for the next deploy to remove it: no Save, so no Let’s Encrypt box. */
+  /** Waiting for the next deploy to remove it: nothing to pick. */
   awaitingRemoval: boolean
   editor: HostingEditorState
   covering: TlsRecord[]
+  /** Every certificate in the library, for the names of a saved site. */
+  library: TlsRecord[]
   /** A pinned certificate that no longer covers the names: still shown, with a note. */
   pinnedGap: PinnedCertificateGap<TlsRecord> | null
   locked: boolean
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
   if (!isHttp) return null
+  if (!composeOwned) {
+    return (
+      <>
+        {hostingId && !awaitingRemoval ? (
+          <HostingNameCertificates
+            orgId={orgId}
+            hostingId={hostingId}
+            library={library}
+            edits={editor.nameChoices}
+            locked={locked}
+            onEditsChange={(nameChoices) => onChange({ nameChoices })}
+          />
+        ) : (
+          <>
+            <Text style={styles.tlsLabel}>Certificate</Text>
+            <Text style={styles.tlsHint}>{tlsPickerHint(false, awaitingRemoval)}</Text>
+          </>
+        )}
+      </>
+    )
+  }
   const chips = pinnedGap ? [...covering, pinnedGap.row] : covering
   const picked = resolveCertificateRef(editor.tlsId ?? undefined, chips)
-  const letsEncryptBoxShown =
-    !awaitingRemoval &&
-    offersLetsEncrypt({
-      composeOwned,
-      protocol: editor.protocol,
-      tlsId: editor.tlsId,
-      hostnameCount: parseHostnameList(editor.hostnames).length,
-    })
   return (
     <>
       <Text style={styles.tlsLabel}>Certificate</Text>
-      <Text style={styles.tlsHint}>
-        {tlsPickerHint(composeOwned, awaitingRemoval, letsEncryptBoxShown)}
-      </Text>
+      <Text style={styles.tlsHint}>{tlsPickerHint(true, awaitingRemoval)}</Text>
       <SegmentedControl
         accessibilityLabel="Certificate"
         options={[
-          ...(composeOwned ? [{ value: AUTOMATIC_CHOICE, label: 'Let\u2019s Encrypt' }] : []),
+          { value: AUTOMATIC_CHOICE, label: 'Let\u2019s Encrypt' },
           { value: NO_CHOICE, label: 'Self-signed' },
           ...chips.map((row) => ({ value: row.id, label: tlsLabel(row) })),
         ]}
@@ -1095,14 +1128,6 @@ function HostingTlsPicker({
         })}`}
       </Text>
       <HostingHintText hint={pinnedGap?.note ?? null} />
-      {letsEncryptBoxShown ? (
-        <Checkbox
-          label="Get a free Let’s Encrypt certificate when I save"
-          checked={editor.getLetsEncrypt}
-          disabled={locked}
-          onPress={() => onChange({ getLetsEncrypt: !editor.getLetsEncrypt })}
-        />
-      ) : null}
     </>
   )
 }
@@ -1110,12 +1135,23 @@ function HostingTlsPicker({
 function HostingBindPicker({
   editor,
   locked,
+  tunnelOnly,
   onChange,
 }: Readonly<{
   editor: HostingEditorState
   locked: boolean
+  tunnelOnly: TunnelOnly | null
   onChange: (patch: Partial<HostingEditorState>) => void
 }>) {
+  if (tunnelOnly && editor.protocol === 'http') {
+    return (
+      <>
+        <Text style={styles.tlsLabel}>Bind</Text>
+        <Text style={styles.tlsHint}>{TUNNEL_ONLY_BIND_TEXT}</Text>
+        <Text style={styles.wwwResult}>Tunnel Only</Text>
+      </>
+    )
+  }
   return (
     <>
       <Text style={styles.tlsLabel}>Bind</Text>
@@ -1283,30 +1319,20 @@ function composeRowKeyAfterSave(
   return `${prefix}${hostingEntryKey(entry)}`
 }
 
-/** A panel hosting save also asks Let's Encrypt for a certificate. */
-function wantsLetsEncrypt(editor: HostingEditorState): boolean {
-  return (
-    editor.getLetsEncrypt &&
-    offersLetsEncrypt({
-      composeOwned: false,
-      protocol: editor.protocol,
-      tlsId: editor.tlsId,
-      hostnameCount: parseHostnameList(editor.hostnames).length,
-    })
-  )
+/** Every name the certificate covers, the www spelling included, as the control plane counts them. */
+function hostingCertificateNames(editor: HostingEditorState): string[] {
+  const names = wwwHostnames(editor.hostnames)
+  return wwwCertificateNames(names, effectiveWwwMode(editor.www, names))
 }
 
 /** A row's save button, and right after it what its last save said. */
 function HostingSaveControls({
-  asksLetsEncrypt,
   saving,
   disabled,
   error,
   savedNote,
   onSave,
 }: Readonly<{
-  /** The save also asks Let's Encrypt for a certificate. */
-  asksLetsEncrypt: boolean
   saving: boolean
   disabled: boolean
   /** Why the last save failed, in plain words. */
@@ -1314,15 +1340,13 @@ function HostingSaveControls({
   savedNote: HostingSaveNote | null
   onSave: () => void
 }>) {
-  // Said while saving, so leaving early is not mistaken for done.
-  const busyLabel = asksLetsEncrypt ? 'Saving and asking Let’s Encrypt…' : 'Saving…'
   const note = error === null ? savedNote : { tone: 'error' as const, message: error }
   const failed = note?.tone === 'error'
   return (
     <>
       <Button
         label="Save hosting"
-        busyLabel={busyLabel}
+        busyLabel="Saving…"
         size="sm"
         variant="secondary"
         busy={saving}
@@ -1391,6 +1415,8 @@ export function HostingPanelRow({
   composeServiceName,
   serviceContext,
   hostingId,
+  serverId = null,
+  canManage = false,
   composeRoute = null,
   composeEntry = null,
   composeState = 'not-deployed',
@@ -1417,6 +1443,10 @@ export function HostingPanelRow({
   serviceContext: HostingServiceContext
   /** Persisted hosting row id; null until the first successful save. */
   hostingId: string | null
+  /** The environment's server (its own or the project's default), for the tunnels that run on it. */
+  serverId?: string | null
+  /** Whether the person can put a name on a tunnel (organization manager). */
+  canManage?: boolean
   /**
    * `hostingEntryKey` of the `x-turbopanel.hosting` entry this row renders, or
    * null for a panel-authored row. Non-null means compose owns the route: the
@@ -1460,6 +1490,14 @@ export function HostingPanelRow({
 }>) {
   const covering = coveringCertificates(tlsOptions, editor.hostnames, editor.www)
   const pinnedGap = pinnedCertificateGap(tlsOptions, editor.tlsId, editor.hostnames, editor.www)
+  const tunnelOnly = useHostingTunnelOnly(
+    orgId,
+    hostingId,
+    hostingCertificateNames(editor),
+    expanded
+  )
+  // A certificate the row pins stays visible, with the normal picker to change or clear it.
+  const certificateTunnel = editor.tlsId ? null : tunnelOnly
 
   const composeOwned = composeRoute !== null
   const targetPortAuthorable = hostingTargetPortAuthorable(composeServiceKindOf(serviceContext))
@@ -1495,7 +1533,7 @@ export function HostingPanelRow({
           <Text style={styles.serviceKindBadge}>{kindLabel}</Text>
         </View>
         <Text style={styles.hostingSummaryText} numberOfLines={1}>
-          {hostingRowSummary(editor, tlsOptions)}
+          {hostingRowSummary(editor, tlsOptions, certificateTunnel)}
         </Text>
       </View>
       <HeaderChevron size={12} color={colors.textMuted} open={expanded} />
@@ -1549,33 +1587,54 @@ export function HostingPanelRow({
       <HostingWwwField isHttp={isHttp} editor={editor} locked={locked} onChange={onChange} />
 
       <HostingTlsPicker
+        orgId={orgId}
+        hostingId={hostingId ?? null}
         isHttp={isHttp}
         composeOwned={composeOwned}
         awaitingRemoval={awaitingRemoval}
         editor={editor}
         covering={covering}
+        library={tlsOptions}
         pinnedGap={pinnedGap}
         locked={locked}
         onChange={onChange}
       />
+
+      {isHttp && hostingId && !awaitingRemoval ? (
+        <HostingTunnelNames
+          orgId={orgId}
+          hostingId={hostingId}
+          serverId={serverId}
+          locked={disabled}
+          canManage={canManage}
+        />
+      ) : null}
 
       {isHttp && hostingId ? (
         <HostingCertificatePanel
           orgId={orgId}
           hostingId={hostingId}
           composeOwned={composeOwned}
+          tunnelOnly={certificateTunnel}
           disabled={frozen}
         />
       ) : null}
 
-      <HostingBindPicker editor={editor} locked={locked} onChange={onChange} />
-
-      <HostingPublicIpPicker
+      <HostingBindPicker
         editor={editor}
-        publicIps={publicIps}
         locked={locked}
+        tunnelOnly={tunnelOnly}
         onChange={onChange}
       />
+
+      {tunnelOnly ? null : (
+        <HostingPublicIpPicker
+          editor={editor}
+          publicIps={publicIps}
+          locked={locked}
+          onChange={onChange}
+        />
+      )}
 
       <HostingProxyFields
         isHttp={isHttp}
@@ -1591,7 +1650,6 @@ export function HostingPanelRow({
 
       {canSave ? (
         <HostingSaveControls
-          asksLetsEncrypt={!composeOwned && wantsLetsEncrypt(editor)}
           saving={saving}
           disabled={disabled}
           error={rowErrorFor(rowError, 'save')}
@@ -1787,10 +1845,13 @@ function EnvironmentInfoPanel({
 
 function EnvironmentComposeOverlayPanel({
   environment,
+  baseLayers,
   onSaveCompose,
   savingCompose,
 }: Readonly<{
   environment: EnvironmentRecord
+  /** The layers these changes are checked against before saving; `null` while the project loads. */
+  baseLayers: EnvironmentBase
   onSaveCompose: (compose: ComposeDocument) => Promise<void>
   savingCompose: boolean
 }>) {
@@ -1803,6 +1864,7 @@ function EnvironmentComposeOverlayPanel({
     >
       <ComposeEditorSection
         document={environment.options?.compose}
+        baseDocument={baseLayers}
         onSave={onSaveCompose}
         saving={savingCompose}
         title="Environment compose overlay"
@@ -1839,7 +1901,7 @@ function EnvironmentDeployChromePanels({
   const { width } = useWindowDimensions()
   const isCompact = width < layout.desktopBreakpoint
   const [previewMenuOpen, setPreviewMenuOpen] = useState(false)
-  const previewBtnRef = useRef<View>(null)
+  const previewBtnRef = useRef<ViewInstance>(null)
   const [previewMenuPosition, setPreviewMenuPosition] = useState({
     top: 56,
     left: 16,
@@ -1867,7 +1929,7 @@ function EnvironmentDeployChromePanels({
 
       <Section
         title="Deploy"
-        note="Preview compose, then deploy this environment to its selected server"
+        note="Preview what will run, then deploy this environment to its selected server"
       >
         <View style={styles.deployActions}>
           <View ref={previewBtnRef} collapsable={false} style={styles.splitGroup}>
@@ -1881,7 +1943,7 @@ function EnvironmentDeployChromePanels({
               disabled={deploying}
               onPress={onPreviewMerged}
               accessibilityRole="button"
-              accessibilityLabel="Preview merged compose"
+              accessibilityLabel="Preview Compose"
             >
               <Text style={panelStyles.toolbarBtnTextSecondary}>Preview</Text>
             </Pressable>
@@ -1951,12 +2013,11 @@ function EnvironmentDeployChromePanels({
                 onPreviewMerged()
               }}
               accessibilityRole="menuitem"
-              accessibilityLabel="Preview merged compose"
+              accessibilityLabel="Preview Compose"
             >
-              <Text style={styles.menuItemTitle}>Merged compose</Text>
+              <Text style={styles.menuItemTitle}>Preview Compose</Text>
               <Text style={styles.menuItemSub}>
-                Project base combined with this environment’s overrides, including TurboPanel’s own
-                settings
+                The compose as written, with this environment’s changes
               </Text>
             </Pressable>
             <Pressable
@@ -1970,11 +2031,11 @@ function EnvironmentDeployChromePanels({
                 onPreviewPrepared()
               }}
               accessibilityRole="menuitem"
-              accessibilityLabel="Preview prepared compose"
+              accessibilityLabel="Preview Deploy Summary"
             >
-              <Text style={styles.menuItemTitle}>Prepared compose</Text>
+              <Text style={styles.menuItemTitle}>Preview Deploy Summary</Text>
               <Text style={styles.menuItemSub}>
-                Deploy-ready document after variables, naming, and site split
+                What will run where, its variables and settings
               </Text>
             </Pressable>
           </View>
@@ -1986,6 +2047,8 @@ function EnvironmentDeployChromePanels({
 
 function EnvironmentHostingSectionPanel({
   orgId,
+  serverId,
+  canManage,
   hostingRows,
   hostingEditors,
   setHostingEditors,
@@ -1997,6 +2060,9 @@ function EnvironmentHostingSectionPanel({
   focusHostingId,
 }: Readonly<{
   orgId: string
+  /** The environment's server (its own or the project's default); null when none is set. */
+  serverId: string | null
+  canManage: boolean
   /**
    * One descriptor per rendered route — every `x-turbopanel.hosting` entry a
    * service declares, or its single panel row when it declares none. Built by
@@ -2058,6 +2124,8 @@ function EnvironmentHostingSectionPanel({
                   composeServiceName={row.composeServiceName}
                   serviceContext={row.serviceContext}
                   hostingId={row.hostingId}
+                  serverId={serverId}
+                  canManage={canManage}
                   composeRoute={row.source.kind === 'compose' ? row.source.route : null}
                   composeEntry={row.source.kind === 'compose' ? row.source.entry : null}
                   composeState={row.source.kind === 'compose' ? row.source.state : undefined}
@@ -2229,6 +2297,7 @@ function EnvironmentLoadedPanels({
   projectId,
   orgId,
   mergedCompose,
+  baseLayers,
   serviceNames,
   allServers,
   sortedServers,
@@ -2266,6 +2335,8 @@ function EnvironmentLoadedPanels({
   projectId: string
   orgId: string
   mergedCompose: ComposeDocument
+  /** Layers around the environment's changes; `null` while the project loads. */
+  baseLayers: EnvironmentBase
   serviceNames: string[]
   allServers: OrgServerRecord[]
   sortedServers: OrgServerRecord[]
@@ -2319,6 +2390,7 @@ function EnvironmentLoadedPanels({
       {showEnvironmentChrome && showComposeOverlay ? (
         <EnvironmentComposeOverlayPanel
           environment={environment}
+          baseLayers={baseLayers}
           onSaveCompose={onSaveCompose}
           savingCompose={savingCompose}
         />
@@ -2343,6 +2415,8 @@ function EnvironmentLoadedPanels({
       {showSection('hosting') ? (
         <EnvironmentHostingSectionPanel
           orgId={orgId}
+          serverId={placementServerId}
+          canManage={canManage}
           hostingRows={hostingRows}
           hostingEditors={hostingEditors}
           setHostingEditors={setHostingEditors}
@@ -2497,7 +2571,7 @@ function EnvironmentDetailChromeExtras({
           environmentCompose={environment.options?.compose}
           deploying={deployPending}
           purpose={previewOpen?.purpose ?? 'inspect'}
-          initialMode={previewOpen?.mode ?? 'merged'}
+          initialMode={previewOpen?.mode ?? 'compose'}
           confirmLabel="Deploy"
           onCancel={onCancelPreview}
           onConfirm={
@@ -2609,7 +2683,6 @@ export function EnvironmentDetailBody({
   const deployEnvironmentMutation = useDeployEnvironment(orgId, environmentId)
   const upsertHostingMutation = useUpsertHosting(orgId)
   const releaseHostingMutation = useReleaseHostingFromCompose(orgId)
-  const letsEncryptMutation = useRequestLetsEncrypt(orgId)
 
   const [error, setError] = useState<string | null>(null)
   const [savingHosting, setSavingHosting] = useState<string | null>(null)
@@ -2636,6 +2709,12 @@ export function EnvironmentDetailBody({
 
   const environment = environmentQuery.data?.environment ?? null
   const projectCompose = projectQuery.data?.project.options?.compose ?? null
+  let baseLayers: EnvironmentBase = null
+  if (projectQuery.data) {
+    baseLayers = environmentBaseLayers(projectQuery.data.project.options, environment?.options)
+  } else if (projectQuery.error) {
+    baseLayers = { error: userErrorMessage(projectQuery.error, 'Failed to load the project') }
+  }
   const projectDefaultServerId = projectQuery.data?.project.options?.defaultServerId ?? null
   const allServers = orEmptyArray(serversQuery.data?.servers)
   const tlsLibrary = tlsQuery.data?.tls ?? []
@@ -2889,7 +2968,7 @@ export function EnvironmentDetailBody({
 
   const openDeployConfirm = useCallback(() => {
     setError(null)
-    setPreviewOpen({ purpose: 'confirm', mode: 'prepared' })
+    setPreviewOpen({ purpose: 'confirm', mode: 'summary' })
   }, [])
 
   /**
@@ -2933,8 +3012,10 @@ export function EnvironmentDetailBody({
     onError: (message: string) => void = (message) =>
       setRowError(row.editorKey, { field: 'save', message })
   ): Promise<boolean> => {
-    // New names must not keep the old name's certificate pinned.
-    const editor = { ...typed, ...stalePinReset(tlsLibrary, typed, row.seed.hostnames) }
+    // A site that is not saved yet must not keep an old name's certificate
+    // pinned. A saved site is left alone: the panel gives a new name its default
+    // and keeps what every other name has.
+    const editor = editorForSave(tlsLibrary, typed, row.seed.hostnames, Boolean(row.hostingId))
     const service = resolvedServices.find(
       (item) => item.composeServiceName === row.composeServiceName
     )
@@ -2942,6 +3023,10 @@ export function EnvironmentDetailBody({
       onError(SERVICE_NOT_SAVED_MESSAGE)
       return false
     }
+    const savedBefore = (hostingsByService[service.id] ?? []).find(
+      (item) => item.id === row.hostingId
+    )
+    const names = nameChoicesToSend(savedBefore?.names ?? [], editor.nameChoices)
     const result = await upsertHostingMutation.run({
       serviceId: service.id,
       ...(row.hostingId ? { hostingId: row.hostingId } : {}),
@@ -2949,32 +3034,21 @@ export function EnvironmentDetailBody({
         name: row.composeServiceName,
         metadata: { composeServiceName: row.composeServiceName },
         options: buildHostingOptions(editor),
-        tlsId: editor.tlsId,
+        // A saved site's names carry their own certificates; the whole-site pin
+        // is sent only when it changed (a new site, a moved compose route, or a
+        // pin let go because the names changed).
+        ...(editor.tlsId === (savedBefore?.tlsId ?? null) ? {} : { tlsId: editor.tlsId }),
         ipId: editor.ipId,
+        ...(names ? { names } : {}),
       },
     })
     if (!result.ok) {
-      onError(failedRunMessage(result, 'Could not save this hostname.'))
+      // The panel's 409 carries only the code; the plain-words mapping words it.
+      onError(hostingSaveErrorMessage(result, 'Could not save this hostname.'))
       return false
     }
-    const savedHostingId =
-      row.hostingId ??
-      ('id' in result.value && typeof result.value.id === 'string' ? result.value.id : null)
-    const wantsCertificate = wantsLetsEncrypt(editor)
-    // The hosting is already saved; a refused certificate is said next to its
-    // Certificate section (with the fix when there is one), never undone.
-    const certificateStep = await certificateAfterSave({
-      hostingId: savedHostingId,
-      wantsCertificate,
-      request: letsEncryptMutation.run,
-    })
-    if (certificateStep) {
-      setCertificateRefusals((current) =>
-        withCertificateRefusal(current, certificateStep.hostingId, certificateStep.refusal)
-      )
-    }
     await refreshEditorsAfterSave([row.editorKey])
-    setSavedNote(row.editorKey, hostingSaveNote(wantsCertificate, certificateStep?.refusal ?? null))
+    setSavedNote(row.editorKey, { tone: 'ok', message: 'Saved.' })
     return true
   }
 
@@ -3061,7 +3135,6 @@ export function EnvironmentDetailBody({
               {
                 ...editor,
                 tlsId: certificate.tlsId,
-                getLetsEncrypt: certificate.getLetsEncrypt,
                 tlsAutomatic: false,
                 protocol: 'http',
               },
@@ -3123,6 +3196,7 @@ export function EnvironmentDetailBody({
           projectId={projectId}
           orgId={orgId}
           mergedCompose={mergedCompose}
+          baseLayers={baseLayers}
           serviceNames={serviceNames}
           allServers={allServers}
           sortedServers={sortedServers}
@@ -3131,8 +3205,8 @@ export function EnvironmentDetailBody({
           deployBlocked={deployBlocked}
           deploying={deploying}
           deployStatus={deployStatus}
-          onPreviewMerged={() => openComposeInspect('merged')}
-          onPreviewPrepared={() => openComposeInspect('prepared')}
+          onPreviewMerged={() => openComposeInspect('compose')}
+          onPreviewPrepared={() => openComposeInspect('summary')}
           onDeploy={openDeployConfirm}
           onSaveCompose={async (compose) => {
             await saveCompose(compose)

@@ -8,8 +8,8 @@
  * back as those same three parts.
  *
  * Anything past the port is dropped rather than rejected: an operator who
- * pastes `https://studio.lan:8443/admin/networking` out of the browser bar
- * means `https://studio.lan:8443`, and a 422 three clicks later is not a useful
+ * pastes `https://dev-workstation.example.lan:8443/admin/networking` out of the browser bar
+ * means `https://dev-workstation.example.lan:8443`, and a 422 three clicks later is not a useful
  * way to say so. A pasted address dropped into the hostname box is absorbed
  * whole — its scheme and port win over the other two controls. The scheme's
  * default port is dropped too: `https://turbopanel.dev:443` and

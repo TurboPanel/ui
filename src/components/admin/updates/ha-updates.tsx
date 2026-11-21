@@ -13,7 +13,7 @@ import type { InstanceUpdates } from '@/lib/instance-api'
 import { HA_PRODUCT_NAME } from '@/lib/platform-copy'
 import {
   isUpdateWaiting,
-  UPDATE_WAITING_COPY,
+  updateWaitingCopy,
   updatesCadenceText,
   waitingSentence,
 } from '@/lib/update-automation'
@@ -41,9 +41,13 @@ import { spacing } from '@/lib/theme'
  */
 function fleetWaiting(data: InstanceUpdates, runActive: boolean): string | null {
   if (runActive || !isUpdateWaiting(data, false)) return null
+  const paused = data.updatesPaused === true
   return (
-    waitingSentence({ pieceLabels: [], daemonsBehind: data.daemonsBehind === true }) ??
-    UPDATE_WAITING_COPY
+    waitingSentence({
+      pieceLabels: [],
+      daemonsBehind: data.daemonsBehind === true,
+      paused,
+    }) ?? updateWaitingCopy(paused)
   )
 }
 

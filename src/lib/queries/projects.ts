@@ -15,6 +15,7 @@ import {
   fetchProjectPrincipals,
   fetchVisibleProjects,
   setPrincipalPassword,
+  setProjectComposeSource,
   updateProject,
   updateProjectPrincipal,
   type ConfigureProjectBody,
@@ -120,6 +121,20 @@ export function useUpdateProject(orgId: string, projectId: string) {
         queryKey: queryKeys.org(orgId).projects.all,
       })
     },
+  })
+}
+
+/** Follow, or stop following, the repository's compose file. Refreshes the project. */
+export function useSetComposeSource(orgId: string, projectId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: (mode: 'seed' | 'track') => setProjectComposeSource(projectId, mode),
+    onSuccess: async () => {
+      const { project } = await fetchProject(projectId)
+      queryClient.setQueryData(queryKeys.org(orgId).projects.detail(projectId), { project })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).projects.all })
+    },
+    fallbackError: 'Could not change how this project follows the repository',
   })
 }
 

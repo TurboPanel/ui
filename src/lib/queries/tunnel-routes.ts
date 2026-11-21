@@ -11,12 +11,11 @@ import {
   removeTunnelHostname,
   rotateTunnelRunToken,
   setServerTunnelCarrying,
-  setTunnelVerifyOrigin,
+  setTunnelHostnameReach,
   updateTunnelPlacement,
   type ConfirmedDnsRecord,
   type CreateTunnelBody,
   type TunnelPlacementBody,
-  type TunnelVerifyOriginBody,
 } from '@/lib/instance-api'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 import { rotationRunning } from '@/lib/tunnel-runs'
@@ -45,16 +44,23 @@ export function useTunnels(orgId: string, options?: Readonly<{ enabled?: boolean
   })
 }
 
+/** One tunnel's hostnames; shared so every reader polls and caches them the same way. */
+export function tunnelHostnamesOptions(orgId: string, tunnelId: string) {
+  return {
+    queryKey: queryKeys.org(orgId).tunnelHostnames(tunnelId),
+    queryFn: () => fetchTunnelHostnames(orgId, tunnelId),
+    refetchInterval: 30_000,
+  }
+}
+
 export function useTunnelHostnames(
   orgId: string,
   tunnelId: string,
   options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).tunnelHostnames(tunnelId),
-    queryFn: () => fetchTunnelHostnames(orgId, tunnelId),
+    ...tunnelHostnamesOptions(orgId, tunnelId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && tunnelId.length > 0,
-    refetchInterval: 30_000,
   })
 }
 
@@ -107,7 +113,13 @@ export function useDeleteTunnel(orgId: string) {
 }
 
 export function useAddTunnelHostname(orgId: string, tunnelId: string) {
-  const invalidate = useInvalidateTunnels(orgId)
+  const invalidateTunnels = useInvalidateTunnels(orgId)
+  const queryClient = useQueryClient()
+  // A site's certificate options depend on which tunnel carries its names.
+  const invalidate = async () => {
+    await invalidateTunnels()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all })
+  }
   return useApiMutation({
     mutationFn: (body: {
       hostname: string
@@ -146,13 +158,21 @@ export function useSetServerTunnelCarrying(orgId: string) {
   })
 }
 
-export function useSetTunnelVerifyOrigin(orgId: string, tunnelId: string) {
+/** Open or close one tunnel name for direct visitors; refreshes the names and the tunnels (their verified names). */
+export function useSetTunnelHostnameReach(orgId: string, tunnelId: string) {
   const invalidate = useInvalidateTunnels(orgId)
+  const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: TunnelVerifyOriginBody) => setTunnelVerifyOrigin(orgId, tunnelId, body),
+    mutationFn: (input: { doorwayId: string; isLocalOnly: boolean }) =>
+      setTunnelHostnameReach(orgId, tunnelId, input.doorwayId, input.isLocalOnly),
     retry: false,
-    onSuccess: invalidate,
-    fallbackError: 'Failed to change the verified connection',
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).tunnelHostnames(tunnelId),
+      })
+      await invalidate()
+    },
+    fallbackError: 'Failed to change how this name is reached',
   })
 }
 

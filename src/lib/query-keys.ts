@@ -179,6 +179,8 @@ export const queryKeys = {
         phpModes: ['org', orgId, 'php-modes'] as const,
         defaultEnvironment: ['org', orgId, 'default-environment'] as const,
         deployTimeout: ['org', orgId, 'deploy-timeout'] as const,
+        /** The organization's build core and memory limits (`/organizations/:id/build-limits`). */
+        buildLimits: ['org', orgId, 'build-limits'] as const,
         /** New-project form switches (`/organizations/:id/project-settings`). */
         projectSettings: ['org', orgId, 'project-settings'] as const,
         /**
@@ -491,6 +493,7 @@ export const queryKeys = {
   admin: {
     all: ['admin'] as const,
     publicUrls: ['admin', 'public-urls'] as const,
+    organizations: ['admin', 'organizations'] as const,
     instanceHostnames: ['admin', 'instance-hostnames'] as const,
     instanceCertificates: ['admin', 'instance-certificates'] as const,
     instanceAcme: ['admin', 'instance-acme'] as const,
@@ -509,8 +512,6 @@ export const queryKeys = {
     developmentUpdates: ['admin', 'instance-updates', 'development'] as const,
     instanceIdentity: ['admin', 'instance-identity'] as const,
     keyRotation: ['admin', 'instance-identity', 'rotation'] as const,
-    /** Superadmin sealed-secrets read (Clear Sealing Key lives beside it). */
-    sealedSecrets: ['admin', 'instance-identity', 'sealed-secrets'] as const,
     /** Connection modes and the edge gate (self-hosted only). */
     ingressCapabilities: ['admin', 'ingress', 'capabilities'] as const,
     ingressAccounts: ['admin', 'ingress', 'accounts'] as const,
