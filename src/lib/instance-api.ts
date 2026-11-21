@@ -5245,6 +5245,35 @@ export async function releaseHostingFromCompose(
   })
 }
 
+/** What a released hostname leaves on the servers (`serverUpdate` of the remove-now answer). */
+export type HostingRemovalUpdate = 'next_deploy' | 'no_environment' | 'not_deployed'
+
+/**
+ * `POST /hostings/:id/remove-now`. `alreadyGone` answers a retry for a row that
+ * no longer exists; `removed: false` (`outcome: 'handed_back'`) is a row the
+ * panel made first, kept and managed on this screen again.
+ */
+export type RemoveHostingNowResult = {
+  ok: true
+  removed: boolean
+  alreadyGone?: true
+  outcome?: 'removed' | 'handed_back'
+  hostnames?: string[]
+  serverUpdate?: HostingRemovalUpdate
+}
+
+/**
+ * Let go of a hostname made from the environment's compose file at once, once
+ * the file no longer declares it. Asks for the `hosting.delete` step-up through
+ * `apiFetch`. 409 `environment_deploy_running` while a deploy runs.
+ */
+export async function removeHostingNow(hostingId: string): Promise<RemoveHostingNowResult> {
+  return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/remove-now`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  })
+}
+
 export async function fetchHostingDnsCheck(hostingId: string): Promise<{ dns: HostingDnsReport }> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}/dns-check`)
 }

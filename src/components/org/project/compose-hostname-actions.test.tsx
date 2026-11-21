@@ -79,7 +79,9 @@ describe('ComposeHostnameActions', () => {
     const { onRemove, onManageHere } = renderActions()
     fireEvent.click(screen.getByText('Remove hostname'))
     expect(
-      screen.getByText('Remove example.test? It stops being served after the next deploy.')
+      screen.getByText(
+        'Remove example.test? Its name is released at once; the server stops serving it after the next deploy.'
+      )
     ).toBeTruthy()
     expect(onRemove).not.toHaveBeenCalled()
     pastConfirmGuard()

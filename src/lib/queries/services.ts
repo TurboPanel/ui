@@ -6,6 +6,7 @@ import {
   fetchVisibleHostings,
   fetchVisibleServices,
   releaseHostingFromCompose,
+  removeHostingNow,
   updateHosting,
   updateService,
   type HostingRecord,
@@ -153,6 +154,23 @@ export function useReleaseHostingFromCompose(orgId: string) {
       })
     },
     fallbackError: 'Failed to move the hostname to this screen',
+  })
+}
+
+/** Release a removed hostname at once; refreshes that service's hostings (or all). */
+export function useRemoveHostingNow(orgId: string) {
+  const queryClient = useQueryClient()
+  return useApiMutation({
+    mutationFn: ({ hostingId }: { hostingId: string; serviceId?: string }) =>
+      removeHostingNow(hostingId),
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: variables.serviceId
+          ? queryKeys.org(orgId).hostings.list(variables.serviceId)
+          : queryKeys.org(orgId).hostings.all,
+      })
+    },
+    fallbackError: 'Failed to release the hostname',
   })
 }
 
