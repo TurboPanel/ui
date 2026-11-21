@@ -387,12 +387,12 @@ const DOCKER_TIMESTAMP_RE =
 /**
  * Where one entry ends and the next begins. Docker ends an entry with a line
  * feed, but the text can arrive with a bare carriage return, or with the
- * separator written out (`\n`, `_`) in front of the next entry's nanosecond
- * stamp. A separator only counts when a full stamp follows it, so a message
+ * separator written out (`\n`, `_`) in front of the next entry's timestamp. A
+ * separator only counts when a timestamp follows it, so a message
  * that merely contains a backslash or an underscore is left whole.
  */
-const DOCKER_ENTRY_BREAK =
-  /\r\n|\r|\n|(?:\\r)?(?:\\n|_)(?=\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{9}Z )/
+const DOCKER_STAMP_AHEAD = String.raw`(?=\d{4}-\d\d-\d\dT\d\d:)`
+const DOCKER_ENTRY_BREAK = new RegExp(String.raw`\r\n|\r|\n|(?:\\r)?(?:\\n|_)` + DOCKER_STAMP_AHEAD)
 
 /**
  * Adapt a `docker container logs --timestamps` snapshot to transcript rows,
