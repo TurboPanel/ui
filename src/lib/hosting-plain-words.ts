@@ -251,6 +251,26 @@ export function isRowAlreadyGone(result: Readonly<{ error: string | null }>): bo
   return /\bHTTP 404\b/.test(result.error ?? '')
 }
 
+/** What `useApiMutation().run` answers, as far as the release step needs it. */
+export type RemoveNowRun = Readonly<
+  | { ok: true; value: Readonly<{ removed: boolean; serverUpdate?: string }> }
+  | { ok: false; error: string | null; cause?: unknown }
+>
+
+/**
+ * What Remove hostname shows once the release step has answered: a notice that
+ * the name is released (a 404 counts, the row is already gone) or the plain
+ * words for why it was not.
+ */
+export function removeNowOutcome(
+  hostname: string,
+  run: RemoveNowRun
+): Readonly<{ notice: string } | { error: string }> {
+  if (run.ok) return { notice: hostnameReleasedMessage(hostname, run.value) }
+  if (isRowAlreadyGone(run)) return { notice: hostnameReleasedMessage(hostname, { removed: true }) }
+  return { error: removeNowErrorMessage(run) }
+}
+
 /** A hostname another hosting already serves. */
 export const HOSTNAME_IN_USE_MESSAGE =
   'Another hosting already uses this hostname. Remove it there first, or pick another name.'

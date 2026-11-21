@@ -22,6 +22,7 @@ import {
   isRowAlreadyGone,
   REMOVE_NOW_DEPLOY_RUNNING_MESSAGE,
   removeNowErrorMessage,
+  removeNowOutcome,
   COMPOSE_HOSTNAME_HINT,
   COMPOSE_PROXY_NOTE,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
@@ -240,6 +241,26 @@ describe('plain hosting words', () => {
     ).toBe(true)
     expect(isRowAlreadyGone({ error: 'HTTP 409: environment_deploy_running' })).toBe(false)
     expect(isRowAlreadyGone({ error: null })).toBe(false)
+  })
+
+  it('turns the release answer into a notice or an error, a 404 counting as released', () => {
+    expect(
+      removeNowOutcome('example.test', {
+        ok: true,
+        value: { removed: true, serverUpdate: 'next_deploy' },
+      })
+    ).toEqual({
+      notice: 'example.test is released. The server stops serving it at the next deploy.',
+    })
+    expect(
+      removeNowOutcome('example.test', { ok: false, error: 'x failed: HTTP 404: Not found' })
+    ).toEqual({ notice: 'example.test is released.' })
+    expect(
+      removeNowOutcome('example.test', {
+        ok: false,
+        error: 'x failed: HTTP 409: environment_deploy_running',
+      })
+    ).toEqual({ error: REMOVE_NOW_DEPLOY_RUNNING_MESSAGE })
   })
 
   it('says what a move keeps, and that undeployed changes stay behind for a deployed hostname', () => {

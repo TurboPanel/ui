@@ -145,13 +145,11 @@ import {
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
   hostingActionErrorMessage,
   hostingSaveErrorMessage,
-  hostnameReleasedMessage,
-  isRowAlreadyGone,
   missingCertificateMessage,
   NEW_HOSTING_CERTIFICATE_HINT,
   PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
-  removeNowErrorMessage,
+  removeNowOutcome,
   resolveCertificateRef,
   SERVICE_NOT_SAVED_MESSAGE,
   SHARED_FILE_HOSTNAME_MESSAGE,
@@ -3115,13 +3113,9 @@ export function EnvironmentDetailBody({
       (item) => item.composeServiceName === row.composeServiceName
     )?.id
     const result = await removeHostingNowMutation.run({ hostingId: row.hostingId, serviceId })
-    if (result.ok) {
-      setRemovedNotice(hostnameReleasedMessage(hostname, result.value))
-    } else if (isRowAlreadyGone(result)) {
-      setRemovedNotice(hostnameReleasedMessage(hostname, { removed: true }))
-    } else {
-      setError(removeNowErrorMessage(result))
-    }
+    const outcome = removeNowOutcome(hostname, result)
+    if ('notice' in outcome) setRemovedNotice(outcome.notice)
+    else setError(outcome.error)
     await queryClient.invalidateQueries({
       queryKey: queryKeys.org(orgId).hostings.all,
     })
