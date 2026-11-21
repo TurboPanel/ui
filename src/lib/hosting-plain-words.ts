@@ -236,13 +236,14 @@ export type RemoveNowAnswer = Readonly<{
  */
 export function hostnameReleasedMessage(fallback: string, answer: RemoveNowAnswer): string {
   const names = answer.hostnames?.length ? answer.hostnames : [fallback]
-  if (!answer.removed) {
-    return `${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} managed on this screen again.`
-  }
-  const released = `${names.join(', ')} ${names.length > 1 ? 'are' : 'is'} released.`
-  return answer.serverUpdate === 'next_deploy'
-    ? `${released} The server stops serving ${names.length > 1 ? 'them' : 'it'} at the next deploy.`
-    : released
+  const many = names.length > 1
+  const list = names.join(', ')
+  const verb = many ? 'are' : 'is'
+  if (!answer.removed) return `${list} ${verb} managed on this screen again.`
+  const released = `${list} ${verb} released.`
+  if (answer.serverUpdate !== 'next_deploy') return released
+  const pronoun = many ? 'them' : 'it'
+  return `${released} The server stops serving ${pronoun} at the next deploy.`
 }
 
 /** A release that failed, in words that say where to try again. */
