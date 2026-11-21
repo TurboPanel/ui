@@ -617,7 +617,7 @@ export function ServerDetailSection({
   const processedCommandIdsRef = useRef<Set<string>>(new Set())
 
   const invalidateServer = useCallback(() => {
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({
       queryKey: queryKeys.org(orgId).servers.detail(serverId),
     })
   }, [queryClient, orgId, serverId])
@@ -825,12 +825,12 @@ export function ServerDetailSection({
             setDeleteBlocked(blocked)
             setDeleteError(formatServerDeleteBlockedError(err))
             if (blocked) {
-              queryClient.invalidateQueries({
+              void queryClient.invalidateQueries({
                 queryKey: queryKeys.org(orgId).servers.deletePreview(serverId),
               })
             }
             if (err instanceof ServerPrincipalChoiceRefusedError) {
-              queryClient.invalidateQueries({
+              void queryClient.invalidateQueries({
                 queryKey: queryKeys.org(orgId).servers.principalRemovalPlan(serverId),
               })
             }
