@@ -113,7 +113,13 @@ export function useDeleteTunnel(orgId: string) {
 }
 
 export function useAddTunnelHostname(orgId: string, tunnelId: string) {
-  const invalidate = useInvalidateTunnels(orgId)
+  const invalidateTunnels = useInvalidateTunnels(orgId)
+  const queryClient = useQueryClient()
+  // A site's certificate options depend on which tunnel carries its names.
+  const invalidate = async () => {
+    await invalidateTunnels()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all })
+  }
   return useApiMutation({
     mutationFn: (body: {
       hostname: string

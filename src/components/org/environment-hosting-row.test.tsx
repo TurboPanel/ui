@@ -28,6 +28,7 @@ vi.mock(
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
 vi.mock('@/components/header-chevron', () => ({ HeaderChevron: () => null }))
+vi.mock('@/components/org/hosting-tunnel-names', () => ({ HostingTunnelNames: () => null }))
 vi.mock('@/components/org/hosting-certificate-panel', () => ({
   HostingCertificatePanel: ({ disabled }: { disabled: boolean }) => (
     <div data-testid="certificate-panel" data-disabled={String(disabled)} />

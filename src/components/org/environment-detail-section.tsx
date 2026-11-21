@@ -175,6 +175,7 @@ import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
 import { HostingNameCertificates } from '@/components/org/hosting-name-certificates'
+import { HostingTunnelNames } from '@/components/org/hosting-tunnel-names'
 import { nameChoicesToSend, type NameChoiceEdits } from '@/lib/name-certificates'
 import {
   withCertificateRefusal,
@@ -1414,6 +1415,8 @@ export function HostingPanelRow({
   composeServiceName,
   serviceContext,
   hostingId,
+  serverId = null,
+  canManage = false,
   composeRoute = null,
   composeEntry = null,
   composeState = 'not-deployed',
@@ -1440,6 +1443,10 @@ export function HostingPanelRow({
   serviceContext: HostingServiceContext
   /** Persisted hosting row id; null until the first successful save. */
   hostingId: string | null
+  /** The environment's server (its own or the project's default), for the tunnels that run on it. */
+  serverId?: string | null
+  /** Whether the person can put a name on a tunnel (organization manager). */
+  canManage?: boolean
   /**
    * `hostingEntryKey` of the `x-turbopanel.hosting` entry this row renders, or
    * null for a panel-authored row. Non-null means compose owns the route: the
@@ -1592,6 +1599,16 @@ export function HostingPanelRow({
         locked={locked}
         onChange={onChange}
       />
+
+      {isHttp && hostingId && !awaitingRemoval ? (
+        <HostingTunnelNames
+          orgId={orgId}
+          hostingId={hostingId}
+          serverId={serverId}
+          locked={disabled}
+          canManage={canManage}
+        />
+      ) : null}
 
       {isHttp && hostingId ? (
         <HostingCertificatePanel
@@ -2030,6 +2047,8 @@ function EnvironmentDeployChromePanels({
 
 function EnvironmentHostingSectionPanel({
   orgId,
+  serverId,
+  canManage,
   hostingRows,
   hostingEditors,
   setHostingEditors,
@@ -2041,6 +2060,9 @@ function EnvironmentHostingSectionPanel({
   focusHostingId,
 }: Readonly<{
   orgId: string
+  /** The environment's server (its own or the project's default); null when none is set. */
+  serverId: string | null
+  canManage: boolean
   /**
    * One descriptor per rendered route — every `x-turbopanel.hosting` entry a
    * service declares, or its single panel row when it declares none. Built by
@@ -2102,6 +2124,8 @@ function EnvironmentHostingSectionPanel({
                   composeServiceName={row.composeServiceName}
                   serviceContext={row.serviceContext}
                   hostingId={row.hostingId}
+                  serverId={serverId}
+                  canManage={canManage}
                   composeRoute={row.source.kind === 'compose' ? row.source.route : null}
                   composeEntry={row.source.kind === 'compose' ? row.source.entry : null}
                   composeState={row.source.kind === 'compose' ? row.source.state : undefined}
@@ -2391,6 +2415,8 @@ function EnvironmentLoadedPanels({
       {showSection('hosting') ? (
         <EnvironmentHostingSectionPanel
           orgId={orgId}
+          serverId={placementServerId}
+          canManage={canManage}
           hostingRows={hostingRows}
           hostingEditors={hostingEditors}
           setHostingEditors={setHostingEditors}

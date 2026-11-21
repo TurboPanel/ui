@@ -126,7 +126,7 @@ function HostnameRow({
 }
 
 /** The records that already hold the name, and the choice to replace them. */
-function ExistingRecords({
+export function ExistingRecords({
   hostname,
   records,
   replaceable,
@@ -174,7 +174,7 @@ function ExistingRecords({
 }
 
 /** What a failed replacement already removed, so it can be added back by hand. */
-function RemovedRecords({
+export function RemovedRecords({
   hostname,
   records,
   onDismiss,
