@@ -83,7 +83,13 @@ function aria(props: Props) {
 
 function dom(tag: string) {
   return function Stub(props: Props) {
-    return createElement(tag, aria(props), props.children)
+    // Pointer and focus handlers, for the components that react to them.
+    const { onPointerEnter, onPointerLeave, onFocus, onBlur } = props as Record<string, never>
+    return createElement(
+      tag,
+      { ...aria(props), onPointerEnter, onPointerLeave, onFocus, onBlur },
+      props.children
+    )
   }
 }
 

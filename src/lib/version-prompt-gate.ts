@@ -6,11 +6,22 @@ import { useStepUpOpen } from '@/lib/use-step-up-open'
 /** How long the new-version prompt keeps away after a change finishes. */
 export const VERSION_PROMPT_QUIET_MS = 5000
 
+/**
+ * The most that busy changes can hold the prompt. A change that hangs, or one
+ * paused while offline, would otherwise keep it away for good.
+ */
+export const VERSION_PROMPT_MAX_HOLD_MS = 60_000
+
 let openDialogs = 0
 const listeners = new Set<() => void>()
 
 function emit(): void {
   for (const listener of listeners) listener()
+}
+
+/** Register while `open`; for a dialog that is not the shared `ModalSheet`. */
+export function useRegisterOpenDialog(open: boolean): void {
+  useEffect(() => (open ? registerOpenDialog() : undefined), [open])
 }
 
 /**
@@ -77,10 +88,26 @@ function useQuietAfterMutations(quietMs: number): boolean {
  * of what the person did ("Deleted organization ...") has been shown and gone.
  * The result always comes first. A prompt that was held back shows as soon as this turns true.
  */
-export function useVersionPromptReady(quietMs: number = VERSION_PROMPT_QUIET_MS): boolean {
+export function useVersionPromptReady(
+  quietMs: number = VERSION_PROMPT_QUIET_MS,
+  maxHoldMs: number = VERSION_PROMPT_MAX_HOLD_MS
+): boolean {
   const dialogOpen = useAnyDialogOpen()
   const stepUpOpen = useStepUpOpen()
   const quiet = useQuietAfterMutations(quietMs)
   const resultPending = useFlashNotices().length > 0
-  return quiet && !dialogOpen && !stepUpOpen && !resultPending
+
+  // Busy changes hold the prompt for at most `maxHoldMs`, however long they
+  // keep running or finishing; a dialog, step-up or result notice still holds it.
+  const [heldTooLong, setHeldTooLong] = useState(false)
+  useEffect(() => {
+    if (quiet) {
+      setHeldTooLong(false)
+      return
+    }
+    const timer = setTimeout(() => setHeldTooLong(true), maxHoldMs)
+    return () => clearTimeout(timer)
+  }, [quiet, maxHoldMs])
+
+  return (quiet || heldTooLong) && !dialogOpen && !stepUpOpen && !resultPending
 }

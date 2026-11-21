@@ -1,10 +1,15 @@
 // @vitest-environment happy-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dismissFlashNotice, postFlashNotice, resetFlashNoticesForTests } from './flash-notice'
-import { registerOpenDialog, useAnyDialogOpen, useVersionPromptReady } from './version-prompt-gate'
+import {
+  registerOpenDialog,
+  useAnyDialogOpen,
+  useRegisterOpenDialog,
+  useVersionPromptReady,
+} from './version-prompt-gate'
 
 const { stepUpOpen } = vi.hoisted(() => ({ stepUpOpen: { value: false } }))
 vi.mock('@/lib/use-step-up-open', () => ({ useStepUpOpen: () => stepUpOpen.value }))
@@ -99,6 +104,44 @@ describe('version prompt gate', () => {
     expect(result.current).toBe(false)
     act(() => vi.advanceTimersByTime(600))
     expect(result.current).toBe(true)
+  })
+
+  it('lets a busy page release the prompt after the ceiling, but not past an open dialog', async () => {
+    const { result } = renderHook(() => useVersionPromptReady(1000, 5000), { wrapper })
+    // A change that never finishes.
+    act(() => {
+      void client
+        .getMutationCache()
+        .build(client, { mutationFn: () => new Promise<void>(() => {}) })
+        .execute(undefined)
+    })
+    await act(async () => {})
+    act(() => vi.advanceTimersByTime(1))
+    expect(result.current).toBe(false)
+    act(() => vi.advanceTimersByTime(4000))
+    expect(result.current).toBe(false)
+    let release = () => {}
+    act(() => {
+      release = registerOpenDialog()
+      vi.advanceTimersByTime(2000)
+    })
+    expect(result.current).toBe(false) // ceiling passed, dialog still holds it
+    act(() => release())
+    expect(result.current).toBe(true)
+  })
+
+  it('holds a dialog open while its component says so', () => {
+    const { result } = renderHook(
+      () => {
+        const [open, setOpen] = useState(true)
+        useRegisterOpenDialog(open)
+        return { open, setOpen, any: useAnyDialogOpen() }
+      },
+      { wrapper }
+    )
+    expect(result.current.any).toBe(true)
+    act(() => result.current.setOpen(false))
+    expect(result.current.any).toBe(false)
   })
 
   it('also waits after a change that failed', async () => {

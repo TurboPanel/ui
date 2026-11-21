@@ -114,6 +114,10 @@ describe('ControlPlaneUpdatingOverlay', () => {
       expect(screen.getByText('Reload')).toBeTruthy()
       expect(screen.getByText('Dismiss')).toBeTruthy()
       expect(screen.queryByText('Reload now')).toBeNull()
+      // Announced politely, without taking focus.
+      const toast = screen.getByRole('status')
+      expect(toast.getAttribute('aria-live')).toBe('polite')
+      expect(toast.textContent).toContain('A newer TurboPanel version is live')
       expect(document.querySelector('[aria-modal="true"]')).toBeNull()
     })
 

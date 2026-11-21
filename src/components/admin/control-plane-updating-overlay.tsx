@@ -187,11 +187,6 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
   },
-  title: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '600',
-  },
   copy: {
     color: colors.textMuted,
     lineHeight: 20,

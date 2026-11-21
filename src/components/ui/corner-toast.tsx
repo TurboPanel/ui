@@ -21,9 +21,27 @@ export function CornerToast({
   title,
   body,
   actions,
-}: Readonly<{ tone?: NoticeTone; title?: string; body?: string; actions?: ReactNode }>) {
+  onHoldChange,
+}: Readonly<{
+  tone?: NoticeTone
+  title?: string
+  body?: string
+  actions?: ReactNode
+  /** Called with true while the pointer is over the toast or focus is inside it. */
+  onHoldChange?: (held: boolean) => void
+}>) {
+  // A polite live region: a screen reader reads it out when it appears,
+  // without moving focus.
   return (
-    <View style={styles.toast}>
+    <View
+      role="status"
+      accessibilityLiveRegion="polite"
+      style={styles.toast}
+      onPointerEnter={onHoldChange && (() => onHoldChange(true))}
+      onPointerLeave={onHoldChange && (() => onHoldChange(false))}
+      onFocus={onHoldChange && (() => onHoldChange(true))}
+      onBlur={onHoldChange && (() => onHoldChange(false))}
+    >
       <Notice compact tone={tone} title={title} body={body} actions={actions} />
     </View>
   )

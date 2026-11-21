@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import {
   Modal,
   Pressable,
@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { colors, layout, spacing } from '@/lib/theme'
-import { registerOpenDialog } from '@/lib/version-prompt-gate'
+import { useRegisterOpenDialog } from '@/lib/version-prompt-gate'
 
 /**
  * How the sheet may be closed.
@@ -81,7 +81,7 @@ export function ModalSheet({
   const dismiss = (blocking ? undefined : onRequestClose) ?? swallowClose
 
   // Tell the new-version prompt to wait while this dialog is open.
-  useEffect(() => (visible ? registerOpenDialog() : undefined), [visible])
+  useRegisterOpenDialog(visible)
 
   return (
     <Modal
