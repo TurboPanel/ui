@@ -3930,6 +3930,8 @@ export type ProjectRecord = {
     defaultServerId?: string
     /** Set on a project created from a Git repository's compose file. */
     composeSource?: ProjectComposeSource
+    /** Project overlays on the Base, kept as stored when a save sends them back. */
+    composeOverlays?: unknown[]
   } | null
   createdAt: string
   updatedAt: string

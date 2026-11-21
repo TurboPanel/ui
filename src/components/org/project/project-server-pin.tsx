@@ -5,8 +5,7 @@ import type { OrgServerRecord } from '@/lib/instance-api'
 import { useOrgServers, useUpdateProject } from '@/lib/queries'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
 import { colors, webPointer } from '@/lib/theme'
-import { failedRunMessage } from '@/lib/user-error'
-import { isBaseTracksRepositoryError } from '@/lib/v4/compose-source'
+import { reportFailedSave } from '@/lib/v4/compose-source'
 
 function serverLabel(server: OrgServerRecord): string {
   return server.name?.trim() || server.hostname?.trim() || server.id.slice(0, 8)
@@ -59,9 +58,7 @@ export function ProjectServerHeaderControl() {
     })
     const result = await updateProject.run({ options: nextOptions, target: 'base' })
     if (!result.ok) {
-      setError(failedRunMessage(result, 'Could not save the default server'), {
-        reload: isBaseTracksRepositoryError(result.cause),
-      })
+      reportFailedSave(setError, result, 'Could not save the default server')
     }
   }
 

@@ -8,6 +8,7 @@
  */
 
 import { formatRelativeLocalDateTime } from '@/lib/format-datetime'
+import { failedRunMessage } from '@/lib/user-error'
 import { sha256Hex } from '@/lib/v4/sha256'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import type {
@@ -116,6 +117,21 @@ export function baseEditBlockedMessage(
   return isFollowingRepository(project)
     ? 'This project follows the repository\u2019s compose file. Stop following it in the Base first to edit the Base here.'
     : null
+}
+
+/**
+ * Reports a failed save to the project's error line. A Base edit the control
+ * plane refused (the project follows the repository and the Base changed since
+ * it was loaded) also offers a reload.
+ */
+export function reportFailedSave(
+  setError: (message: string, options: { reload: boolean }) => void,
+  result: Readonly<{ error: string | null; cause?: unknown }>,
+  fallback: string
+): void {
+  setError(failedRunMessage(result, fallback), {
+    reload: isBaseTracksRepositoryError(result.cause),
+  })
 }
 
 /** True when `err` is the control plane refusing a Base edit while the project follows the repository. */

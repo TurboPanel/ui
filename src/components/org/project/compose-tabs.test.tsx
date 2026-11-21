@@ -11,7 +11,7 @@ import {
   seedComposeDraftFromDocument,
   useComposeDraftStore,
 } from './compose-draft-context'
-import { ServicesPanelBody } from './compose-tabs'
+import { ServicesPanelBody, saveBaseCompose } from './compose-tabs'
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock(
@@ -178,5 +178,30 @@ describe('Overview Save on a stale Base draft', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Save' }))
     await waitFor(() => expect(onSaveProjectCompose).toHaveBeenCalledTimes(1))
     expect(onSaveBlocked).not.toHaveBeenCalled()
+  })
+})
+
+describe('saveBaseCompose', () => {
+  it('clears the error line and reports nothing when the save works', async () => {
+    const setError = vi.fn()
+    await saveBaseCompose(vi.fn().mockResolvedValue({ ok: true, error: null }), doc('x'), setError)
+    expect(setError).toHaveBeenCalledTimes(1)
+    expect(setError).toHaveBeenCalledWith(null)
+  })
+
+  it('shows the control plane words and offers a reload on a stale Base', async () => {
+    const setError = vi.fn()
+    const cause = new Error(
+      '/projects/p failed: HTTP 409: base_tracks_repository \u2014 Reload and save again.'
+    )
+    const run = vi.fn().mockResolvedValue({ ok: false, error: cause.message, cause })
+    await saveBaseCompose(run, doc('x'), setError)
+    expect(setError).toHaveBeenLastCalledWith('Reload and save again.', { reload: true })
+  })
+
+  it('reports another failure without a reload, even before any error state is set', async () => {
+    const setError = vi.fn()
+    await saveBaseCompose(vi.fn().mockResolvedValue({ ok: false, error: null }), doc('x'), setError)
+    expect(setError).toHaveBeenLastCalledWith('Failed to save compose', { reload: false })
   })
 })

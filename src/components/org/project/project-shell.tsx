@@ -286,6 +286,7 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
       {error && errorReload ? (
         <Pressable
           accessibilityRole="button"
+          style={StyleSheet.flatten([styles.reloadLink, webPointer])}
           onPress={() => {
             setError(null)
             void invalidateProject()
@@ -348,6 +349,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 15,
     fontWeight: '600',
+  },
+  reloadLink: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   reloadText: {
     color: colors.link,

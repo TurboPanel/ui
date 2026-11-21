@@ -93,8 +93,9 @@ export function usePersistAccountWrites(orgId: string, projectId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
     mutationFn: async (writes: readonly AccountWrite[]) => {
-      // A tracking project refuses every Base write, so refuse before any
-      // document goes out rather than saving only the environment half.
+      // A tracking project refuses a changed Base (an unchanged echo is
+      // accepted), and these writes change it, so refuse before any document
+      // goes out rather than saving only the environment half.
       if (writes.some((write) => write.target.kind === 'base')) {
         const tracked = queryClient.getQueryData<{ project: ProjectRecord }>(
           queryKeys.org(orgId).projects.detail(projectId)

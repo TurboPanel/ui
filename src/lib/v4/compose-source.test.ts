@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ComposeDocument } from '@/lib/compose'
 import type { ProjectComposeSource } from '@/lib/instance-api'
 import {
@@ -6,7 +6,9 @@ import {
   composeSourceForCreate,
   environmentBranchRows,
   followingNote,
+  isBaseTracksRepositoryError,
   isFollowingRepository,
+  reportFailedSave,
   baseEditBlockedMessage,
   shortCommit,
 } from './compose-source'
@@ -91,6 +93,19 @@ describe('baseEditBlockedMessage', () => {
       baseEditBlockedMessage({ options: { composeSource: { ...SOURCE, mode: 'seed' } } })
     ).toBeNull()
     expect(baseEditBlockedMessage({ options: {} })).toBeNull()
+  })
+})
+
+describe('reportFailedSave', () => {
+  it('adds a reload for the refusal of a stale Base, and only for it', () => {
+    const cause = new Error('/p failed: HTTP 409: base_tracks_repository \u2014 Reload.')
+    const stale = vi.fn()
+    reportFailedSave(stale, { error: cause.message, cause }, 'fallback')
+    expect(stale).toHaveBeenCalledWith('Reload.', { reload: true })
+    const other = vi.fn()
+    reportFailedSave(other, { error: null }, 'fallback')
+    expect(other).toHaveBeenCalledWith('fallback', { reload: false })
+    expect(isBaseTracksRepositoryError(new Error('HTTP 409: compose_source_missing'))).toBe(false)
   })
 })
 
