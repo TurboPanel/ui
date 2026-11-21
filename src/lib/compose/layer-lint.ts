@@ -4,6 +4,7 @@ import {
   restoreComposeTurbopanelExtensions,
 } from './hidden-extension'
 import { composeDocumentToYaml, mergeComposeOverlay, type ComposeDocument } from './index'
+import { undefinedResourceIssues } from './undefined-resources'
 import { lintComposeYaml, type ComposeLintIssue, type ComposeLintOptions } from './lint'
 
 /**
@@ -78,8 +79,13 @@ export function lintEnvironmentLayer(
   options?: ComposeLintOptions
 ): ComposeLintIssue[] {
   const layerIssues = lintComposeYaml(layerSource, { ...options, requireImageOrBuild: false })
-  // An empty layer, or one that does not parse, has nothing to merge.
-  if (layerSource.trim() === '' || layerIssues.some((issue) => issue.path === '$')) {
+  // An empty layer, or one that does not parse, has nothing to merge. The
+  // "no services section" note is a warning, not a parse failure: a layer that
+  // only declares volumes still has to be checked against the Base.
+  if (
+    layerSource.trim() === '' ||
+    layerIssues.some((issue) => issue.path === '$' && issue.level === 'error')
+  ) {
     return layerIssues
   }
   if (base === null || 'error' in base) {
@@ -98,6 +104,7 @@ export function lintEnvironmentLayer(
     ]
   }
   let mergedYaml: string
+  let undefinedResources: ComposeLintIssue[] = []
   try {
     // The first layer is resolved on its own, as the control plane does, so a
     // `!reset` in the Base keeps its value instead of deleting the key.
@@ -105,6 +112,13 @@ export function lintEnvironmentLayer(
     let merged = mergeComposeOverlay(first, null)
     for (const layer of rest) merged = mergeComposeOverlay(merged, layer)
     mergedYaml = composeDocumentToYaml(merged)
+    // A save that leaves a service using a volume, network, secret or config no
+    // layer declares would fail the next deploy; refuse it here, as the control plane does.
+    undefinedResources = undefinedResourceIssues(merged.data).map((issue): ComposeLintIssue => ({
+      level: 'error',
+      message: issue.message,
+      path: issue.path,
+    }))
   } catch {
     return layerIssues
   }
@@ -113,6 +127,7 @@ export function lintEnvironmentLayer(
   )
   return [
     ...layerIssues,
+    ...undefinedResources,
     ...mergedIssues.map((issue): ComposeLintIssue => ({
       level: issue.level,
       message: issue.message,
