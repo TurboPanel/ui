@@ -1,5 +1,6 @@
 import {
   DeployHealthCheckMissingError,
+  DeployNetworkSharesRefusedError,
   DeployResourceLimitExceededError,
   DeployTunnelRefusedError,
 } from '@/lib/instance-api'
@@ -24,6 +25,43 @@ function serverSentence(message: string): string | null {
   return sentence.length > 0 ? sentence : null
 }
 
+function quotedList(names: readonly string[]): string {
+  return names.map((name) => `"${name}"`).join(', ')
+}
+
+/**
+ * Plain words for a refused network share: what was refused, why, and who or
+ * what fixes it. The server setting names the servers; the others say who can
+ * grant the permission or approve the shares.
+ */
+export function networkSharesRefusalMessage(err: DeployNetworkSharesRefusedError): string {
+  const volumes = err.volumes.length > 0 ? ` (${quotedList(err.volumes)})` : ''
+  const head = `This compose file mounts a network share${volumes}.`
+  if (err.reason === 'server_setting') {
+    const where =
+      err.servers.length > 0 ? quotedList(err.servers.map((server) => server.name)) : 'the server'
+    return `${head} Network shares are not allowed on ${where}. Turn on "Allow Network Shares" in the server's settings, then deploy again.`
+  }
+  if (err.reason === 'approval') {
+    const turnedBack =
+      err.servers.length > 0
+        ? ` Allow Network Shares was turned off and on again on ${quotedList(err.servers.map((server) => server.name))} since the last approval, which voids it.`
+        : ''
+    return `${head} This was an automated deploy (a git push or a schedule), and a manual deploy must approve these shares first.${turnedBack} Deploy once from the web interface as an organization owner or manager, or as someone with the Deploy network shares permission; automated deploys of the same shares then run.`
+  }
+  return `${head} You do not have the Deploy network shares permission. An organization owner or manager can deploy it, and an owner can grant you the permission under Access.`
+}
+
+/** The servers a share refusal names (the ones with Allow Network Shares off, or turned off and on again); empty for any other error. */
+export function networkSharesRefusalServers(err: unknown): { id: string; name: string }[] {
+  return err instanceof DeployNetworkSharesRefusedError ? err.servers : []
+}
+
+/** A refusal the person must see at once: the deploy preview closes so it is not hidden under it. */
+export function deployRefusalClosesPreview(err: unknown): boolean {
+  return err instanceof DeployNetworkSharesRefusedError
+}
+
 /** The deploy was refused because an app has no Hosting Account to run as. */
 export function isHostingAccountRefusal(err: unknown): boolean {
   return err instanceof Error && err.message.includes('principal_required_for_service_kind')
@@ -34,7 +72,16 @@ export function deployErrorMessage(err: unknown): string {
   if (err instanceof DeployTunnelRefusedError) {
     return tunnelDeployRefusalMessage(err.code, err.hostnames) ?? err.message
   }
+  if (err instanceof DeployNetworkSharesRefusedError) {
+    return networkSharesRefusalMessage(err)
+  }
   const message = err instanceof Error ? err.message : 'Failed to deploy environment'
+  if (message.includes('compose_network_shares_refused')) {
+    return (
+      serverSentence(message) ??
+      'This compose file mounts a network share that this server or your role does not allow. Turn on "Allow Network Shares" in the server\'s settings, and ask an organization owner or manager to deploy it.'
+    )
+  }
   if (SERVER_SENTENCE_CODES.some((code) => message.includes(code))) {
     return (
       serverSentence(message) ??
@@ -99,6 +146,9 @@ export function deployPreviewFailureMessage(err: unknown): string | null {
   }
   if (err instanceof DeployTunnelRefusedError) {
     return tunnelDeployRefusalMessage(err.code, err.hostnames)
+  }
+  if (err instanceof DeployNetworkSharesRefusedError) {
+    return networkSharesRefusalMessage(err)
   }
   return null
 }

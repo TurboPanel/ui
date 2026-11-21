@@ -32,6 +32,7 @@ import {
   useTeams,
 } from '@/lib/queries/access'
 import { getAccessManagementPermissionKey, useCan } from '@/lib/query-client'
+import { PERMISSIONS_BY_SCOPE, grantPermissionLabel } from '@/lib/access-permissions'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -48,11 +49,6 @@ const SUBJECT_KIND_OPTIONS = [
   { value: 'team', label: 'team' },
   { value: 'organization', label: 'organization' },
 ] as const
-
-const PERMISSIONS_BY_SCOPE: Record<AccessScopeKind, PermissionKey[]> = {
-  organization: ['organization:own', 'organization:manage'],
-  team: ['team:own', 'team:manage'],
-}
 
 type ScopeItem = {
   id: string
@@ -256,7 +252,9 @@ function AccessGrantCard({
           <View style={styles.badgeRow}>
             {/* Deny grants are not supported — every grant is an allow grant. */}
             <Badge label={grant.effect} tone="ok" />
-            <Text style={panelStyles.detailLine}>permission: {grant.permissionKey}</Text>
+            <Text style={panelStyles.detailLine}>
+              permission: {grantPermissionLabel(grant.permissionKey)}
+            </Text>
           </View>
         </View>
         {canManage ? (

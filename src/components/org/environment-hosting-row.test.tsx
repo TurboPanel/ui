@@ -41,6 +41,9 @@ vi.mock('@/components/org/project/preview-deployment-modal', () => ({}))
 vi.mock('@/components/org/logs/container-log-tail', () => ({ ContainerLogTail: () => null }))
 vi.mock('@/components/org/managed/container-status-badge', () => ({}))
 vi.mock('@/components/org/service-settings-panel', () => ({ ServiceSettingsPanel: () => null }))
+vi.mock('@/components/org/network-shares-refusal-links', () => ({
+  NetworkSharesRefusalLinks: () => null,
+}))
 vi.mock('@/components/org/storage-section', () => ({ StorageSection: () => null }))
 vi.mock('@/components/org/variables-section', () => ({ VariablesSection: () => null }))
 vi.mock('@/components/org/removed-service-card', () => ({ RemovedServiceCard: () => null }))
