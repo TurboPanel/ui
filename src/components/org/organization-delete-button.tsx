@@ -1,6 +1,7 @@
 import { useRouter, type Href } from 'expo-router'
 import { useState } from 'react'
 import { TypeNameDeleteButton, type ButtonSize } from '@/components/ui'
+import { postFlashNotice } from '@/lib/flash-notice'
 import {
   organizationDeleteFailure,
   ORGANIZATION_DELETE_DIALOG_DESCRIPTION,
@@ -44,6 +45,8 @@ export function OrganizationDeleteButton({
       setFailure(organizationDeleteFailure(err, orgId))
       return false
     }
+    // The caller redirects; the notice is queued outside the screen so it outlives that.
+    postFlashNotice(`Deleted organization ${orgName}.`)
     onDeleted(orgId)
     return true
   }

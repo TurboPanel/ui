@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import {
   Modal,
   Pressable,
@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { colors, layout, spacing } from '@/lib/theme'
+import { registerOpenDialog } from '@/lib/version-prompt-gate'
 
 /**
  * How the sheet may be closed.
@@ -79,6 +80,9 @@ export function ModalSheet({
   const isCompact = width < layout.desktopBreakpoint
   const dismiss = (blocking ? undefined : onRequestClose) ?? swallowClose
 
+  // Tell the new-version prompt to wait while this dialog is open.
+  useEffect(() => (visible ? registerOpenDialog() : undefined), [visible])
+
   return (
     <Modal
       visible={visible}
@@ -97,13 +101,7 @@ export function ModalSheet({
             accessibilityLabel={dismissLabel ?? `Close ${title}`}
           />
         )}
-        <View
-          style={[
-            styles.panel,
-            { maxWidth },
-            isCompact && styles.panelSheet,
-          ]}
-        >
+        <View style={[styles.panel, { maxWidth }, isCompact && styles.panelSheet]}>
           <Text style={styles.title}>{title}</Text>
           {/* The body scrolls, the footer stays pinned: on a phone a tall body
               used to push the confirm button off the sheet with no way to reach it. */}
@@ -112,9 +110,7 @@ export function ModalSheet({
             contentContainerStyle={styles.bodyContent}
             keyboardShouldPersistTaps="handled"
           >
-            {description ? (
-              <Text style={styles.description}>{description}</Text>
-            ) : null}
+            {description ? <Text style={styles.description}>{description}</Text> : null}
             {children}
           </ScrollView>
           {footer ? <View style={styles.footer}>{footer}</View> : null}

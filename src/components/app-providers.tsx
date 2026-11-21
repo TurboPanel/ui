@@ -9,6 +9,7 @@ import { isRemoteCookieClient } from '@/lib/control-plane'
 import { hydrateControlPlaneStore } from '@/lib/control-plane-accounts'
 import { createAppQueryClient } from '@/lib/query-client'
 import { DashboardWarmup } from '@/components/dashboard-warmup'
+import { FlashNoticeHost } from '@/components/flash-notice-host'
 import { ReauthSheet } from '@/components/auth/reauth-sheet'
 import { ControlPlaneUpdatingOverlay } from '@/components/admin/control-plane-updating-overlay'
 import { colors } from '@/lib/theme'
@@ -49,6 +50,7 @@ export function AppProviders({ children }: AppProvidersProps) {
           <DashboardWarmup />
           {children}
           <ControlPlaneUpdatingOverlay />
+          <FlashNoticeHost />
           <ReauthSheet />
         </AuthProvider>
       </ControlPlaneGate>
