@@ -16,6 +16,9 @@ const BASE = yamlToComposeDocument(`services:
       - data:/data
   web:
     image: nginx:alpine
+volumes:
+  data:
+  media:
 `)
 
 function lint(layerYaml: string, base: unknown, overlays: unknown[] = [], after: unknown[] = []) {
@@ -58,6 +61,30 @@ describe('lintEnvironmentLayer', () => {
     expect(issues[0]?.message).toBe(
       `Service "worker" must define "image" or "build" - neither the project's Base nor this environment's changes give it one`
     )
+  })
+
+  it('refuses a save that drops a top-level volume a service still mounts', () => {
+    const base = yamlToComposeDocument(
+      'services:\n  qbittorrent:\n    image: qbit\n    volumes:\n      - qbittorrent-config:/config\n'
+    )
+    // What the environment stored: it declares the volume the Base only mounts.
+    const stored = 'volumes:\n  qbittorrent-config:\n  pia:\n'
+    expect(blockingComposeLintIssues(lint(stored, base))).toEqual([])
+
+    // What the editor used to show back: the declaration is gone.
+    const shown = blockingComposeLintIssues(lint('volumes:\n  pia:\n  downloads:\n', base))
+    expect(shown).toHaveLength(1)
+    expect(shown[0]?.message).toContain('volume "qbittorrent-config"')
+    expect(shown[0]?.message).toContain('Service "qbittorrent"')
+  })
+
+  it('does not ask for a declaration of a bind mount or an anonymous volume', () => {
+    const base = yamlToComposeDocument(
+      'services:\n  web:\n    image: x\n    volumes:\n      - ./data:/data\n      - /srv:/srv\n      - /anon\n'
+    )
+    expect(
+      blockingComposeLintIssues(lint('services:\n  web:\n    restart: always\n', base))
+    ).toEqual([])
   })
 
   it('accepts a new service that names its own image', () => {

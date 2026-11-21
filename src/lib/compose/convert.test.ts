@@ -332,3 +332,23 @@ services:
     expect(() => composeDocumentToYaml(doc)).toThrow(/Alias nodes cannot have tags/)
   })
 })
+
+describe('null-valued top-level volumes', () => {
+  it('shows every stored volume and saves them back unchanged', () => {
+    const stored: ComposeDocument = {
+      version: 1,
+      data: {
+        services: {
+          qbittorrent: { image: 'qbit', volumes: ['qbittorrent-config:/config'] },
+        },
+        volumes: { pia: null, downloads: null, 'pia-shared': null, 'qbittorrent-config': null },
+      },
+      presentation: { keyOrder: ['services', 'volumes'], comments: {} },
+    }
+    const text = composeDocumentToYaml(stored)
+    for (const name of ['pia', 'downloads', 'pia-shared', 'qbittorrent-config']) {
+      expect(text).toContain(`  ${name}: null`)
+    }
+    expect(yamlToComposeDocument(text).data).toEqual(stored.data)
+  })
+})
