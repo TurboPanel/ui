@@ -11,7 +11,6 @@ import {
 import { LoadingState } from '@/components/ui'
 import { projectRepositoriesHref } from '@/lib/org-navigation'
 import { buildProjectOptionsPatch } from '@/lib/project-options'
-import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
 import {
   environmentPageTabHref,
   isManagedProject,
@@ -31,6 +30,7 @@ import { useOrganizationRecord } from '@/lib/queries/auth'
 import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
 import { userWorkspaces } from '@/lib/system-inventory'
 import { failedRunMessage } from '@/lib/user-error'
+import { isBaseTracksRepositoryError } from '@/lib/v4/compose-source'
 import {
   buildProjectGeneralPatch,
   projectDescriptionProblem,
@@ -155,7 +155,11 @@ export function ProjectSettingsScreen() {
     setBusy(kind)
     const result = await update.run(body)
     setBusy(null)
-    if (!result.ok && update.actionError) setError(update.actionError)
+    if (!result.ok) {
+      setError(failedRunMessage(result, 'Could not save the project'), {
+        reload: isBaseTracksRepositoryError(result.cause),
+      })
+    }
     return result.ok
   }
 
@@ -193,11 +197,6 @@ export function ProjectSettingsScreen() {
         keepOriginalNames={(project.options?.containerNaming ?? 'uuid') === 'custom'}
         savingNames={busy === 'names'}
         onKeepOriginalNames={(keep) => {
-          const blocked = settingsSaveBlockedMessage(project)
-          if (blocked) {
-            setError(blocked)
-            return
-          }
           void run('names', {
             options: buildProjectOptionsPatch(project, {
               containerNaming: keep ? 'custom' : 'uuid',

@@ -12,7 +12,6 @@ import { sha256Hex } from '@/lib/v4/sha256'
 import { environmentDisplayName } from '@/lib/resource-labels'
 import type {
   ComposeBaseRecord,
-  DeploymentHistoryRecord,
   EnvironmentRecord,
   ProjectComposeSource,
   ProjectRecord,
@@ -47,36 +46,19 @@ export function shortCommit(sha: string): string {
 }
 
 /**
- * When the newest deploy that used the file at `commitSha` was queued, from a
- * deploy history (any order). `null` when no listed deploy used that commit.
- */
-export function lastReadTime(
-  deployments: readonly DeploymentHistoryRecord[] | undefined,
-  commitSha: string | undefined
-): string | null {
-  if (!commitSha) return null
-  let newest: string | null = null
-  for (const deployment of deployments ?? []) {
-    const when = deployment.queuedAt ?? deployment.startedAt
-    if (deployment.composeBase?.commitSha !== commitSha || !when) continue
-    if (newest === null || when > newest) newest = when
-  }
-  return newest
-}
-
-/**
  * "Following compose.yaml on main; last read at 1a2b3c4 5m ago (…)".
  * `branch` is the project's own branch, `null` when the repository's default
- * applies. A commit that no deploy has read yet says so.
+ * applies. The time is the control plane's `lastReadAt`; a source never read
+ * since it was created has none.
  */
 export function followingNote(
   source: ProjectComposeSource,
-  options: Readonly<{ defaultBranch?: string | null; readAt?: string | null }> = {}
+  options: Readonly<{ defaultBranch?: string | null }> = {}
 ): string {
   const branch = normalizeBranch(source.ref) ?? normalizeBranch(options.defaultBranch)
   const where = branch ? `${source.path} on ${branch}` : `${source.path} in the repository`
   const commit = source.lastReadCommitSha ?? source.seededCommitSha
-  const time = options.readAt ? ` ${formatRelativeLocalDateTime(options.readAt)}` : ''
+  const time = source.lastReadAt ? ` ${formatRelativeLocalDateTime(source.lastReadAt)}` : ''
   return `Following ${where}; last read at ${shortCommit(commit)}${time}`
 }
 
@@ -123,16 +105,22 @@ export function environmentBranchRows(
 }
 
 /**
- * Project settings saves (container names, default server) send the Base along,
- * which the control plane refuses while the project follows the repository.
- * The sentence to show instead of sending, or `null` when the save can go.
+ * Base edits (the compose document, Hosting Account links) are refused while
+ * the project follows the repository; settings stored next to the Base
+ * (container names, default server, deploy tuning) still save. The sentence to
+ * show instead of sending a Base edit, or `null` when it can go.
  */
-export function settingsSaveBlockedMessage(
+export function baseEditBlockedMessage(
   project: Pick<ProjectRecord, 'options'> | null | undefined
 ): string | null {
   return isFollowingRepository(project)
-    ? 'Stop following the repository\u2019s compose file in the Base first. Then this setting can be saved.'
+    ? 'This project follows the repository\u2019s compose file. Stop following it in the Base first to edit the Base here.'
     : null
+}
+
+/** True when `err` is the control plane refusing a Base edit while the project follows the repository. */
+export function isBaseTracksRepositoryError(err: unknown): boolean {
+  return err instanceof Error && /HTTP 409: base_tracks_repository\b/.test(err.message)
 }
 
 /**

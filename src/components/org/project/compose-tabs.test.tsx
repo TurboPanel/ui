@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ComposeDocument, ProjectRecord } from '@/lib/instance-api'
 import {
   composeDraftScopeKey,
   ComposeDraftProvider,
+  isComposeDraftDirty,
+  resolveComposeDraftSnapshot,
   seedComposeDraftFromDocument,
   useComposeDraftStore,
 } from './compose-draft-context'
@@ -91,9 +93,16 @@ function project(mode: 'track' | 'seed'): ProjectRecord {
   } as unknown as ProjectRecord
 }
 
+let draftStore: ReturnType<typeof useComposeDraftStore> | null = null
+
 function StaleDraft() {
   const store = useComposeDraftStore()
+  const done = useRef(false)
+  draftStore = store
   useEffect(() => {
+    // Once: a re-seed after the save would hide whether the draft was dropped.
+    if (done.current) return
+    done.current = true
     const seeded = seedComposeDraftFromDocument(doc('nginx'))
     const edited = seedComposeDraftFromDocument(doc('caddy'))
     store.setSnapshot(composeDraftScopeKey('p1', null), {
@@ -147,8 +156,15 @@ describe('Overview Save on a stale Base draft', () => {
     })
     fireEvent.click(await screen.findByRole('button', { name: 'Save' }))
     await waitFor(() => expect(onSaveBlocked).toHaveBeenCalledTimes(1))
-    expect(onSaveBlocked.mock.calls[0]?.[0]).toMatch(/not saved.*Stop following/)
+    expect(onSaveBlocked.mock.calls[0]?.[0]).toMatch(/dropped and not saved.*Stop following/)
     expect(onSaveProjectCompose).not.toHaveBeenCalled()
+    // The notice says the edits are gone, so the draft must be gone.
+    const snapshot = resolveComposeDraftSnapshot(
+      draftStore!,
+      composeDraftScopeKey('p1', null),
+      doc('nginx')
+    )
+    expect(isComposeDraftDirty(snapshot)).toBe(false)
   })
 
   it('saves the edits once the project no longer follows', async () => {

@@ -246,6 +246,9 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     project,
     loading,
     error,
+    errorReload,
+    invalidateProject,
+    setError,
     needsSetup,
     isWorkspaceKindResolved,
     isSystemProject,
@@ -280,6 +283,17 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
       <ProjectHeader />
 
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {error && errorReload ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setError(null)
+            void invalidateProject()
+          }}
+        >
+          <Text style={styles.reloadText}>Reload</Text>
+        </Pressable>
+      ) : null}
 
       <ProjectShellChrome
         managed={managed}
@@ -333,6 +347,11 @@ const styles = StyleSheet.create({
   crumbLinkText: {
     color: colors.textMuted,
     fontSize: 15,
+    fontWeight: '600',
+  },
+  reloadText: {
+    color: colors.link,
+    fontSize: 14,
     fontWeight: '600',
   },
   backLink: {

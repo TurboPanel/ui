@@ -113,6 +113,8 @@ type ProjectContextValue = {
    */
   environmentsSettled: boolean
   error: string | null
+  /** True when `error` should offer a reload (the project changed since it was loaded). */
+  errorReload: boolean
   canOwn: boolean
   canManage: boolean
   needsSetup: boolean
@@ -122,7 +124,8 @@ type ProjectContextValue = {
   selectBaseCompose: () => void
   invalidateProject: () => Promise<void>
   invalidateEnvironments: () => Promise<void>
-  setError: (error: string | null) => void
+  /** `reload: true` adds a Reload button to the message, for a save refused over stale data. */
+  setError: (error: string | null, options?: Readonly<{ reload?: boolean }>) => void
 }
 
 /** See `environmentsSettled`: a draft has no list to wait for. */
@@ -182,7 +185,16 @@ export function ProjectProvider({
 
   const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string | null>(null)
   const [environmentScopeActive, setEnvironmentScopeActive] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [errorState, setErrorState] = useState<{ message: string | null; reload: boolean }>({
+    message: null,
+    reload: false,
+  })
+  const error = errorState.message
+  const errorReload = errorState.reload
+  const setError = useCallback<ProjectContextValue['setError']>(
+    (message, options) => setErrorState({ message, reload: Boolean(options?.reload) }),
+    []
+  )
 
   const loading =
     !isDraft && (projectQuery.isLoading || environmentsQuery.isLoading || workspacesQuery.isLoading)
@@ -198,7 +210,7 @@ export function ProjectProvider({
 
   useEffect(() => {
     setError(queryError)
-  }, [queryError])
+  }, [queryError, setError])
 
   // Opening a project puts it first in the sidebar's Recent Projects (this
   // device only). A draft is not a project yet.
@@ -313,6 +325,7 @@ export function ProjectProvider({
       loading,
       environmentsSettled,
       error,
+      errorReload,
       canOwn,
       canManage,
       needsSetup,
@@ -342,6 +355,7 @@ export function ProjectProvider({
       loading,
       environmentsSettled,
       error,
+      errorReload,
       canOwn,
       canManage,
       needsSetup,
@@ -350,6 +364,7 @@ export function ProjectProvider({
       selectBaseCompose,
       invalidateProject,
       invalidateEnvironments,
+      setError,
     ]
   )
 

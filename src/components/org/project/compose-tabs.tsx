@@ -16,7 +16,7 @@ import {
   useProjectRepositoryId,
   type ProjectDraft,
 } from '@/components/org/project/project-context'
-import { settingsSaveBlockedMessage } from '@/lib/v4/compose-source'
+import { baseEditBlockedMessage, isBaseTracksRepositoryError } from '@/lib/v4/compose-source'
 import { ComposeSourceGate } from '@/components/org/project/compose-source-panel'
 import { ComposeScopeBanner } from '@/components/org/project/compose-scope-banner'
 import { ComposeInheritedPanel } from '@/components/org/project/compose-inherited-panel'
@@ -526,11 +526,12 @@ export function ServicesPanelBody({
   // Plain handlers (not useCallback): React Compiler could not preserve manual
   // memoization of this save path (`preserve-manual-memoization` on scopeKey).
   async function saveOverviewDraft(): Promise<void> {
-    // A draft made while the Base was editable is stale once the project follows
-    // the repository again: the Base refuses it, so drop it instead of sending.
-    const blocked = baseSelected ? settingsSaveBlockedMessage(project) : null
+    // A draft made while the Base was editable cannot be saved once the project
+    // follows the repository: the control plane refuses a changed Base, so drop
+    // the draft instead of sending it.
+    const blocked = baseSelected ? baseEditBlockedMessage(project) : null
     if (blocked) {
-      onSaveBlocked(`These edits were not saved. ${blocked}`)
+      onSaveBlocked(`These edits were dropped and not saved. ${blocked}`)
       discardOverviewDraft()
       return
     }
@@ -842,7 +843,9 @@ export function ComposeServicesTab() {
       setError(null)
       const result = await persistProjectCompose.run(compose)
       if (!result.ok && persistProjectCompose.actionError) {
-        setError(failedRunMessage(result, persistProjectCompose.actionError))
+        setError(failedRunMessage(result, persistProjectCompose.actionError), {
+          reload: isBaseTracksRepositoryError(result.cause),
+        })
       }
     },
     [draft, baseSelected, persistProjectCompose, setError]

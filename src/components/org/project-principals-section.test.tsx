@@ -233,7 +233,9 @@ describe('ProjectPrincipalsSection add Hosting Account', () => {
         },
       },
     ]
-    const cause = new Error('HTTP 409: base_tracks_repository \u2014 x')
+    const cause = new Error(
+      '/projects/p failed: HTTP 409: base_tracks_repository \u2014 The Base cannot be edited here.'
+    )
     state.persist.mockResolvedValue({ ok: false, error: cause.message, cause })
     render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
     fireEvent.click(screen.getByRole('button', { name: 'Add Hosting Account' }))
