@@ -15,7 +15,11 @@ export function isHttpStatusError(err: unknown, status: number): err is Error {
  * Let's Encrypt turned off). They must not look like a lost session, so
  * {@link isForbiddenError} skips them.
  */
-const NON_PERMISSION_403_CODES = ['container_not_owned', 'lets_encrypt_not_enabled']
+const NON_PERMISSION_403_CODES = [
+  'container_not_owned',
+  'lets_encrypt_not_enabled',
+  'compose_network_shares_refused',
+]
 
 export function isForbiddenError(err: unknown): boolean {
   if (!isHttpStatusError(err, 403)) return false

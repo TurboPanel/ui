@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
   type Dispatch,
+  type ReactNode,
   type SetStateAction,
 } from 'react'
 import {
@@ -177,7 +178,8 @@ import { projectComposeHref, projectEnvironmentComposeHref } from '@/lib/project
 import { hostPickerLabel, pickHostKey } from '@/lib/hosting-host-label'
 import { HostingHostPicker } from '@/components/org/project/hosting-host-picker'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
-import { deployErrorMessage } from '@/lib/deploy-error-message'
+import { deployErrorMessage, networkSharesRefusalServers } from '@/lib/deploy-error-message'
+import { NetworkSharesRefusalLinks } from '@/components/org/network-shares-refusal-links'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { useCan } from '@/lib/query-client'
 import { useQueryClient } from '@tanstack/react-query'
@@ -1901,6 +1903,7 @@ function EnvironmentDeployChromePanels({
   onPreviewPrepared,
   onDeploy,
   deployStatus,
+  deployLinks,
 }: Readonly<{
   placementServerId: string | null
   sortedServers: OrgServerRecord[]
@@ -1913,6 +1916,8 @@ function EnvironmentDeployChromePanels({
   onPreviewPrepared: () => void
   onDeploy: () => void
   deployStatus: string | null
+  /** Links under the deploy status (to the server settings after a refused share). */
+  deployLinks?: ReactNode
 }>) {
   const { width } = useWindowDimensions()
   const isCompact = width < layout.desktopBreakpoint
@@ -1990,6 +1995,7 @@ function EnvironmentDeployChromePanels({
           />
         </View>
         {deployStatus ? <Text style={panelStyles.detailLine}>{deployStatus}</Text> : null}
+        {deployLinks}
       </Section>
 
       <Modal
@@ -2323,6 +2329,7 @@ function EnvironmentLoadedPanels({
   deployBlocked,
   deploying,
   deployStatus,
+  deployLinks,
   onPreviewMerged,
   onPreviewPrepared,
   onDeploy,
@@ -2363,6 +2370,7 @@ function EnvironmentLoadedPanels({
   deployBlocked: boolean
   deploying: boolean
   deployStatus: string | null
+  deployLinks?: ReactNode
   onPreviewMerged: () => void
   onPreviewPrepared: () => void
   onDeploy: () => void
@@ -2427,6 +2435,7 @@ function EnvironmentLoadedPanels({
           onPreviewPrepared={onPreviewPrepared}
           onDeploy={onDeploy}
           deployStatus={deployStatus}
+          deployLinks={deployLinks}
         />
       ) : null}
 
@@ -2718,6 +2727,7 @@ export function EnvironmentDetailBody({
     required: boolean
   } | null>(null)
   const [deployStatus, setDeployStatus] = useState<string | null>(null)
+  const [shareRefusalServers, setShareRefusalServers] = useState<{ id: string; name: string }[]>([])
   const [previewOpen, setPreviewOpen] = useState<{
     purpose: PreviewDeploymentPurpose
     mode: ComposePreviewMode
@@ -2945,6 +2955,7 @@ export function EnvironmentDetailBody({
       return
     }
     setDeployStatus('Queueing deployment…')
+    setShareRefusalServers([])
     setError(null)
     try {
       const result = await deployEnvironmentMutation.mutateAsync({
@@ -2974,6 +2985,7 @@ export function EnvironmentDetailBody({
         )
         return
       }
+      setShareRefusalServers(networkSharesRefusalServers(err))
       setDeployStatus(deployErrorMessage(err))
     }
   }
@@ -3269,6 +3281,13 @@ export function EnvironmentDetailBody({
           deployBlocked={deployBlocked}
           deploying={deploying}
           deployStatus={deployStatus}
+          deployLinks={
+            <NetworkSharesRefusalLinks
+              orgId={orgId}
+              servers={shareRefusalServers}
+              canManage={canManage}
+            />
+          }
           onPreviewMerged={() => openComposeInspect('compose')}
           onPreviewPrepared={() => openComposeInspect('summary')}
           onDeploy={openDeployConfirm}

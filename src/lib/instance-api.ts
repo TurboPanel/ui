@@ -995,6 +995,8 @@ export type OrgServerRecord = {
   /** Effective Via header on site responses (server → org → off). */
   sendViaHeader: boolean
   sendViaHeaderSource: HostDefaultsSource | null
+  /** Allow Network Shares: whether compose files may mount SMB shares here. Off unless set; never inherited. Absent on an older control plane. */
+  networkShares?: boolean
   /** This server's own build limits; `null` parts are not set. */
   buildLimits?: { cores: number | null; memoryBytes: number | null; swap: boolean | null }
   /** Datacenter memberships (IP pins); a server may belong to many. */
@@ -1044,6 +1046,7 @@ function normalizeOrgServer<T extends OrgServerRecord>(server: T): T {
     hideWebServerNamesSource: server.hideWebServerNamesSource ?? null,
     sendViaHeader: server.sendViaHeader ?? false,
     sendViaHeaderSource: server.sendViaHeaderSource ?? null,
+    networkShares: server.networkShares ?? false,
   }
 }
 
@@ -1238,6 +1241,8 @@ export async function updateServer(
       hideWebServerNames?: boolean | null
       /** `null` follows the organization setting. */
       sendViaHeader?: boolean | null
+      /** Allow Network Shares; `null` turns it off. */
+      networkShares?: boolean | null
       /** Replaces this server's build limits; `{}` clears both. */
       buildLimits?: { cores?: number | null; memoryBytes?: number | null; swap?: boolean | null }
       hosting?: { enabled: boolean }
@@ -3761,6 +3766,7 @@ export type PermissionKey =
   | 'system:read'
   | 'system:operate'
   | 'system:manage'
+  | 'environments.deploy_network_shares'
 
 export type PermissionRecord = {
   key: PermissionKey
@@ -9143,12 +9149,76 @@ export class DeployTunnelRefusedError extends Error {
   }
 }
 
+export type NetworkSharesRefusalReason = 'permission' | 'approval' | 'server_setting'
+
+/**
+ * A deploy refused because the compose file mounts an SMB network share and
+ * the deploy may not (`403 compose_network_shares_refused`). `servers` names the
+ * targets with Allow Network Shares off (`server_setting` only).
+ */
+export class DeployNetworkSharesRefusedError extends Error {
+  readonly reason: NetworkSharesRefusalReason
+  readonly volumes: string[]
+  readonly servers: { id: string; name: string }[]
+
+  constructor(
+    reason: NetworkSharesRefusalReason,
+    volumes: string[],
+    servers: { id: string; name: string }[]
+  ) {
+    super('compose_network_shares_refused')
+    this.name = 'DeployNetworkSharesRefusedError'
+    this.reason = reason
+    this.volumes = volumes
+    this.servers = servers
+  }
+}
+
+function parseNetworkSharesRefusal(body: {
+  reason?: unknown
+  volumes?: unknown
+  servers?: unknown
+}): DeployNetworkSharesRefusedError {
+  const reason: NetworkSharesRefusalReason =
+    body.reason === 'approval' || body.reason === 'server_setting' ? body.reason : 'permission'
+  const volumes = Array.isArray(body.volumes)
+    ? body.volumes.filter((name): name is string => typeof name === 'string')
+    : []
+  const servers = Array.isArray(body.servers)
+    ? body.servers.flatMap((entry: unknown) => {
+        const row = entry as { id?: unknown; name?: unknown } | null
+        return typeof row?.id === 'string' && typeof row.name === 'string'
+          ? [{ id: row.id, name: row.name }]
+          : []
+      })
+    : []
+  return new DeployNetworkSharesRefusedError(reason, volumes, servers)
+}
+
 type DeployConflictBody = {
   error?: string
   required?: boolean
   services?: string[]
   violations?: ResourceLimitViolation[]
   hostnames?: unknown
+  reason?: unknown
+  volumes?: unknown
+  servers?: unknown
+}
+
+async function throwIfNetworkSharesRefusal(response: Response): Promise<void> {
+  if (response.status !== 403) {
+    return
+  }
+  let body: DeployConflictBody | null = null
+  try {
+    body = (await response.clone().json()) as DeployConflictBody
+  } catch {
+    // Non-JSON error body: generic handling.
+  }
+  if (body?.error === 'compose_network_shares_refused') {
+    throw parseNetworkSharesRefusal(body)
+  }
 }
 
 async function throwIfDeployConflict(response: Response): Promise<void> {
@@ -9226,6 +9296,7 @@ export async function deployEnvironment(
   })
 
   await throwIfDeployConflict(response)
+  await throwIfNetworkSharesRefusal(response)
 
   if (!response.ok) {
     await throwClientFetchFailed(path, response)

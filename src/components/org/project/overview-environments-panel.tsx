@@ -35,7 +35,13 @@ import {
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
 import { environmentStatusTone, hasHostDeployedContainers } from '@/lib/container-status'
-import { deployPreviewFailureMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
+import {
+  deployPreviewFailureMessage,
+  deployRefusalMessage,
+  networkSharesRefusalServers,
+} from '@/lib/deploy-error-message'
+import { NetworkSharesRefusalLinks } from '@/components/org/network-shares-refusal-links'
+import { useCan } from '@/lib/query-client'
 import {
   type CommandProgress,
   type CommandStatus,
@@ -771,6 +777,8 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   destroyData: DestroyDataState
   containerError: string | null
   actionError: string | null
+  /** Servers to link to after a refused network share (Allow Network Shares off). */
+  shareRefusalServers: { id: string; name: string }[]
   commandError: string | null
   previewOpen: PreviewOpenState | null
   deployConfirmBusy: boolean
@@ -890,6 +898,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const [trackedEntries, setTrackedEntries] = useState<readonly TrackedCommandEntry[]>([])
   const [commandMeta, setCommandMeta] = useState<Record<string, TrackedCommand>>({})
   const [actionError, setActionError] = useState<string | null>(null)
+  const [shareRefusalServers, setShareRefusalServers] = useState<{ id: string; name: string }[]>([])
   const [containerError, setContainerError] = useState<string | null>(null)
   const [destroyArmed, setDestroyArmed] = useState(false)
   const [previewOpen, setPreviewOpen] = useState<PreviewOpenState | null>(null)
@@ -1062,6 +1071,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
 
   const openDeployConfirm = (confirm: DeployConfirmMode) => {
     setActionError(null)
+    setShareRefusalServers([])
     setPreviewOpen({ purpose: 'confirm', mode: 'summary', confirm })
   }
 
@@ -1076,6 +1086,9 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
       )
       if (!result.ok) {
         // `actionError` still holds the previous render's value here; the refusal itself is `cause`.
+        // A refused network share closes the preview so the reason is what the person sees next.
+        if (result.cause && deployPreviewFailureMessage(result.cause)) setPreviewOpen(null)
+        setShareRefusalServers(networkSharesRefusalServers(result.cause))
         setActionError(
           result.cause ? deployRefusalMessage(result.cause) : (result.error ?? 'Failed to deploy')
         )
@@ -1092,6 +1105,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
       const previewMessage = deployPreviewFailureMessage(err)
       if (previewMessage) {
         setPreviewOpen(null)
+        setShareRefusalServers(networkSharesRefusalServers(err))
         setActionError(previewMessage)
         return
       }
@@ -1214,6 +1228,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     destroyData,
     containerError,
     actionError,
+    shareRefusalServers,
     commandError,
     previewOpen,
     deployConfirmBusy,
@@ -1253,12 +1268,23 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
 function LifecycleErrorMessages({
   containerError,
   actionError,
+  shareRefusalServers,
   commandError,
-}: Pick<OverviewEnvironmentsPanelModel, 'containerError' | 'actionError' | 'commandError'>) {
+  orgId,
+}: Pick<
+  OverviewEnvironmentsPanelModel,
+  'containerError' | 'actionError' | 'shareRefusalServers' | 'commandError'
+> & { orgId: string }) {
+  const canManage = useCan('organization', orgId, 'organization:manage')
   return (
     <>
       {containerError ? <Text style={panelStyles.error}>{containerError}</Text> : null}
       {actionError ? <Text style={panelStyles.error}>{actionError}</Text> : null}
+      <NetworkSharesRefusalLinks
+        orgId={orgId}
+        servers={shareRefusalServers}
+        canManage={canManage}
+      />
       {commandError ? <Text style={panelStyles.error}>{commandError}</Text> : null}
     </>
   )
@@ -1383,7 +1409,9 @@ export function EnvironmentLifecycleNotices({
       <LifecycleErrorMessages
         containerError={model.containerError}
         actionError={model.actionError}
+        shareRefusalServers={model.shareRefusalServers}
         commandError={model.commandError}
+        orgId={model.orgId}
       />
 
       {withDeployLog ? <RunningDeploySection /> : null}

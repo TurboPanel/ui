@@ -50,8 +50,13 @@ const SUBJECT_KIND_OPTIONS = [
 ] as const
 
 const PERMISSIONS_BY_SCOPE: Record<AccessScopeKind, PermissionKey[]> = {
-  organization: ['organization:own', 'organization:manage'],
+  organization: ['organization:own', 'organization:manage', 'environments.deploy_network_shares'],
   team: ['team:own', 'team:manage'],
+}
+
+/** A grant's permission in words where it has a display name; the key for the older ones. */
+function grantPermissionLabel(key: string): string {
+  return key === 'environments.deploy_network_shares' ? 'Deploy network shares' : key
 }
 
 type ScopeItem = {
@@ -256,7 +261,9 @@ function AccessGrantCard({
           <View style={styles.badgeRow}>
             {/* Deny grants are not supported — every grant is an allow grant. */}
             <Badge label={grant.effect} tone="ok" />
-            <Text style={panelStyles.detailLine}>permission: {grant.permissionKey}</Text>
+            <Text style={panelStyles.detailLine}>
+              permission: {grantPermissionLabel(grant.permissionKey)}
+            </Text>
           </View>
         </View>
         {canManage ? (

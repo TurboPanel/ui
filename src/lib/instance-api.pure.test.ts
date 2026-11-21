@@ -4,6 +4,7 @@ import {
   DATABASE_NOT_FOUND_ERROR,
   DeployHealthCheckMissingError,
   DeployResourceLimitExceededError,
+  DeployNetworkSharesRefusedError,
   DeployTunnelRefusedError,
   DEV_SYNC_WEB_AVAILABLE,
   FABRIC_RECONCILE_FAILED_ERROR,
@@ -1337,6 +1338,43 @@ describe('fetch wrappers (mocked fetch)', () => {
       expect(err.code).toBe('tunnel_name_public_certificate')
       expect(err.hostnames).toEqual(['a.example.com', 'b.example.com'])
     }
+  })
+
+  it('deployEnvironment keeps the reason, volumes and servers of a network share refusal', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          error: 'compose_network_shares_refused',
+          reason: 'server_setting',
+          volumes: ['media', 4],
+          servers: [{ id: 's1', name: 'web-1' }, { id: 7 }],
+          message: 'x',
+        },
+        403
+      )
+    )
+    const err = await deployEnvironment('env-1').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(DeployNetworkSharesRefusedError)
+    const refused = err as DeployNetworkSharesRefusedError
+    expect(refused.reason).toBe('server_setting')
+    expect(refused.volumes).toEqual(['media'])
+    expect(refused.servers).toEqual([{ id: 's1', name: 'web-1' }])
+  })
+
+  it('deployEnvironment reads an unknown share reason as a missing permission', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: 'compose_network_shares_refused', reason: 'other' }, 403)
+    )
+    const err = await deployEnvironment('env-1').catch((e: unknown) => e)
+    expect((err as DeployNetworkSharesRefusedError).reason).toBe('permission')
+    expect((err as DeployNetworkSharesRefusedError).servers).toEqual([])
+  })
+
+  it('deployEnvironment leaves any other 403 to the generic error', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'forbidden' }, 403))
+    await expect(deployEnvironment('env-1')).rejects.toThrow('HTTP 403: forbidden')
+    fetchMock.mockResolvedValueOnce(textResponse('nope', 403))
+    await expect(deployEnvironment('env-1')).rejects.toThrow('HTTP 403')
   })
 
   it('deployEnvironment treats missing services/violations as empty arrays', async () => {
