@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
 import { Button, LoadingState } from '@/components/ui'
+import { CornerToast, CornerToastStack } from '@/components/ui/corner-toast'
+import { useVersionPromptReady } from '@/lib/version-prompt-gate'
 import { useAuth } from '@/lib/auth-context'
 import { upgradeStatusQueryEnabled } from '@/lib/upgrade-status-query'
 import { canQueryControlPlane } from '@/lib/control-plane-accounts'
@@ -66,6 +68,8 @@ export function ControlPlaneUpdatingOverlay() {
   })
   const visible = overlay.visible && !dismissedUpdating
 
+  const promptReady = useVersionPromptReady()
+
   const observedRevision = getInstanceRevision()
   const needsReload = shouldPromptControlPlaneReload({
     bundledVersion: getClientVersion(),
@@ -91,10 +95,10 @@ export function ControlPlaneUpdatingOverlay() {
     return () => clearTimeout(timer)
   }, [watchRemainingMs, tick])
 
-  if (!visible && !(needsReload && !dismissReload)) return null
-
+  // A new version waits (queued) while a dialog is open or a change has just
+  // finished, and shows once the page is quiet.
   if (needsReload && !dismissReload && !visible) {
-    return <ReloadPrompt onDismiss={() => setDismissReload(true)} />
+    return promptReady ? <ReloadPrompt onDismiss={() => setDismissReload(true)} /> : null
   }
 
   if (!visible) return null
@@ -112,18 +116,20 @@ export function ControlPlaneUpdatingOverlay() {
 
 function ReloadPrompt({ onDismiss }: Readonly<{ onDismiss: () => void }>) {
   return (
-    <View style={styles.scrim} accessibilityViewIsModal>
-      <View style={styles.card}>
-        <Text style={styles.title}>A newer TurboPanel version is live</Text>
-        <Text style={styles.copy}>Reload this page so it matches the new TurboPanel version.</Text>
-        <View style={styles.actions}>
-          {Platform.OS === 'web' ? (
-            <Button label="Reload now" variant="primary" onPress={reloadWebClient} />
-          ) : null}
-          <Button label="Not now" variant="secondary" onPress={onDismiss} />
-        </View>
-      </View>
-    </View>
+    <CornerToastStack>
+      <CornerToast
+        title="A newer TurboPanel version is live"
+        body="Reload this page so it matches the new TurboPanel version."
+        actions={
+          <>
+            {Platform.OS === 'web' ? (
+              <Button label="Reload" variant="primary" size="sm" onPress={reloadWebClient} />
+            ) : null}
+            <Button label="Dismiss" variant="secondary" size="sm" onPress={onDismiss} />
+          </>
+        }
+      />
+    </CornerToastStack>
   )
 }
 
@@ -180,11 +186,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '600',
   },
   copy: {
     color: colors.textMuted,

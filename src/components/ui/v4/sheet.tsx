@@ -1,14 +1,18 @@
 import { type ReactNode } from 'react'
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native'
 import { themedStyles, usePalette } from '@/components/ui/v4/use-palette'
 import { typeStyle } from '@/components/ui/v4/type-styles'
-import {
-  COMPACT_BREAKPOINT,
-  RADIUS,
-  SHEET_WIDTH,
-  SHEET_WIDTH_WIDE,
-} from '@/lib/v4/ui-scale'
+import { COMPACT_BREAKPOINT, RADIUS, SHEET_WIDTH, SHEET_WIDTH_WIDE } from '@/lib/v4/ui-scale'
 import type { ViewStyle } from 'react-native'
+import { useRegisterOpenDialog } from '@/lib/version-prompt-gate'
 
 const styles = themedStyles((p) => ({
   scrim: { flex: 1, backgroundColor: p.scrim, justifyContent: 'center', padding: 16 },
@@ -81,6 +85,7 @@ export function Sheet({
 }>) {
   const p = usePalette()
   const s = styles(p)
+  useRegisterOpenDialog(visible)
   const { width } = useWindowDimensions()
   const compact = width < COMPACT_BREAKPOINT
   const maxWidth = wide ? SHEET_WIDTH_WIDE : SHEET_WIDTH

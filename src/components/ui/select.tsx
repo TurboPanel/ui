@@ -22,6 +22,7 @@ import {
   type SelectOption,
 } from '@/lib/select-options'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
+import { useRegisterOpenDialog } from '@/lib/version-prompt-gate'
 
 export type { SelectOption }
 
@@ -199,6 +200,9 @@ function SelectPickerPanel({
       )}
     </View>
   )
+
+  // The list is mounted only while open.
+  useRegisterOpenDialog(true)
 
   return (
     <Modal
