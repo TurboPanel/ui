@@ -366,6 +366,16 @@ function stateOfSite(
   }
 }
 
+/** How often a hosting is read again while a name still waits for its origin certificate. */
+export const ORIGIN_WAITING_POLL_MS = 30_000
+
+/** Whether any name chose the origin certificate and has none yet. */
+export function waitsForOriginCertificate(
+  names: readonly Pick<HostingNameCertificate, 'certificate' | 'tlsId'>[] | undefined
+): boolean {
+  return (names ?? []).some((name) => name.certificate === 'cloudflare_origin' && !name.tlsId)
+}
+
 /** What each reason the server gives means, with the next step. */
 const ORIGIN_ISSUE_SENTENCES: Readonly<Record<string, string>> = {
   no_badge:

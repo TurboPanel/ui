@@ -294,6 +294,44 @@ describe('services query hooks', () => {
     })
   })
 
+  it('useUpdateHosting puts the answered names into the cached hosting', async () => {
+    const waiting = { hostname: 'a.example.net', certificate: 'cloudflare_origin', tlsId: null }
+    const client = createAppQueryClient()
+    client.setQueryData(['org', orgId, 'hostings', serviceId], {
+      hostings: [{ id: 'host-1', names: [] }],
+    })
+    client.setQueryData(['org', orgId, 'hostings', 'detail', 'host-1'], {
+      hosting: { id: 'host-1', names: [] },
+    })
+    // The re-read never answers: what shows is the save's own answer.
+    fetchVisibleHostings.mockReturnValue(new Promise(() => undefined))
+    updateHosting.mockResolvedValueOnce({ ok: true, names: [waiting] })
+
+    const { result } = renderHook(() => useUpdateHosting(orgId, serviceId), {
+      wrapper: createWrapper(client),
+    })
+    void result.current.run({ hostingId: 'host-1', body: { name: 'www' } })
+    await waitFor(() => {
+      expect(
+        client.getQueryData<{ hosting: { names: unknown[] } }>([
+          'org',
+          orgId,
+          'hostings',
+          'detail',
+          'host-1',
+        ])?.hosting.names
+      ).toEqual([waiting])
+    })
+    expect(
+      client.getQueryData<{ hostings: { names: unknown[] }[] }>([
+        'org',
+        orgId,
+        'hostings',
+        serviceId,
+      ])?.hostings[0]?.names
+    ).toEqual([waiting])
+  })
+
   it('useHostingsByServices maps hostings by service id', async () => {
     fetchVisibleHostings.mockResolvedValueOnce({
       hostings: [{ id: 'host-1', name: 'app.example.com' }],

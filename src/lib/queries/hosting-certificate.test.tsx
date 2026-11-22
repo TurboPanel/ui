@@ -44,6 +44,29 @@ describe('hosting certificate queries', () => {
     expect(fetchHosting).toHaveBeenCalledWith('h1')
   })
 
+  it('keeps reading the hosting while a name waits for its origin certificate', async () => {
+    const waiting = { hostname: 'a.example.net', certificate: 'cloudflare_origin', tlsId: null }
+    fetchHosting.mockResolvedValue({ hosting: { id: 'h1', certificate: null, names: [waiting] } })
+    const client = createAppQueryClient()
+    const { result } = renderHook(() => useHostingCertificate('org-1', 'h1'), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const interval = (names: unknown[]) => {
+      const found = client
+        .getQueryCache()
+        .find({ queryKey: ['org', 'org-1', 'hostings', 'detail', 'h1'] })
+      const options = (found?.options as { refetchInterval?: unknown } | undefined)
+        ?.refetchInterval as ((query: never) => unknown) | number | false | undefined
+      return typeof options === 'function'
+        ? options({ state: { data: { hosting: { certificate: null, names } } } } as never)
+        : options
+    }
+    expect(interval([waiting])).toBe(30_000)
+    expect(interval([{ ...waiting, tlsId: 'tls-1' }])).toBe(false)
+    expect(interval([])).toBe(false)
+  })
+
   it('use Let’s Encrypt asks for the hosting and refreshes the hosting lists', async () => {
     requestLetsEncryptForHosting.mockResolvedValue({ needsDeploy: true })
     const client = createAppQueryClient()

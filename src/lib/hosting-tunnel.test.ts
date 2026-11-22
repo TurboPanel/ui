@@ -112,10 +112,33 @@ describe('tunnelOnlyCertificateView follows the name’s certificate', () => {
       { ...pick('letsencrypt_http'), hostname: 'b.example' },
     ])
     expect(view.label).toBe(MIXED_CERTIFICATES_LABEL)
-    expect(view.lines).toContain(`a.example: ${ORIGIN_CERTIFICATE_LABEL}.`)
-    expect(view.lines).toContain(`b.example: ${LETS_ENCRYPT_CERTIFICATE_LABEL}.`)
+    expect(view.lines.some((line) => line.startsWith('a.example: Issued'))).toBe(true)
+    expect(view.lines.some((line) => line.startsWith('b.example: The tunnel reaches'))).toBe(true)
     expect(view.actions).toEqual([])
     expect(view.spinner).toBe(false)
+  })
+
+  it('does not show good while one origin name is issued and another waits', () => {
+    const issue = {
+      code: 'no_badge',
+      message: 'm',
+      failedAt: '2030-01-02T03:04:05.000Z',
+      attempts: 1,
+      nextTryAt: null,
+    }
+    const view = tunnelOnlyCertificateView(tunnel, [
+      pick('cloudflare_origin', 'tls-1'),
+      {
+        ...pick('cloudflare_origin', null, { originCertificateIssue: issue }),
+        hostname: 'b.example',
+      },
+    ])
+    expect(view.label).toBe(ORIGIN_CERTIFICATE_LABEL)
+    expect(view.tone).toBe('pending')
+    expect(view.lines.some((line) => line.startsWith('a.example: Issued'))).toBe(true)
+    expect(
+      view.lines.some((line) => line.startsWith('b.example: Waiting: No Cloudflare token'))
+    ).toBe(true)
   })
 
   it('summarises one name for a domain row', () => {

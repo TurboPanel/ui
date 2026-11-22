@@ -123,13 +123,17 @@ export function tunnelOnlyCertificateView(
   const where = `Tunnel only · ${tunnel.tunnelNames.join(', ')}.`
   const words = names.map((name) => nameWords(name, locale))
   const first = words[0] ?? nameWords(undefined)
-  const same = words.every((item) => item.label === first.label)
+  const same = words.every(
+    (item) => item.label === first.label && item.tone === first.tone && item.line === first.line
+  )
+  const sameLabel = words.every((item) => item.label === first.label)
   const lines = same
-    ? [where, ...new Set(words.length > 0 ? words.map((item) => item.line) : [first.line])]
-    : [where, ...names.map((name, index) => `${name.hostname}: ${words[index]!.label}.`)]
+    ? [where, first.line]
+    : [where, ...names.map((name, index) => `${name.hostname}: ${words[index]!.line}`)]
+  const tone = words.some((item) => item.tone === 'pending') ? 'pending' : 'neutral'
   return {
-    label: same ? first.label : MIXED_CERTIFICATES_LABEL,
-    tone: same ? first.tone : 'neutral',
+    label: sameLabel ? first.label : MIXED_CERTIFICATES_LABEL,
+    tone: same ? first.tone : tone,
     lines,
     reason: null,
     actions: [],
