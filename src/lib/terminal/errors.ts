@@ -31,9 +31,14 @@ const CODE_COPY: Record<string, string> = {
 
 const FALLBACK = 'The terminal could not be opened. Try again.'
 
+function errorText(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return typeof error === 'string' ? error : ''
+}
+
 /** The code in an API error message such as `... failed: HTTP 403: terminal_disabled`, or null. */
 export function terminalErrorCode(error: unknown): string | null {
-  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  const message = errorText(error)
   const sorted = Object.keys(CODE_COPY).sort((a, b) => b.length - a.length)
   return sorted.find((code) => message.includes(code)) ?? null
 }
@@ -46,7 +51,7 @@ export function terminalCodeMessage(code: string | null | undefined): string {
 export function terminalErrorMessage(error: unknown): string {
   const code = terminalErrorCode(error)
   if (code) return CODE_COPY[code]
-  const message = error instanceof Error ? error.message : ''
+  const message = errorText(error)
   if (/HTTP 403/.test(message)) return CODE_COPY.forbidden
   if (/HTTP 401/.test(message)) return 'Sign in again to open a terminal.'
   return FALLBACK

@@ -47,44 +47,52 @@ class Serial {
   }
 }
 
-/** Seals the frames of one direction; counters follow the order of the calls. */
-export class FrameSealer {
-  readonly #key: CryptoKey
-  readonly #sid: Uint8Array
-  readonly #dir: Direction
-  readonly #serial = new Serial()
-  #ctr = 0n
+/** What a sealer and an opener share: the key, the session, one direction and a counter. */
+class FrameChannel {
+  protected readonly key: CryptoKey
+  protected readonly sid: Uint8Array
+  protected readonly dir: Direction
+  protected readonly serial = new Serial()
+  protected ctr = 0n
 
-  constructor(key: CryptoKey, sid: string, dir: Direction = DIR_BROWSER_TO_DAEMON) {
-    this.#key = key
-    this.#sid = sidToBytes(sid)
-    this.#dir = dir
+  constructor(key: CryptoKey, sid: string, dir: Direction) {
+    this.key = key
+    this.sid = sidToBytes(sid)
+    this.dir = dir
   }
 
+  /** The counter of the next frame (sealer) or the one the opener expects. */
   get nextCounter(): bigint {
-    return this.#ctr
+    return this.ctr
+  }
+}
+
+/** Seals the frames of one direction; counters follow the order of the calls. */
+export class FrameSealer extends FrameChannel {
+  constructor(key: CryptoKey, sid: string, dir: Direction = DIR_BROWSER_TO_DAEMON) {
+    super(key, sid, dir)
   }
 
   seal(plaintext: Uint8Array): Promise<Uint8Array> {
-    return this.#serial.run(() => this.#sealNow(plaintext))
+    return this.serial.run(() => this.#sealNow(plaintext))
   }
 
   async #sealNow(plaintext: Uint8Array): Promise<Uint8Array> {
     if (plaintext.length === 0 || plaintext.length > MAX_PLAINTEXT_BYTES) {
       throw new FrameError('oversize', 'plaintext length is out of range')
     }
-    const ctr = this.#ctr
-    this.#ctr += 1n
-    const header = headerFor(this.#sid, this.#dir, ctr)
+    const ctr = this.ctr
+    this.ctr += 1n
+    const header = headerFor(this.sid, this.dir, ctr)
     const sealed = new Uint8Array(
       await globalThis.crypto.subtle.encrypt(
         {
           name: 'AES-GCM',
-          iv: nonceFor(this.#dir, ctr) as BufferSource,
+          iv: nonceFor(this.dir, ctr) as BufferSource,
           additionalData: header as BufferSource,
           tagLength: TAG_BYTES * 8,
         },
-        this.#key,
+        this.key,
         plaintext as BufferSource
       )
     )
@@ -103,40 +111,28 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /** Opens the frames of one direction and requires the counter to run 0, 1, 2, ... */
-export class FrameOpener {
-  readonly #key: CryptoKey
-  readonly #sid: Uint8Array
-  readonly #dir: Direction
-  readonly #serial = new Serial()
-  #expected = 0n
-
+export class FrameOpener extends FrameChannel {
   constructor(key: CryptoKey, sid: string, dir: Direction = DIR_DAEMON_TO_BROWSER) {
-    this.#key = key
-    this.#sid = sidToBytes(sid)
-    this.#dir = dir
-  }
-
-  get nextCounter(): bigint {
-    return this.#expected
+    super(key, sid, dir)
   }
 
   /** The plaintext, or a {@link FrameError}. The counter moves only after the tag verified. */
   open(frame: Uint8Array): Promise<Uint8Array> {
-    return this.#serial.run(() => this.#openNow(frame))
+    return this.serial.run(() => this.#openNow(frame))
   }
 
   #check(frame: Uint8Array): bigint {
     if (frame.length < MIN_FRAME_BYTES) throw new FrameError('malformed', 'frame is too short')
     if (frame.length > MAX_FRAME_BYTES) throw new FrameError('oversize', 'frame is too long')
     if (frame[0] !== FRAME_VERSION) throw new FrameError('version', 'unknown frame version')
-    if (!sameBytes(frame.subarray(1, 17), this.#sid)) {
+    if (!sameBytes(frame.subarray(1, 17), this.sid)) {
       throw new FrameError('sid', 'frame is for another session')
     }
-    if (frame[17] !== this.#dir) {
+    if (frame[17] !== this.dir) {
       throw new FrameError('direction', 'frame has the wrong direction')
     }
     const ctr = new DataView(frame.buffer, frame.byteOffset, frame.length).getBigUint64(18, false)
-    if (ctr !== this.#expected) {
+    if (ctr !== this.ctr) {
       throw new FrameError('counter', 'frame counter is not the next one')
     }
     return ctr
@@ -149,17 +145,17 @@ export class FrameOpener {
       plain = await globalThis.crypto.subtle.decrypt(
         {
           name: 'AES-GCM',
-          iv: nonceFor(this.#dir, ctr) as BufferSource,
+          iv: nonceFor(this.dir, ctr) as BufferSource,
           additionalData: frame.slice(0, HEADER_BYTES) as BufferSource,
           tagLength: TAG_BYTES * 8,
         },
-        this.#key,
+        this.key,
         frame.slice(HEADER_BYTES) as BufferSource
       )
     } catch {
       throw new FrameError('tag', 'frame does not authenticate')
     }
-    this.#expected += 1n
+    this.ctr += 1n
     return new Uint8Array(plain)
   }
 }
