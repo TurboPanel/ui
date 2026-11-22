@@ -11,12 +11,7 @@ import { useContainers } from '@/lib/queries/containers'
 import { useCan } from '@/lib/query-client'
 import { useServerDetail } from '@/lib/queries/servers'
 import { isTerminalDisabledError, terminalErrorMessage } from '@/lib/terminal/errors'
-import {
-  isValidLoginUser,
-  serverPinned,
-  terminalEntryAllowed,
-  terminalSwitchOn,
-} from '@/lib/terminal/gate'
+import { isValidLoginUser, terminalEntryAllowed, terminalSwitchOn } from '@/lib/terminal/gate'
 
 export const LOGIN_USER_ERROR =
   'Login user must be a user name (lowercase letters, digits, _ or -) or a numeric id such as 1000 or 1000:1000.'
@@ -31,10 +26,21 @@ export function terminalContainer(containers: readonly ContainerRecord[]): Conta
   )
 }
 
+/** Any container of the service: names the server and the permission when none is running. */
+function anchorContainer(
+  containers: readonly ContainerRecord[],
+  running: ContainerRecord | null
+): ContainerRecord | null {
+  return running ?? containers.find((row) => row.role === 'service') ?? containers[0] ?? null
+}
+
+export const NO_RUNNING_CONTAINER =
+  'No running container for this service. Start it to open a terminal.'
+
 /**
  * Services › service › Terminal. Shows only where a terminal can work: the
- * server's Container Terminal switch is on, the person may open one, and the
- * server is verified. Nothing opens until the button is pressed.
+ * server's Container Terminal switch is on and the person may open one. With no
+ * running container it says so. Nothing opens until the button is pressed.
  */
 export function ServiceTerminalPanel({
   orgId,
@@ -45,27 +51,33 @@ export function ServiceTerminalPanel({
     () => terminalContainer(containers.data?.containers ?? []),
     [containers.data?.containers]
   )
-  const server = useServerDetail(orgId, container?.serverId ?? '', {
-    enabled: container !== null,
+  const anchor = useMemo(
+    () => anchorContainer(containers.data?.containers ?? [], container),
+    [containers.data?.containers, container]
+  )
+  const server = useServerDetail(orgId, anchor?.serverId ?? '', {
+    enabled: anchor !== null,
   })
-  const canOpen = useCan('container', container?.id ?? '', 'terminal:container')
+  const canOpen = useCan('container', anchor?.id ?? '', 'terminal:container')
   const canManage = useCan('organization', orgId, 'organization:manage')
   const allowed = terminalEntryAllowed({
     switchOn: terminalSwitchOn(server.data?.options),
     canOpen,
-    pinned: serverPinned(server.data?.trustPinnedBy),
-    hasContainer: container !== null,
   })
-  if (!allowed || !container) return null
+  if (!allowed || !anchor) return null
   return (
     <Section title="Terminal" collapsible defaultCollapsed>
-      <TerminalEntry
-        key={container.id}
-        orgId={orgId}
-        serverId={container.serverId}
-        containerId={container.id}
-        canManage={canManage}
-      />
+      {container ? (
+        <TerminalEntry
+          key={container.id}
+          orgId={orgId}
+          serverId={container.serverId}
+          containerId={container.id}
+          canManage={canManage}
+        />
+      ) : (
+        <Text style={panelStyles.muted}>{NO_RUNNING_CONTAINER}</Text>
+      )}
     </Section>
   )
 }
