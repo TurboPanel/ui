@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
   createNotificationChannel,
@@ -19,8 +20,12 @@ import { isForbiddenError } from '@/lib/fetch-error-detail'
 import { queryKeys } from '@/lib/query-keys'
 import { useApiMutation } from '@/lib/query-client'
 
-/** The bell polls: a notification is worth a minute's latency, not a socket. */
-export const UNREAD_POLL_MS = 60_000
+/**
+ * The bell polls: a notification is worth a few minutes' latency, not a
+ * socket. Every open tab asks, and each ask costs the control plane database
+ * statements, so the poll is slow and sleeps while the tab is hidden.
+ */
+export const UNREAD_POLL_MS = 180_000
 
 export function useUnreadNotificationsQuery(options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
@@ -28,17 +33,34 @@ export function useUnreadNotificationsQuery(options?: Readonly<{ enabled?: boole
     queryFn: fetchUnreadNotificationCount,
     enabled: options?.enabled ?? true,
     refetchInterval: UNREAD_POLL_MS,
+    // A hidden tab does not poll (the focus manager tracks document
+    // visibility on the web).
+    refetchIntervalInBackground: false,
+    // The count is fresh for one interval; becoming visible again refetches
+    // only when the last answer is older than that.
+    staleTime: UNREAD_POLL_MS,
+    refetchOnWindowFocus: true,
     retry: false,
   })
 }
 
 export function useNotificationsQuery(options?: Readonly<{ enabled?: boolean; limit?: number }>) {
-  return useQuery({
+  const queryClient = useQueryClient()
+  const query = useQuery({
     queryKey: [...queryKeys.notifications.inbox, options?.limit ?? 30] as const,
     queryFn: () => fetchNotifications({ limit: options?.limit ?? 30 }),
     enabled: options?.enabled ?? true,
     retry: false,
   })
+  // The inbox response already carries the unread total: opening the panel
+  // updates the badge at once instead of waiting for the next poll.
+  const unread = query.data?.unread
+  useEffect(() => {
+    if (unread !== undefined) {
+      queryClient.setQueryData(queryKeys.notifications.unread, unread)
+    }
+  }, [queryClient, unread])
+  return query
 }
 
 async function invalidateInbox(queryClient: QueryClient): Promise<void> {
