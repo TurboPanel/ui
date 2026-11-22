@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   tunnelsError: false,
   add: vi.fn(async (_body: unknown) => ({ ok: true }) as { ok: boolean; cause?: unknown }),
   addTunnelId: '',
+  tunnelsEnabled: [] as boolean[],
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -54,7 +55,15 @@ vi.mock('@/lib/queries/hosting-certificate', () => ({
   }),
 }))
 vi.mock('@/lib/queries/tunnel-routes', () => ({
-  useTunnels: () => ({ data: { tunnels: state.tunnels }, isError: state.tunnelsError }),
+  useTunnels: (_org: string, options?: { enabled?: boolean }) => {
+    const enabled = options?.enabled ?? true
+    state.tunnelsEnabled.push(enabled)
+    // A disabled query sends no request and holds no data, as the real hook does.
+    return {
+      data: enabled ? { tunnels: state.tunnels } : undefined,
+      isError: enabled && state.tunnelsError,
+    }
+  },
   useAddTunnelHostname: (_org: string, tunnelId: string) => {
     state.addTunnelId = tunnelId
     return { run: state.add, isPending: false }
@@ -90,6 +99,7 @@ beforeEach(() => {
   state.tunnels = []
   state.hostingError = false
   state.tunnelsError = false
+  state.tunnelsEnabled = []
   state.add.mockClear()
   state.add.mockResolvedValue({ ok: true })
 })
@@ -169,6 +179,21 @@ describe('HostingTunnelNames', () => {
     expect(screen.queryByText('Serve Through Tunnel')).toBeNull()
     expect(screen.queryByText(/No tunnel exists yet/)).toBeNull()
     expect(screen.queryByText('other.example.net')).toBeNull()
+  })
+
+  it('does not ask for the tunnels list unless the person can manage', () => {
+    state.hosting = {
+      names: names('app.example.net'),
+      tunnels: [{ hostname: 'app.example.net', tunnelId: 't1', tunnelName: 'Edge' }],
+    }
+    draw('server-a', false)
+    expect(screen.getByText('Carried by Edge')).toBeTruthy()
+    expect(state.tunnelsEnabled.length).toBeGreaterThan(0)
+    expect(state.tunnelsEnabled.every((enabled) => !enabled)).toBe(true)
+    cleanup()
+    state.tunnelsEnabled = []
+    draw('server-a', true)
+    expect(state.tunnelsEnabled.every(Boolean)).toBe(true)
   })
 
   it('shows nothing to a person who cannot manage when no tunnel carries a name', () => {

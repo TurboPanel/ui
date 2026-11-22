@@ -12,6 +12,15 @@ import { NetworkTunnelCard } from './network-tunnel-card'
 import { NetworkTunnelCreate } from './network-tunnel-create'
 import { NetworkTunnelServers } from './network-tunnel-servers'
 
+function AccessNote({
+  roleLoading,
+  allowed,
+}: Readonly<{ roleLoading: boolean; allowed: boolean }>) {
+  if (roleLoading) return <LoadingState label="Checking your access…" />
+  if (allowed) return null
+  return <Text style={panelStyles.muted}>Only owners and managers can manage tunnels.</Text>
+}
+
 /**
  * Tunnels: create one on a Cloudflare account, choose which servers run it,
  * and add the hostnames it carries. Owners and managers only.
@@ -23,6 +32,8 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
     'organization:manage'
   )
   const tunnels = useTunnels(orgId, { enabled: canManage })
+  // A refusal after the role changed: show the same no-access note, not an empty list.
+  const refused = tunnels.data !== undefined && 'forbidden' in tunnels.data
   const carriers = useTunnelCarriers(orgId, { enabled: canManage })
   const servers = useOrgServers(orgId, { enabled: canManage })
   const datacenters = useDatacenters(orgId, { enabled: canManage })
@@ -32,6 +43,8 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
   // Until the servers load, a tunnel would name its server by raw id.
   const serversReady = !servers.isLoading
 
+  const allowed = canManage && !refused
+
   return (
     <View style={styles.root}>
       <Text style={panelStyles.pageTitle}>Tunnels</Text>
@@ -39,14 +52,9 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
         A tunnel lets visitors reach a site through Cloudflare without opening a port on your
         server. Choose which servers run it, then add the hostnames it carries.
       </Text>
-      {roleLoading ? <LoadingState label="Checking your access…" /> : null}
-      {canManage || roleLoading ? null : (
-        <Text style={panelStyles.muted}>Only owners and managers can manage tunnels.</Text>
-      )}
-      {canManage && carriers.isLoading ? (
-        <LoadingState label="Loading Cloudflare accounts…" />
-      ) : null}
-      {canManage && !carriers.isLoading ? (
+      <AccessNote roleLoading={roleLoading} allowed={allowed} />
+      {allowed && carriers.isLoading ? <LoadingState label="Loading Cloudflare accounts…" /> : null}
+      {allowed && !carriers.isLoading ? (
         <NetworkTunnelCreate
           orgId={orgId}
           carriers={carriers.data?.carriers ?? []}
@@ -59,10 +67,10 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
           {tunnelErrorMessage(tunnels.error, 'Failed to load tunnels')}
         </Text>
       ) : null}
-      {canManage && (tunnels.isLoading || !serversReady) ? (
+      {allowed && (tunnels.isLoading || !serversReady) ? (
         <LoadingState label="Loading tunnels…" />
       ) : null}
-      {canManage && !tunnels.isLoading && list.length === 0 ? (
+      {allowed && !tunnels.isLoading && list.length === 0 ? (
         <EmptyState title="No tunnels yet." hint="Create one above." panel />
       ) : null}
       {(serversReady ? list : []).map((tunnel) => (
@@ -74,7 +82,7 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
           datacenters={datacenterList}
         />
       ))}
-      {canManage && serversReady ? (
+      {allowed && serversReady ? (
         <NetworkTunnelServers orgId={orgId} servers={serverList} tunnels={list} />
       ) : null}
     </View>

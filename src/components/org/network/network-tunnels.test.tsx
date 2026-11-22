@@ -12,6 +12,8 @@ type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 const state = vi.hoisted(() => ({
   can: { allowed: true, loading: false },
   tunnels: [] as unknown[],
+  forbidden: false,
+  tunnelsEnabled: [] as boolean[],
   setCarrying: vi.fn(async (_body: { serverId: string; carry: boolean }) => ({ ok: true })),
   deleteTunnel: vi.fn(async (_id: string) => ({ ok: true })),
 }))
@@ -63,7 +65,14 @@ vi.mock('@/lib/queries/servers', () => ({ useOrgServers: () => ({ data: { server
 vi.mock('@/lib/queries/tunnels', () => ({ useTunnelCarriers: () => ({ data: { carriers: [] } }) }))
 vi.mock('@/lib/queries/topology', () => ({ useDatacenters: () => ({ data: { datacenters: [] } }) }))
 vi.mock('@/lib/queries/tunnel-routes', () => ({
-  useTunnels: () => ({ data: { tunnels: state.tunnels }, isError: false, isLoading: false }),
+  useTunnels: (_org: string, options?: { enabled?: boolean }) => {
+    state.tunnelsEnabled.push(options?.enabled ?? true)
+    return {
+      data: state.forbidden ? { tunnels: [], forbidden: true } : { tunnels: state.tunnels },
+      isError: false,
+      isLoading: false,
+    }
+  },
   useSetServerTunnelCarrying: () => ({ run: state.setCarrying, isPending: false }),
   useDeleteTunnel: () => ({ run: state.deleteTunnel, isPending: false }),
   useUpdateTunnelPlacement: () => ({ run: vi.fn(), isPending: false }),
@@ -108,6 +117,8 @@ const server = (id: string): OrgServerRecord =>
 beforeEach(() => {
   state.can = { allowed: true, loading: false }
   state.tunnels = []
+  state.forbidden = false
+  state.tunnelsEnabled = []
   state.setCarrying.mockClear()
   state.deleteTunnel.mockClear()
 })
@@ -134,6 +145,23 @@ describe('the role gate on the Tunnels screen', () => {
     render(<NetworkTunnelsSection orgId="o1" />)
     expect(screen.getByText('Only owners and managers can manage tunnels.')).toBeTruthy()
     expect(screen.queryByText('Checking your access…')).toBeNull()
+  })
+  it('does not ask for the tunnels list unless the person can manage', () => {
+    state.can = { allowed: false, loading: false }
+    render(<NetworkTunnelsSection orgId="o1" />)
+    expect(state.tunnelsEnabled.every((enabled) => !enabled)).toBe(true)
+    cleanup()
+    state.tunnelsEnabled = []
+    state.can = { allowed: true, loading: false }
+    render(<NetworkTunnelsSection orgId="o1" />)
+    expect(state.tunnelsEnabled.every(Boolean)).toBe(true)
+  })
+  it('shows the refusal, not an empty list, when the list is refused after the role changed', () => {
+    state.forbidden = true
+    render(<NetworkTunnelsSection orgId="o1" />)
+    expect(screen.getByText('Only owners and managers can manage tunnels.')).toBeTruthy()
+    expect(screen.queryByText('No tunnels yet.')).toBeNull()
+    expect(screen.queryByText('create form')).toBeNull()
   })
   it('shows the create form for a manager', () => {
     render(<NetworkTunnelsSection orgId="o1" />)
