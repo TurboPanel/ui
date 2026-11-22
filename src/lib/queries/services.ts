@@ -1,4 +1,4 @@
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import {
   createHosting,
@@ -9,8 +9,11 @@ import {
   removeHostingNow,
   updateHosting,
   updateService,
+  type HostingNameCertificate,
+  type HostingNameChoice,
   type HostingRecord,
 } from '@/lib/instance-api'
+import { withSavedNames } from '@/lib/name-certificates'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 
 export function useServices(
@@ -73,6 +76,34 @@ export function useUpdateService(orgId: string, serviceId: string) {
   })
 }
 
+/**
+ * Put the names a save answered into the cached hosting, so the result shows
+ * at once; the refetch that follows only confirms it.
+ */
+export function showSavedNames(
+  queryClient: QueryClient,
+  orgId: string,
+  serviceId: string,
+  hostingId: string | undefined,
+  names: HostingNameCertificate[] | undefined
+): void {
+  if (!names || !hostingId) return
+  queryClient.setQueryData<{ hostings: HostingRecord[] }>(
+    queryKeys.org(orgId).hostings.list(serviceId),
+    (current) =>
+      current && {
+        ...current,
+        hostings: current.hostings.map((item) =>
+          item.id === hostingId ? withSavedNames(item, names) : item
+        ),
+      }
+  )
+  queryClient.setQueryData<{ hosting: HostingRecord }>(
+    queryKeys.org(orgId).hostings.detail(hostingId),
+    (current) => current && { ...current, hosting: withSavedNames(current.hosting, names) }
+  )
+}
+
 export function useCreateHosting(orgId: string, serviceId: string) {
   const queryClient = useQueryClient()
   return useApiMutation({
@@ -95,7 +126,8 @@ export function useUpdateHosting(orgId: string, serviceId: string) {
       hostingId: string
       body: Parameters<typeof updateHosting>[1]
     }) => updateHosting(hostingId, body),
-    onSuccess: async () => {
+    onSuccess: async (data, variables) => {
+      showSavedNames(queryClient, orgId, serviceId, variables.hostingId, data.names)
       await queryClient.invalidateQueries({
         queryKey: queryKeys.org(orgId).hostings.list(serviceId),
       })
@@ -113,6 +145,7 @@ export type UpsertHostingInput = Readonly<{
     options?: Record<string, unknown>
     tlsId?: string | null
     ipId?: string | null
+    names?: HostingNameChoice[]
   }
 }>
 
@@ -122,7 +155,8 @@ export function useUpsertHosting(orgId: string) {
   return useApiMutation({
     mutationFn: ({ serviceId, hostingId, body }: UpsertHostingInput) =>
       hostingId ? updateHosting(hostingId, body) : createHosting(serviceId, body),
-    onSuccess: async (_data, variables) => {
+    onSuccess: async (data, variables) => {
+      showSavedNames(queryClient, orgId, variables.serviceId, variables.hostingId, data.names)
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: queryKeys.org(orgId).hostings.list(variables.serviceId),

@@ -190,7 +190,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/lib/query-keys'
 import { HostingNameCertificates } from '@/components/org/hosting-name-certificates'
 import { HostingTunnelNames } from '@/components/org/hosting-tunnel-names'
-import { nameChoicesToSend, type NameChoiceEdits } from '@/lib/name-certificates'
+import { nameChoicesToSend, savedNamesNote, type NameChoiceEdits } from '@/lib/name-certificates'
 import {
   withCertificateRefusal,
   type HostingSaveNote,
@@ -3085,8 +3085,10 @@ export function EnvironmentDetailBody({
       onError(hostingSaveErrorMessage(result, 'Could not save this hostname.'))
       return false
     }
+    // The answer's own names say at once whether a name got its origin
+    // certificate or why not; shown before the re-read and anything after it.
+    setSavedNote(row.editorKey, { tone: 'ok', message: savedNamesNote(result.value.names) })
     await refreshEditorsAfterSave([row.editorKey])
-    setSavedNote(row.editorKey, { tone: 'ok', message: 'Saved.' })
     return true
   }
 

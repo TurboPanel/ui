@@ -269,7 +269,9 @@ export function HostingCertificatePanel({
     return refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null
   }
 
-  const view = tunnel ? tunnelOnlyCertificateView(tunnel) : describeCertificate(certificate)
+  const view = tunnel
+    ? tunnelOnlyCertificateView(tunnel, hosting?.names)
+    : describeCertificate(certificate)
   const dnsError = dnsCheck.error ? userErrorMessage(dnsCheck.error, 'Could not check DNS.') : null
   const dns = dnsCheck.data?.dns ?? null
   const request = () => {
