@@ -390,8 +390,8 @@ export function ProjectPrincipalsSection({
     setSavingAssignments((current) => new Set(current).add(principalId))
     setError(null)
     const result = await updateAssignments.run({ principalId, serviceIds: next })
-    if (!result.ok && updateAssignments.actionError) {
-      setError(updateAssignments.actionError)
+    if (!result.ok) {
+      setError(failedRunMessage(result, 'Could not save the access change.'))
     }
     setSavingAssignments((current) => {
       const copy = new Set(current)
@@ -411,8 +411,8 @@ export function ProjectPrincipalsSection({
     setSavingAccess((current) => new Set(current).add(principalId))
     setError(null)
     const result = await updatePrincipal.run({ principalId, access })
-    if (!result.ok && updatePrincipal.actionError) {
-      setError(updatePrincipal.actionError)
+    if (!result.ok) {
+      setError(failedRunMessage(result, 'Could not save the access change.'))
     }
     setSavingAccess((current) => {
       const copy = new Set(current)
@@ -455,10 +455,9 @@ export function ProjectPrincipalsSection({
       nameScheme: nameScheme.requestScheme,
     })
     if (!result.ok) {
-      const raw = result.error ?? createPrincipal.actionError
-      if (raw) {
-        setError(principalSchemeErrorMessage(raw, trimmed))
-      }
+      setError(
+        principalSchemeErrorMessage(failedRunMessage(result, 'Could not add the account.'), trimmed)
+      )
       return
     }
     setUsername('')
@@ -943,8 +942,8 @@ export function ProjectDetailSection({
   const saveCompose = async (compose: ComposeDocument) => {
     setError(null)
     const result = await persistProjectCompose.run(compose)
-    if (!result.ok && persistProjectCompose.actionError) {
-      setError(persistProjectCompose.actionError)
+    if (!result.ok) {
+      setError(failedRunMessage(result, 'Could not save the compose file.'))
     }
   }
 
@@ -956,8 +955,8 @@ export function ProjectDetailSection({
       name: displayName || undefined,
       description: description || undefined,
     })
-    if (!result.ok && updateProjectMutation.actionError) {
-      setError(updateProjectMutation.actionError)
+    if (!result.ok) {
+      setError(failedRunMessage(result, 'Could not save the project.'))
     }
   }
 
@@ -967,8 +966,8 @@ export function ProjectDetailSection({
     }
     setError(null)
     const result = await updateProjectMutation.run({ workspaceId })
-    if (!result.ok && updateProjectMutation.actionError) {
-      setError(updateProjectMutation.actionError)
+    if (!result.ok) {
+      setError(failedRunMessage(result, 'Could not save the project.'))
     }
   }
 

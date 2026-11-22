@@ -6,6 +6,7 @@ import { usePersistEnvironmentCompose } from '@/components/org/compose-persisten
 import { ConfirmButton } from '@/components/ui'
 import { emptyComposeDocument, resolveComposeOverlayState } from '@/lib/compose'
 import { environmentDisplayName } from '@/lib/resource-labels'
+import { failedRunMessage } from '@/lib/user-error'
 
 function EnvironmentOverridingBanner({
   envName,
@@ -56,10 +57,7 @@ export function ComposeScopeBanner() {
     invalidateEnvironments,
     setError,
   } = useProjectContext()
-  const persistEnvironmentCompose = usePersistEnvironmentCompose(
-    orgId,
-    selectedEnvironmentId ?? '',
-  )
+  const persistEnvironmentCompose = usePersistEnvironmentCompose(orgId, selectedEnvironmentId ?? '')
 
   const canMutate = canManage && projectAllowsMutations
   const saving = persistEnvironmentCompose.isPending
@@ -68,24 +66,17 @@ export function ComposeScopeBanner() {
     if (!selectedEnvironmentId) return
     setError(null)
     const result = await persistEnvironmentCompose.run(emptyComposeDocument())
-    if (!result.ok && persistEnvironmentCompose.actionError) {
-      setError(persistEnvironmentCompose.actionError)
+    if (!result.ok) {
+      setError(failedRunMessage(result, 'Could not clear the overrides.'))
       return
     }
     await invalidateEnvironments()
-  }, [
-    selectedEnvironmentId,
-    persistEnvironmentCompose,
-    setError,
-    invalidateEnvironments,
-  ])
+  }, [selectedEnvironmentId, persistEnvironmentCompose, setError, invalidateEnvironments])
 
   if (isSystemProject || !project || baseSelected) return null
   if (!selectedEnvironment) return null
 
-  const overlayState = resolveComposeOverlayState(
-    selectedEnvironment.options?.compose,
-  )
+  const overlayState = resolveComposeOverlayState(selectedEnvironment.options?.compose)
   if (overlayState.blank) return null
 
   return (

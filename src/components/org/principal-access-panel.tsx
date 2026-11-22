@@ -23,6 +23,7 @@ import {
 } from '@/lib/queries/projects'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { colors, spacing } from '@/lib/theme'
+import { failedRunMessage } from '@/lib/user-error'
 
 /**
  * Three levels, and only three, so this is a segmented control rather than a
@@ -173,7 +174,7 @@ function PrincipalKeysSection({
       // The server's own sentence, not a generic "invalid key": a pasted
       // options field, a DSA key, and the private half by mistake each have a
       // different fix, and the API says which.
-      setError(addKey.actionError ?? 'That key was not accepted.')
+      setError(failedRunMessage(result, 'That key was not accepted.'))
       return
     }
     setName('')
@@ -185,7 +186,7 @@ function PrincipalKeysSection({
     setError(null)
     const result = await removeKey.run(keyId)
     if (!result.ok) {
-      setError(removeKey.actionError ?? 'That key could not be removed.')
+      setError(failedRunMessage(result, 'That key could not be removed.'))
     }
   }
 
@@ -322,7 +323,7 @@ function PrincipalPasswordSection({
     setError(null)
     const result = await setPassword.run(body)
     if (!result.ok) {
-      setError(setPassword.actionError ?? 'The password was not accepted.')
+      setError(failedRunMessage(result, 'The password was not accepted.'))
       return
     }
     setGeneratedPassword(result.value.generatedPassword ?? null)
@@ -335,7 +336,7 @@ function PrincipalPasswordSection({
     setGeneratedPassword(null)
     const result = await disablePassword.run()
     if (!result.ok) {
-      setError(disablePassword.actionError ?? 'Password sign-in could not be disabled.')
+      setError(failedRunMessage(result, 'Password sign-in could not be disabled.'))
     }
   }
 

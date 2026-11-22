@@ -146,8 +146,8 @@ describe('EnvironmentSettingsBody', () => {
   })
 
   it('keeps what was typed and shows the refusal when the rename fails', async () => {
-    h.run.mockResolvedValue({ ok: false })
-    h.actionError = 'Could not save'
+    // `actionError` stays null: it is render state and empty inside the call that failed.
+    h.run.mockResolvedValue({ ok: false, error: 'Could not save' })
     render(<EnvironmentSettingsBody showGitSource />)
     await press(() => h.view.rename.onName('preview'))
     await press(() => h.view.rename.onSave())

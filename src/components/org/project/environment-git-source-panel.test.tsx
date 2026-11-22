@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EnvironmentGitSourcePanel } from './environment-git-source-panel'
@@ -138,5 +138,26 @@ describe('EnvironmentGitSourcePanel', () => {
       screen.getByText('Pushes to live deploy production: on (repository auto-deploy is on)')
     ).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Turn on/ })).toBeNull()
+  })
+
+  it('shows the refusal from the call that failed, on the first failure', async () => {
+    state.repositories = [
+      { id: REPO, repositoryUrl: 'https://github.com/acme/site', autoDeploy: 'immediate' },
+    ]
+    // `actionError` is null in this mock, as it is inside the call that just failed.
+    state.persist.mockResolvedValueOnce({ ok: false, error: 'That branch is protected.' } as never)
+    renderPanel()
+    fireEvent.click(screen.getByRole('switch'))
+    await waitFor(() => expect(screen.getByText('That branch is protected.')).toBeTruthy())
+  })
+
+  it('falls back to a plain sentence when the failure carries no message', async () => {
+    state.repositories = [
+      { id: REPO, repositoryUrl: 'https://github.com/acme/site', autoDeploy: 'immediate' },
+    ]
+    state.persist.mockResolvedValueOnce({ ok: false, error: null } as never)
+    renderPanel()
+    fireEvent.click(screen.getByRole('switch'))
+    await waitFor(() => expect(screen.getByText('Failed to save the branch')).toBeTruthy())
   })
 })

@@ -24,6 +24,7 @@ import { serverDisplayName } from '@/lib/resource-labels'
 import { useOrgServers, useUpdateEnvironment } from '@/lib/queries'
 import { useCan } from '@/lib/query-client'
 import { spacing } from '@/lib/theme'
+import { failedRunMessage } from '@/lib/user-error'
 
 function resolveInheritServerLabel(
   inheritedServer: OrgServerRecord | undefined,
@@ -334,8 +335,8 @@ function EnvironmentServersPanel({
           void (async () => {
             setError(null)
             const result = await updateEnvironment.run({ serverId })
-            if (!result.ok && updateEnvironment.actionError) {
-              setError(updateEnvironment.actionError)
+            if (!result.ok) {
+              setError(failedRunMessage(result, 'Could not save the server.'))
             }
           })()
         }}
@@ -343,8 +344,8 @@ function EnvironmentServersPanel({
           void (async () => {
             setError(null)
             const result = await updateEnvironment.run({ serverId: null })
-            if (!result.ok && updateEnvironment.actionError) {
-              setError(updateEnvironment.actionError)
+            if (!result.ok) {
+              setError(failedRunMessage(result, 'Could not save the server.'))
             }
           })()
         }}
