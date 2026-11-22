@@ -4339,11 +4339,24 @@ export type HostingNameCertificateOption = {
   reason?: string
 }
 
+/** Why a name set to the Cloudflare Origin Certificate has none yet. `code` may grow; unknown codes fall back to `message`. */
+export type HostingNameOriginIssue = {
+  code: string
+  /** The server's plain words, scrubbed of secrets. */
+  message: string
+  failedAt: string
+  attempts: number
+  /** The earliest time the scheduled retry looks again; null when it may on the next pass. */
+  nextTryAt: string | null
+}
+
 /** One name the site answers on and the certificate it has. */
 export type HostingNameCertificate = {
   hostname: string
   certificate: HostnameCertificate
   tlsId: string | null
+  /** Why the origin certificate is waiting or failing; null when there is no problem. Absent on older control planes. */
+  originCertificateIssue?: HostingNameOriginIssue | null
   certificateOptions: {
     default: HostnameCertificate
     options: HostingNameCertificateOption[]
@@ -5348,7 +5361,7 @@ export async function createHosting(
     ipId?: string | null
     names?: HostingNameChoice[]
   }
-): Promise<{ ok: true; id: string }> {
+): Promise<{ ok: true; id: string; names?: HostingNameCertificate[] }> {
   return await apiFetch(`${CLIENT_API}/hostings`, {
     method: 'POST',
     body: JSON.stringify({
@@ -5375,7 +5388,7 @@ export async function updateHosting(
     ipId?: string | null
     names?: HostingNameChoice[]
   }
-): Promise<{ ok: true }> {
+): Promise<{ ok: true; names?: HostingNameCertificate[] }> {
   return await apiFetch(`${CLIENT_API}/hostings/${hostingId}`, {
     method: 'PATCH',
     body: JSON.stringify(body),

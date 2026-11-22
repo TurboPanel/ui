@@ -4,6 +4,7 @@ import type {
   HostingCertificate,
   HostingNameCertificate,
   HostingNameCertificateOption,
+  HostingNameOriginIssue,
   TlsRecord,
 } from './instance-api'
 import {
@@ -15,14 +16,17 @@ import {
   nameChoicesToSend,
   nameState,
   optionLabel,
+  originIssueText,
   optionOf,
   optionValue,
   otherNamesCoveredBy,
   retryWaitMessage,
+  savedNamesNote,
   sharedOptions,
   sharedValue,
   withLibraryChoice,
   withNameChoice,
+  withSavedNames,
   withSharedChoice,
 } from './name-certificates'
 
@@ -389,5 +393,85 @@ describe('names that already have an issued certificate', () => {
       { certificate: 'letsencrypt_http', tlsId: null }
     )
     expect(Object.keys(edits)).toEqual(['c.example.net'])
+  })
+})
+
+describe('origin certificate issues', () => {
+  const issue = (
+    code: string,
+    extra: Partial<HostingNameOriginIssue> = {}
+  ): HostingNameOriginIssue => ({
+    code,
+    message: 'The server says so.',
+    failedAt: NOW,
+    attempts: 1,
+    nextTryAt: null,
+    ...extra,
+  })
+
+  it('words every code the control plane sends with a next step', () => {
+    const codes = [
+      'no_badge',
+      'provider_error',
+      'unsupported_provider',
+      'zone_not_covered',
+      'secrets_unavailable',
+      'badge_cannot_certify',
+      'origin_certificate_limit',
+      'origin_certificate_names',
+    ]
+    const sentences = codes.map((code) => originIssueText(issue(code), 'en-US'))
+    for (const sentence of sentences) expect(sentence).not.toContain('The server says so.')
+    expect(new Set(sentences).size).toBe(codes.length)
+    expect(sentences[0]).toContain(
+      'No Cloudflare token in this organization can issue certificates for this zone. Add one in Badges.'
+    )
+  })
+
+  it('falls back to the server message for a code it does not know', () => {
+    expect(originIssueText(issue('something_new'), 'en-US')).toContain('The server says so.')
+    expect(originIssueText(issue('something_new', { message: ' ' }), 'en-US')).toContain(
+      'Not issued yet.'
+    )
+  })
+
+  it('adds the next try time when there is one, and the number of tries', () => {
+    const text = originIssueText(issue('no_badge', { attempts: 3, nextTryAt: NOW }), 'en-US')
+    expect(text).toContain('Next try ')
+    expect(text).toContain('3 tries so far.')
+    const once = originIssueText(issue('no_badge'), 'en-US')
+    expect(once).not.toContain('Next try')
+    expect(once).toContain('1 try so far.')
+  })
+
+  it('shows the reason in the Waiting state of an origin name, not after it is pinned or verified', () => {
+    const waiting = {
+      certificate: 'cloudflare_origin' as const,
+      tlsId: null,
+      originCertificateIssue: issue('no_badge'),
+    }
+    const state = nameState(waiting, [], null, 'en-US')
+    expect(state.label).toBe('Waiting')
+    expect(state.detail).toContain('Add one in Badges.')
+    expect(nameState({ ...waiting, originCertificateIssue: null }, [], null).detail).toBe(
+      'Waiting for the origin certificate to be issued and sent to the server.'
+    )
+    expect(nameState(waiting, [], null, 'en-US', true).label).toBe('Ready')
+  })
+
+  it('reads the save answer at once: a note naming each waiting name, and the names put in place', () => {
+    const waiting = {
+      ...name('a.example.net', 'cloudflare_origin'),
+      originCertificateIssue: issue('no_badge'),
+    }
+    const done = name('b.example.net', 'cloudflare_origin', 'origin-1')
+    const note = savedNamesNote([waiting, done], 'en-US')
+    expect(note.startsWith('Saved. a.example.net: No Cloudflare token')).toBe(true)
+    expect(note).not.toContain('b.example.net')
+    expect(savedNamesNote([done])).toBe('Saved.')
+    expect(savedNamesNote(undefined)).toBe('Saved.')
+    const hosting = { names: [done] }
+    expect(withSavedNames(hosting, [waiting]).names).toEqual([waiting])
+    expect(withSavedNames(hosting, undefined)).toBe(hosting)
   })
 })

@@ -9,7 +9,12 @@ import {
   firstRows,
   withHostingHostnames,
 } from './config-view-model'
-import { INTERNAL_CERTIFICATE_LABEL } from '@/lib/hosting-tunnel'
+import {
+  INTERNAL_CERTIFICATE_LABEL,
+  LETS_ENCRYPT_CERTIFICATE_LABEL,
+  ORIGIN_CERTIFICATE_LABEL,
+  PINNED_CERTIFICATE_LABEL,
+} from '@/lib/hosting-tunnel'
 import type { HostingRecord } from '@/lib/instance-api'
 import {
   domainRow,
@@ -368,6 +373,41 @@ describe('hostnames held by the panel', () => {
     })
     expect(merged.domains[1].certificate?.label).toBeTruthy()
     expect(merged.domains[1].certificate?.label).not.toBe(INTERNAL_CERTIFICATE_LABEL)
+  })
+
+  it('follows the chosen certificate of a tunnel-only name', () => {
+    const model = buildConfigViewModel({ envName: 'Staging', view: viewWithoutHostnames() })
+    const path = {
+      tunnelId: 't1',
+      tunnelName: 'Edge',
+      provider: 'cloudflare',
+      originVerified: false,
+      status: 'live',
+      tunnelOnly: true,
+    }
+    const names = (
+      certificate: 'cloudflare_origin' | 'letsencrypt_http' | 'library',
+      tlsId: string | null
+    ) => [
+      {
+        hostname: 'Tunnel.example.com',
+        certificate,
+        tlsId,
+        certificateOptions: { default: certificate, options: [] },
+      },
+    ]
+    const labelFor = (choice: ReturnType<typeof names>) =>
+      withHostingHostnames(model, {
+        'id-web': [
+          hosting('h1', ['tunnel.example.com'], {
+            tunnels: [{ ...path, hostname: 'tunnel.example.com' }],
+            names: choice,
+          }),
+        ],
+      }).domains[0].certificate?.label
+    expect(labelFor(names('cloudflare_origin', 'tls-1'))).toBe(ORIGIN_CERTIFICATE_LABEL)
+    expect(labelFor(names('library', 'tls-2'))).toBe(PINNED_CERTIFICATE_LABEL)
+    expect(labelFor(names('letsencrypt_http', null))).toBe(LETS_ENCRYPT_CERTIFICATE_LABEL)
   })
 
   it('ignores a hosting without hostnames and an app the panel has no id for', () => {

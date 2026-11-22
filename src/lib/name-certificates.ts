@@ -11,6 +11,7 @@ import type {
   HostingNameCertificate,
   HostingNameCertificateOption,
   HostingNameChoice,
+  HostingNameOriginIssue,
   HostnameCertificate,
   TlsRecord,
 } from '@/lib/instance-api'
@@ -365,6 +366,38 @@ function stateOfSite(
   }
 }
 
+/** What each reason the server gives means, with the next step. */
+const ORIGIN_ISSUE_SENTENCES: Readonly<Record<string, string>> = {
+  no_badge:
+    'No Cloudflare token in this organization can issue certificates for this zone. Add one in Badges.',
+  provider_error:
+    'Cloudflare did not issue the certificate. It is tried again by itself; nothing to do unless it keeps failing.',
+  unsupported_provider:
+    'The provider of this zone cannot issue origin certificates. Choose another certificate for this name.',
+  zone_not_covered:
+    'The token that was found does not cover this name’s zone. Give the token this zone in Badges, or choose another certificate.',
+  secrets_unavailable:
+    'The stored Cloudflare token cannot be read right now. Ask an administrator to check the server’s encryption keys.',
+  badge_cannot_certify:
+    'The Cloudflare token has no certificate rights. Edit it in Badges and allow certificates.',
+  origin_certificate_limit:
+    'Cloudflare will not issue more origin certificates for this zone. Remove ones you no longer use, then it tries again.',
+  origin_certificate_names:
+    'Cloudflare refused the names on the certificate. Check that the name is inside the zone, or choose another certificate.',
+}
+
+/**
+ * Why a name's origin certificate is waiting, in plain words: the sentence for
+ * its code (the server's own message for a code this panel does not know),
+ * when it tries next and how many tries so far.
+ */
+export function originIssueText(issue: Readonly<HostingNameOriginIssue>, locale?: string): string {
+  const sentence = ORIGIN_ISSUE_SENTENCES[issue.code] ?? (issue.message.trim() || 'Not issued yet.')
+  const next = when(issue.nextTryAt, locale)
+  const tries = issue.attempts === 1 ? '1 try so far' : `${issue.attempts} tries so far`
+  return [sentence, next ? `Next try ${next}.` : null, `${tries}.`].filter(Boolean).join(' ')
+}
+
 /**
  * Where one name's certificate stands. The panel has no state field per name,
  * so this reads what it does send: the library row the name pins (`acme`
@@ -374,7 +407,7 @@ function stateOfSite(
  * once the tunnel checks it (`originVerified`) and Waiting until then.
  */
 export function nameState(
-  name: Pick<HostingNameCertificate, 'certificate' | 'tlsId'>,
+  name: Pick<HostingNameCertificate, 'certificate' | 'tlsId' | 'originCertificateIssue'>,
   library: readonly TlsRecord[],
   siteCertificate: HostingCertificate | null | undefined,
   locale?: string,
@@ -401,6 +434,15 @@ export function nameState(
     }
   }
   if (name.certificate === 'cloudflare_origin') {
+    if (name.originCertificateIssue && !originVerified) {
+      return {
+        label: 'Waiting',
+        tone: 'pending',
+        detail: originIssueText(name.originCertificateIssue, locale),
+        canRetry: false,
+        retryTlsId: null,
+      }
+    }
     return originVerified
       ? { label: 'Ready', tone: 'ok', detail: null, canRetry: false, retryTlsId: null }
       : {
@@ -412,6 +454,35 @@ export function nameState(
         }
   }
   return stateOfSite(siteCertificate, locale)
+}
+
+/**
+ * What a save tells at once about the names it answered: "Saved." plus, for
+ * each name still without its origin certificate, why. Read from the save's own
+ * answer, so it shows before any re-read.
+ */
+export function savedNamesNote(
+  names: readonly Pick<HostingNameCertificate, 'hostname' | 'originCertificateIssue'>[] | undefined,
+  locale?: string
+): string {
+  const lines = (names ?? []).flatMap((name) =>
+    name.originCertificateIssue
+      ? [`${name.hostname}: ${originIssueText(name.originCertificateIssue, locale)}`]
+      : []
+  )
+  return ['Saved.', ...lines].join(' ')
+}
+
+/**
+ * The hosting with the names a save answered, so the screen shows the result
+ * without waiting for a re-read. Unchanged when the answer carries no names
+ * (an older control plane).
+ */
+export function withSavedNames<T extends Readonly<{ names?: HostingNameCertificate[] }>>(
+  hosting: T,
+  names: HostingNameCertificate[] | undefined
+): T {
+  return names ? { ...hosting, names } : hosting
 }
 
 /** The sentence after a retry the authority refused with a wait. Null for any other failure. */

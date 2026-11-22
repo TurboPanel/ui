@@ -73,10 +73,9 @@ describe('services query hooks', () => {
   })
 
   it('useServices stays idle when disabled or org id is empty', () => {
-    const disabled = renderHook(
-      () => useServices(orgId, environmentId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useServices(orgId, environmentId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     const empty = renderHook(() => useServices('', environmentId), {
       wrapper: createWrapper(),
     })
@@ -101,10 +100,9 @@ describe('services query hooks', () => {
   })
 
   it('useHostings stays idle when disabled or service id is empty', () => {
-    const disabled = renderHook(
-      () => useHostings(orgId, serviceId, { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const disabled = renderHook(() => useHostings(orgId, serviceId, { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     const empty = renderHook(() => useHostings(orgId, ''), {
       wrapper: createWrapper(),
     })
@@ -124,7 +122,7 @@ describe('services query hooks', () => {
       result.current.run({
         environmentId,
         body: { name: 'api' },
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
     expect(createService).toHaveBeenCalledWith(environmentId, {
       name: 'api',
@@ -142,7 +140,7 @@ describe('services query hooks', () => {
       result.current.run({
         serviceId,
         body: { name: 'www' },
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
     expect(createHosting).toHaveBeenCalledWith(serviceId, {
       name: 'www',
@@ -161,11 +159,71 @@ describe('services query hooks', () => {
         serviceId,
         hostingId: 'host-1',
         body: { name: 'www-updated' },
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
     expect(updateHosting).toHaveBeenCalledWith('host-1', {
       name: 'www-updated',
     })
+  })
+
+  it('useUpsertHosting puts the answered names into the cache before the re-read', async () => {
+    const waiting = {
+      hostname: 'a.example.net',
+      certificate: 'cloudflare_origin',
+      tlsId: null,
+      certificateOptions: { default: 'cloudflare_origin', options: [] },
+      originCertificateIssue: {
+        code: 'no_badge',
+        message: 'm',
+        failedAt: '2030-01-02T03:04:05.000Z',
+        attempts: 1,
+        nextTryAt: null,
+      },
+    }
+    const client = createAppQueryClient()
+    client.setQueryData(['org', orgId, 'hostings', serviceId], {
+      hostings: [
+        { id: 'host-1', names: [] },
+        { id: 'host-2', names: [] },
+      ],
+    })
+    client.setQueryData(['org', orgId, 'hostings', 'detail', 'host-1'], {
+      hosting: { id: 'host-1', names: [] },
+    })
+    // The re-read never answers in this test: what shows is the save's own answer.
+    fetchVisibleHostings.mockReturnValue(new Promise(() => undefined))
+    updateHosting.mockResolvedValueOnce({ ok: true, names: [waiting] })
+
+    const { result } = renderHook(() => useUpsertHosting(orgId), {
+      wrapper: createWrapper(client),
+    })
+    const saving = result.current.run({ serviceId, hostingId: 'host-1', body: { name: 'www' } })
+    await waitFor(() => {
+      const list = client.getQueryData<{ hostings: { id: string; names: unknown[] }[] }>([
+        'org',
+        orgId,
+        'hostings',
+        serviceId,
+      ])
+      expect(list?.hostings[0]?.names).toEqual([waiting])
+    })
+    const list = client.getQueryData<{ hostings: { id: string; names: unknown[] }[] }>([
+      'org',
+      orgId,
+      'hostings',
+      serviceId,
+    ])
+    expect(list?.hostings[1]?.names).toEqual([])
+    expect(
+      client.getQueryData<{ hosting: { names: unknown[] } }>([
+        'org',
+        orgId,
+        'hostings',
+        'detail',
+        'host-1',
+      ])?.hosting.names
+    ).toEqual([waiting])
+    void saving
   })
 
   it('useUpdateService invalidates services and hostings', async () => {
@@ -173,14 +231,11 @@ describe('services query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useUpdateService(orgId, serviceId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useUpdateService(orgId, serviceId), {
+      wrapper: createWrapper(client),
+    })
 
-    await expect(
-      result.current.run({ name: 'api-renamed' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ name: 'api-renamed' })).resolves.toMatchObject({ ok: true })
 
     expect(updateService).toHaveBeenCalledWith(serviceId, {
       name: 'api-renamed',
@@ -197,14 +252,13 @@ describe('services query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useCreateHosting(orgId, serviceId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useCreateHosting(orgId, serviceId), {
+      wrapper: createWrapper(client),
+    })
 
-    await expect(
-      result.current.run({ name: 'app.example.com' }),
-    ).resolves.toMatchObject({ ok: true })
+    await expect(result.current.run({ name: 'app.example.com' })).resolves.toMatchObject({
+      ok: true,
+    })
 
     expect(createHosting).toHaveBeenCalledWith(serviceId, {
       name: 'app.example.com',
@@ -221,16 +275,15 @@ describe('services query hooks', () => {
     const client = createAppQueryClient()
     const invalidate = vi.spyOn(client, 'invalidateQueries')
 
-    const { result } = renderHook(
-      () => useUpdateHosting(orgId, serviceId),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useUpdateHosting(orgId, serviceId), {
+      wrapper: createWrapper(client),
+    })
 
     await expect(
       result.current.run({
         hostingId: 'host-1',
         body: { name: 'updated.example.com' },
-      }),
+      })
     ).resolves.toMatchObject({ ok: true })
 
     expect(updateHosting).toHaveBeenCalledWith('host-1', {
@@ -246,10 +299,9 @@ describe('services query hooks', () => {
       hostings: [{ id: 'host-1', name: 'app.example.com' }],
     })
 
-    const { result } = renderHook(
-      () => useHostingsByServices(orgId, [serviceId]),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useHostingsByServices(orgId, [serviceId]), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false)
@@ -262,17 +314,15 @@ describe('services query hooks', () => {
     fetchVisibleHostings.mockRejectedValue(new Error('boom'))
     const client = createAppQueryClient()
     client.setDefaultOptions({ queries: { retry: false } })
-    const { result } = renderHook(
-      () => useHostingsByServices(orgId, [serviceId]),
-      { wrapper: createWrapper(client) },
-    )
+    const { result } = renderHook(() => useHostingsByServices(orgId, [serviceId]), {
+      wrapper: createWrapper(client),
+    })
     await waitFor(() => {
       expect(result.current.hasError).toBe(true)
     })
-    const off = renderHook(
-      () => useHostingsByServices(orgId, [serviceId], { enabled: false }),
-      { wrapper: createWrapper() },
-    )
+    const off = renderHook(() => useHostingsByServices(orgId, [serviceId], { enabled: false }), {
+      wrapper: createWrapper(),
+    })
     expect(off.result.current.hasError).toBe(false)
     fetchVisibleHostings.mockReset()
   })
@@ -282,10 +332,9 @@ describe('services query hooks', () => {
       hostings: [{ id: 'host-1', name: 'app.example.com' }],
     })
 
-    const { result } = renderHook(
-      () => useHostingsByServices(orgId, [serviceId]),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useHostingsByServices(orgId, [serviceId]), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false)
@@ -302,7 +351,7 @@ describe('services query hooks', () => {
   it('useHostingsByServices stays idle when disabled and skips blank service ids', async () => {
     const disabled = renderHook(
       () => useHostingsByServices(orgId, [serviceId], { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     expect(disabled.result.current.isLoading).toBe(false)
     expect(fetchVisibleHostings).not.toHaveBeenCalled()
@@ -310,10 +359,9 @@ describe('services query hooks', () => {
     fetchVisibleHostings.mockResolvedValueOnce({
       hostings: [{ id: 'host-1', name: 'app.example.com' }],
     })
-    const { result } = renderHook(
-      () => useHostingsByServices(orgId, ['', serviceId]),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useHostingsByServices(orgId, ['', serviceId]), {
+      wrapper: createWrapper(),
+    })
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false)
     })
@@ -328,10 +376,9 @@ describe('services query hooks', () => {
       services: [{ id: serviceId, name: 'web' }],
     })
 
-    const { result } = renderHook(
-      () => useServicesByEnvironments(orgId, [environmentId]),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServicesByEnvironments(orgId, [environmentId]), {
+      wrapper: createWrapper(),
+    })
 
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false)
@@ -343,7 +390,7 @@ describe('services query hooks', () => {
   it('useServicesByEnvironments stays idle when disabled and skips blank environment ids', async () => {
     const disabled = renderHook(
       () => useServicesByEnvironments(orgId, [environmentId], { enabled: false }),
-      { wrapper: createWrapper() },
+      { wrapper: createWrapper() }
     )
     expect(disabled.result.current.isLoading).toBe(false)
     expect(fetchVisibleServices).not.toHaveBeenCalled()
@@ -351,10 +398,9 @@ describe('services query hooks', () => {
     fetchVisibleServices.mockResolvedValueOnce({
       services: [{ id: serviceId, name: 'web' }],
     })
-    const { result } = renderHook(
-      () => useServicesByEnvironments(orgId, ['', environmentId]),
-      { wrapper: createWrapper() },
-    )
+    const { result } = renderHook(() => useServicesByEnvironments(orgId, ['', environmentId]), {
+      wrapper: createWrapper(),
+    })
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false)
     })
