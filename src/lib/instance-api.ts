@@ -4344,7 +4344,9 @@ export type HostingNameOriginIssue = {
   code: string
   /** The server's plain words, scrubbed of secrets. */
   message: string
-  failedAt: string
+  /** Null for `queued`: no attempt has run yet. */
+  failedAt: string | null
+  /** 0 for `queued`. */
   attempts: number
   /** The earliest time the scheduled retry looks again; null when it may on the next pass. */
   nextTryAt: string | null

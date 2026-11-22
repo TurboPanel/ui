@@ -31,7 +31,7 @@ function anchorContainer(
   containers: readonly ContainerRecord[],
   running: ContainerRecord | null
 ): ContainerRecord | null {
-  return running ?? containers.find((row) => row.role === 'service') ?? containers[0] ?? null
+  return running ?? containers.find((row) => row.role === 'service') ?? null
 }
 
 export const NO_RUNNING_CONTAINER =

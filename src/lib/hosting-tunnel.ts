@@ -6,7 +6,7 @@
  */
 import type { CertificateTone, CertificateView } from '@/lib/hosting-certificate'
 import type { HostingNameCertificate, HostingRecord } from '@/lib/instance-api'
-import { originIssueText } from '@/lib/name-certificates'
+import { ORIGIN_WAITING_LINE, originIssueText } from '@/lib/name-certificates'
 
 export type TunnelOnly = Readonly<{ tunnelNames: string[] }>
 
@@ -48,8 +48,8 @@ function nameWords(name: TunnelNameCertificate | undefined, locale?: string): Na
             label: ORIGIN_CERTIFICATE_LABEL,
             tone: 'pending',
             line: name.originCertificateIssue
-              ? `Waiting: ${originIssueText(name.originCertificateIssue, locale)}`
-              : 'Waiting for the certificate to be issued and sent to the server.',
+              ? `Waiting for the origin certificate. ${originIssueText(name.originCertificateIssue, locale)}`
+              : ORIGIN_WAITING_LINE,
           }
     case 'library':
       return {

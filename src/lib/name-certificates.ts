@@ -369,15 +369,48 @@ function stateOfSite(
 /** How often a hosting is read again while a name still waits for its origin certificate. */
 export const ORIGIN_WAITING_POLL_MS = 30_000
 
-/** Whether any name chose the origin certificate and has none yet. */
+/**
+ * The reasons that only a person can clear (a token, a zone, a provider, keys):
+ * reading the hosting again every 30 s cannot change them. Any other code,
+ * including one this panel does not know, is still worth polling.
+ */
+const ORIGIN_ISSUES_WITHOUT_RETRY: ReadonlySet<string> = new Set([
+  'no_badge',
+  'unsupported_provider',
+  'zone_not_covered',
+  'secrets_unavailable',
+  'badge_cannot_certify',
+  'origin_certificate_names',
+])
+
+/**
+ * Whether the hosting should be read again for the origin certificate: a name
+ * chose it, has none yet, and no reason the server gave needs the person first.
+ * Stops once every name is issued or only blocked names are left.
+ */
 export function waitsForOriginCertificate(
-  names: readonly Pick<HostingNameCertificate, 'certificate' | 'tlsId'>[] | undefined
+  names:
+    | readonly Pick<HostingNameCertificate, 'certificate' | 'tlsId' | 'originCertificateIssue'>[]
+    | undefined
 ): boolean {
-  return (names ?? []).some((name) => name.certificate === 'cloudflare_origin' && !name.tlsId)
+  return (names ?? []).some(
+    (name) =>
+      name.certificate === 'cloudflare_origin' &&
+      !name.tlsId &&
+      !(
+        name.originCertificateIssue &&
+        ORIGIN_ISSUES_WITHOUT_RETRY.has(name.originCertificateIssue.code)
+      )
+  )
 }
+
+/** The one line for a name whose origin certificate is not here yet, with or without a reason. */
+export const ORIGIN_WAITING_LINE =
+  'Waiting for the origin certificate to be issued and sent to the server.'
 
 /** What each reason the server gives means, with the next step. */
 const ORIGIN_ISSUE_SENTENCES: Readonly<Record<string, string>> = {
+  queued: 'The first attempt to issue the certificate has not run yet.',
   no_badge:
     'No Cloudflare token in this organization can issue certificates for this zone. Add one in Badges.',
   provider_error:
@@ -404,8 +437,11 @@ const ORIGIN_ISSUE_SENTENCES: Readonly<Record<string, string>> = {
 export function originIssueText(issue: Readonly<HostingNameOriginIssue>, locale?: string): string {
   const sentence = ORIGIN_ISSUE_SENTENCES[issue.code] ?? (issue.message.trim() || 'Not issued yet.')
   const next = when(issue.nextTryAt, locale)
-  const tries = issue.attempts === 1 ? '1 try so far' : `${issue.attempts} tries so far`
-  return [sentence, next ? `Next try ${next}.` : null, `${tries}.`].filter(Boolean).join(' ')
+  const count = Number.isFinite(issue.attempts) ? issue.attempts : 0
+  const tries = count === 1 ? '1 try so far' : `${count} tries so far`
+  return [sentence, next ? `Next try ${next}.` : null, count > 0 ? `${tries}.` : null]
+    .filter(Boolean)
+    .join(' ')
 }
 
 /**
@@ -458,7 +494,7 @@ export function nameState(
       : {
           label: 'Waiting',
           tone: 'pending',
-          detail: 'Waiting for the origin certificate to be issued and sent to the server.',
+          detail: ORIGIN_WAITING_LINE,
           canRetry: false,
           retryTlsId: null,
         }
