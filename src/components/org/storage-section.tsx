@@ -41,7 +41,7 @@ import { useServices } from '@/lib/queries/services'
 import { useOrgServers } from '@/lib/queries/servers'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 const KIND_LABELS: Record<StorageKind, string> = {
   volume: 'Volume',
@@ -170,8 +170,8 @@ function useStorageSection({
           setFolder(EMPTY_FOLDER_DRAFT)
           setShowAdd(false)
         },
-        onError: () => {
-          setError(createMutation.actionError ?? 'Failed to create storage')
+        onError: (err) => {
+          setError(userErrorMessage(err, 'Failed to create storage'))
         },
       }
     )
@@ -188,16 +188,16 @@ function useStorageSection({
       mountId,
       body: { destinationPath: nextDestinationPath },
     })
-    if (!result.ok && result.error) {
-      setError(result.error)
+    if (!result.ok) {
+      setError(failedRunMessage(result, 'Failed to save the mount path'))
     }
   }
 
   const handleDelete = (id: string) => {
     setError(null)
     deleteMutation.mutate(id, {
-      onError: () => {
-        setError(deleteMutation.actionError ?? 'Failed to delete storage')
+      onError: (err) => {
+        setError(userErrorMessage(err, 'Failed to delete storage'))
       },
     })
   }

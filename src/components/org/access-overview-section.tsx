@@ -501,8 +501,8 @@ export function AccessOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     }
     setActionError(null)
     revokeGrantMutation.mutate(grantId, {
-      onError: () => {
-        setActionError(revokeGrantMutation.actionError ?? 'Failed to revoke access grant')
+      onError: (err) => {
+        setActionError(userErrorMessage(err, 'Failed to revoke access grant'))
       },
     })
   }
@@ -536,8 +536,8 @@ export function AccessOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         setSubjectId('')
         setSelectedPermissionKey(null)
       },
-      onError: () => {
-        setSubmitError(createGrantMutation.actionError ?? 'Failed to create access grant')
+      onError: (err) => {
+        setSubmitError(userErrorMessage(err, 'Failed to create access grant'))
       },
     })
   }
@@ -559,8 +559,8 @@ export function AccessOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         onSuccess: () => {
           setInviteEmail('')
         },
-        onError: () => {
-          setInviteError(createInvitationMutation.actionError ?? 'Failed to send invitation')
+        onError: (err) => {
+          setInviteError(userErrorMessage(err, 'Failed to send invitation'))
         },
       }
     )

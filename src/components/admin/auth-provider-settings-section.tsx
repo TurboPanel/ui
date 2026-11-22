@@ -187,8 +187,8 @@ export function AuthProviderSettingsSection() {
         setSuccess('Settings saved.')
         setSaveError(null)
       },
-      onError: () => {
-        setSaveError(saveMutation.actionError ?? 'Failed to save sign-in provider settings')
+      onError: (err) => {
+        setSaveError(userErrorMessage(err, 'Failed to save sign-in provider settings'))
         setSuccess(null)
       },
     })

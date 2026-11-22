@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectShell } from './project-shell'
@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   width: 1200,
   envChrome: false,
   os: 'web',
+  updateRun: vi.fn(),
 }))
 
 vi.mock('react-native', () => ({
@@ -26,7 +27,14 @@ vi.mock('react-native', () => ({
   View: ({ children }: Props) => <div>{children}</div>,
   ScrollView: ({ children }: Props) => <div>{children}</div>,
   Text: ({ children }: Props) => <span>{children}</span>,
-  TextInput: () => <input />,
+  TextInput: ({ value, onChangeText, onBlur }: Props) => (
+    <input
+      aria-label="Project name"
+      value={value as string}
+      onChange={(event) => (onChangeText as (text: string) => void)(event.target.value)}
+      onBlur={onBlur as () => void}
+    />
+  ),
   Pressable: ({ children, onPress, accessibilityLabel, accessibilityRole }: Props) => (
     <button
       type="button"
@@ -63,7 +71,7 @@ vi.mock('@/lib/queries', () => ({
   useCommandsBatch: () => ({ data: undefined }),
   useDeleteEnvironment: () => ({}),
   useDeleteEnvironmentManagedMutation: () => ({}),
-  useUpdateProject: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateProject: () => ({ mutate: vi.fn(), run: state.updateRun, isPending: false }),
 }))
 vi.mock('@/components/ui/v4', () => ({
   UnderlineTabs: ({
@@ -123,6 +131,7 @@ beforeEach(() => {
   state.envChrome = false
   state.os = 'web'
   state.push.mockReset()
+  state.updateRun.mockReset()
   setContext()
 })
 afterEach(cleanup)
@@ -277,5 +286,34 @@ describe('error line', () => {
     setContext({ error: null, errorReload: true })
     render(<ProjectShell>body</ProjectShell>)
     expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+  })
+})
+
+describe('renaming the project', () => {
+  async function rename(next: string) {
+    const input = screen.getByLabelText('Project name')
+    fireEvent.change(input, { target: { value: next } })
+    fireEvent.blur(input)
+    await waitFor(() => expect(state.updateRun).toHaveBeenCalled())
+  }
+
+  it('shows the refusal from the failed save, not a stale mutation state', async () => {
+    const setError = vi.fn()
+    setContext({ canOwn: true, projectAllowsMutations: true, setError })
+    state.updateRun.mockResolvedValue({ ok: false, error: 'That name is taken.' })
+    render(<ProjectShell>body</ProjectShell>)
+    await rename('Webshop')
+    expect(state.updateRun).toHaveBeenCalledWith({ name: 'Webshop' })
+    await waitFor(() => expect(setError).toHaveBeenLastCalledWith('That name is taken.'))
+  })
+
+  it('shows nothing when the save works', async () => {
+    const setError = vi.fn()
+    setContext({ canOwn: true, projectAllowsMutations: true, setError })
+    state.updateRun.mockResolvedValue({ ok: true, value: {} })
+    render(<ProjectShell>body</ProjectShell>)
+    await rename('Webshop')
+    expect(setError).toHaveBeenCalledTimes(1)
+    expect(setError).toHaveBeenLastCalledWith(null)
   })
 })

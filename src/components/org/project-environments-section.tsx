@@ -33,7 +33,7 @@ import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 function environmentLabel(environment: EnvironmentRecord): string {
   return environment.name?.trim() || 'Unnamed environment'
@@ -261,8 +261,11 @@ function useEnvironmentDeleteFlow(
     const result = await stopEnvironment.run(activeEnvironment.id)
     if (result.ok) {
       setFailure({ text: ENVIRONMENT_STOP_QUEUED_COPY, needsStop: false })
-    } else if (stopEnvironment.actionError) {
-      setFailure({ text: stopEnvironment.actionError, needsStop: true })
+    } else {
+      setFailure({
+        text: failedRunMessage(result, 'Could not stop the environment.'),
+        needsStop: true,
+      })
     }
   }
 
@@ -345,14 +348,14 @@ export function ProjectEnvironmentsSection({
     if (defaultNameLoading || environmentsQuery.isLoading) return
     if (environments.length === 0 && canOwn && provisionAttemptedFor.current !== projectId) {
       provisionAttemptedFor.current = projectId
-      createEnvironment
+      void createEnvironment
         .run({
           projectId,
           name: defaultEnvironmentName,
         })
         .then((result) => {
-          if (!result.ok && createEnvironment.actionError) {
-            setError(createEnvironment.actionError)
+          if (!result.ok) {
+            setError(failedRunMessage(result, 'Could not create the environment.'))
           }
         })
     }
@@ -394,9 +397,7 @@ export function ProjectEnvironmentsSection({
     setError(null)
     const result = await updateEnvironment.run({ name: trimmed })
     if (!result.ok) {
-      if (updateEnvironment.actionError) {
-        setError(updateEnvironment.actionError)
-      }
+      setError(failedRunMessage(result, 'Could not rename the environment.'))
       return
     }
     setRenaming(false)
@@ -416,9 +417,7 @@ export function ProjectEnvironmentsSection({
       name: trimmed,
     })
     if (!result.ok) {
-      if (createEnvironment.actionError) {
-        setCreateError(createEnvironment.actionError)
-      }
+      setCreateError(failedRunMessage(result, 'Could not create the environment.'))
       return
     }
     setSelectedId(result.value.id)

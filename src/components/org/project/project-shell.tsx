@@ -34,6 +34,7 @@ import { useOrganizationRecord } from '@/lib/queries/auth'
 import { isEmojiIconAllowedOf } from '@/lib/icons'
 import { showsBreadcrumb } from '@/lib/header-breadcrumb'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { failedRunMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 /**
@@ -111,9 +112,7 @@ function ProjectHeader() {
       name: trimmed || undefined,
     })
     if (!result.ok) {
-      if (updateProject.actionError) {
-        setError(updateProject.actionError)
-      }
+      setError(failedRunMessage(result, 'Could not save the project name.'))
     }
   }
 

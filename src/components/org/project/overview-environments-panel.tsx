@@ -94,7 +94,7 @@ import { resolveEffectiveServerId } from '@/lib/project-options'
 import { resolveServerLabel } from '@/lib/resource-labels'
 import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 type TrackedCommand = {
   environmentId: string
@@ -1048,7 +1048,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     try {
       const result = await lifecycleMutation.run(action)
       if (!result.ok) {
-        setActionError(lifecycleMutation.actionError ?? `Failed to ${action}`)
+        setActionError(failedRunMessage(result, `Failed to ${action}`))
         return
       }
       trackEnqueue(
@@ -1120,9 +1120,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     setActionError(null)
     const result = await lifecycleMutation.run('stop')
     if (!result.ok) {
-      if (lifecycleMutation.actionError) {
-        setActionError(lifecycleMutation.actionError)
-      }
+      setActionError(failedRunMessage(result, 'Could not stop the environment.'))
       return
     }
     trackEnqueue(
@@ -1140,9 +1138,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     if (!result.ok) {
       // A refused data delete (changed list) shows the list afresh.
       if (destroyData.options) destroyData.refetch()
-      if (stopEnvironmentMutation.actionError) {
-        setActionError(stopEnvironmentMutation.actionError)
-      }
+      setActionError(failedRunMessage(result, 'Could not delete the environment.'))
       return
     }
     trackEnqueue(
