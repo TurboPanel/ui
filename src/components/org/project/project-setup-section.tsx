@@ -30,7 +30,7 @@ import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
  * picks Compose or Services and binds the repository on the service itself.
  */
 const RESUMABLE_SETUP_OPTIONS = SETUP_TYPE_OPTIONS.filter(
-  (option) => option.choice !== 'repository',
+  (option) => option.choice !== 'repository'
 )
 
 /**
@@ -41,48 +41,33 @@ const RESUMABLE_SETUP_OPTIONS = SETUP_TYPE_OPTIONS.filter(
  */
 export function ProjectSetupSection() {
   const router = useRouter()
-  const {
-    orgId,
-    projectId,
-    project,
-    environments,
-    canManage,
-    needsSetup,
-    setError,
-  } = useProjectContext()
+  const { orgId, projectId, project, environments, canManage, needsSetup, setError } =
+    useProjectContext()
   const { defaultEnvironmentName } = useOrgDefaultEnvironmentName(orgId)
   const scaffoldedEnvironmentName =
-    environments.find((env) => env.description === 'Default environment')
-      ?.name?.trim() ||
+    environments.find((env) => env.description === 'Default environment')?.name?.trim() ||
     (environments.length === 1 ? environments[0]?.name?.trim() : undefined) ||
     defaultEnvironmentName
 
-  const [selectedChoice, setSelectedChoice] = useState<SetupChoice | null>(
-    null,
-  )
-  const selectedOption = selectedChoice
-    ? setupOptionForChoice(selectedChoice) ?? null
-    : null
+  const [selectedChoice, setSelectedChoice] = useState<SetupChoice | null>(null)
+  const selectedOption = selectedChoice ? (setupOptionForChoice(selectedChoice) ?? null) : null
   const [selectedCode, setSelectedCode] = useState('')
   const configureProject = useConfigureProject(orgId, projectId)
 
   const catalogQuery = useProjectCatalog(orgId, {
-    enabled:
-      selectedOption != null && selectedOption.type !== 'docker-compose',
+    enabled: selectedOption != null && selectedOption.type !== 'docker-compose',
   })
 
   const localError =
-    catalogQuery.error instanceof Error ? userErrorMessage(catalogQuery.error, '') : configureProject.actionError
+    catalogQuery.error instanceof Error
+      ? userErrorMessage(catalogQuery.error, '')
+      : configureProject.actionError
 
   // Where setup hands off. Compose lands on the YAML editor, managed on
   // Overview; every other choice lands on the Services cards so the operator
   // continues in the surface they picked.
   const landingSection = selectedOption?.section ?? 'overview'
-  const landingHref = projectComposeSectionHref(
-    orgId,
-    projectId,
-    landingSection,
-  ) as Href
+  const landingHref = projectComposeSectionHref(orgId, projectId, landingSection) as Href
 
   useEffect(() => {
     if (!needsSetup && project) {
@@ -108,8 +93,7 @@ export function ProjectSetupSection() {
     router.replace(landingHref)
   }
 
-  const needsCode =
-    selectedOption != null && selectedOption.type !== 'docker-compose'
+  const needsCode = selectedOption != null && selectedOption.type !== 'docker-compose'
   const canFinish =
     canManage &&
     selectedOption != null &&
@@ -123,14 +107,10 @@ export function ProjectSetupSection() {
         hint={`${scaffoldedEnvironmentName} already exists. Choose how this project runs — nothing changes until you finish.`}
         accent
       >
-        {localError ? (
-          <Text style={panelStyles.error}>{localError}</Text>
-        ) : null}
+        {localError ? <Text style={panelStyles.error}>{localError}</Text> : null}
 
         {!canManage ? (
-          <Text style={panelStyles.muted}>
-            Ask an organization manager to finish setup.
-          </Text>
+          <Text style={panelStyles.muted}>Ask an organization manager to finish setup.</Text>
         ) : null}
 
         <ChoiceGrid>
