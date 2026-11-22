@@ -12,6 +12,15 @@ import { NetworkTunnelCard } from './network-tunnel-card'
 import { NetworkTunnelCreate } from './network-tunnel-create'
 import { NetworkTunnelServers } from './network-tunnel-servers'
 
+function AccessNote({
+  roleLoading,
+  allowed,
+}: Readonly<{ roleLoading: boolean; allowed: boolean }>) {
+  if (roleLoading) return <LoadingState label="Checking your access…" />
+  if (allowed) return null
+  return <Text style={panelStyles.muted}>Only owners and managers can manage tunnels.</Text>
+}
+
 /**
  * Tunnels: create one on a Cloudflare account, choose which servers run it,
  * and add the hostnames it carries. Owners and managers only.
@@ -43,10 +52,7 @@ export function NetworkTunnelsSection({ orgId }: Readonly<{ orgId: string }>) {
         A tunnel lets visitors reach a site through Cloudflare without opening a port on your
         server. Choose which servers run it, then add the hostnames it carries.
       </Text>
-      {roleLoading ? <LoadingState label="Checking your access…" /> : null}
-      {allowed || roleLoading ? null : (
-        <Text style={panelStyles.muted}>Only owners and managers can manage tunnels.</Text>
-      )}
+      <AccessNote roleLoading={roleLoading} allowed={allowed} />
       {allowed && carriers.isLoading ? <LoadingState label="Loading Cloudflare accounts…" /> : null}
       {allowed && !carriers.isLoading ? (
         <NetworkTunnelCreate
