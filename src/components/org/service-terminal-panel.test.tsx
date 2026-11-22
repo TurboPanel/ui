@@ -1,7 +1,12 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LOGIN_USER_ERROR, ServiceTerminalPanel, terminalContainer } from './service-terminal-panel'
+import {
+  LOGIN_USER_ERROR,
+  NO_RUNNING_CONTAINER,
+  ServiceTerminalPanel,
+  terminalContainer,
+} from './service-terminal-panel'
 
 const state = vi.hoisted(() => ({
   containers: [] as unknown[],
@@ -61,7 +66,7 @@ vi.mock('@/components/ui', () => ({
 }))
 
 const running = { id: 'c1', serverId: 's1', role: 'service', status: 'running', containerId: 'abc' }
-const onServer = { id: 's1', trustPinnedBy: 'install', options: { terminal: { container: true } } }
+const onServer = { id: 's1', trustPinnedBy: 'none', options: { terminal: { container: true } } }
 
 beforeEach(() => {
   state.containers = [running]
@@ -72,7 +77,7 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('Terminal entry on a service', () => {
-  it('shows when the switch is on, the person may open one and the server is pinned', () => {
+  it('shows when the switch is on, the person may open one, even when the server is not pinned', () => {
     render(<ServiceTerminalPanel orgId="o" serviceId="svc" />)
     expect(screen.getByText('Open Terminal')).toBeTruthy()
     expect(screen.getByLabelText('Login User')).toBeTruthy()
@@ -80,14 +85,33 @@ describe('Terminal entry on a service', () => {
 
   it.each([
     ['the switch is off', () => (state.server = { ...onServer, options: {} })],
-    ['the server is not pinned', () => (state.server = { ...onServer, trustPinnedBy: 'none' })],
     ['the person has no permission', () => (state.can = {})],
-    ['no container is running', () => (state.containers = [{ ...running, status: 'exited' }])],
+    ['no container exists', () => (state.containers = [])],
     ['the server is not loaded', () => (state.server = undefined)],
   ])('hides when %s', (_name, change) => {
     change()
     const { container } = render(<ServiceTerminalPanel orgId="o" serviceId="svc" />)
     expect(container.textContent).toBe('')
+  })
+
+  it('says so when the switch is on but no service container is running', () => {
+    state.containers = [{ ...running, status: 'exited' }]
+    render(<ServiceTerminalPanel orgId="o" serviceId="svc" />)
+    expect(screen.getByText('Terminal')).toBeTruthy()
+    expect(screen.getByText(NO_RUNNING_CONTAINER)).toBeTruthy()
+    expect(screen.queryByText('Open Terminal')).toBeNull()
+  })
+
+  it('hides the not-running line when the switch is off or the person may not open one', () => {
+    state.containers = [{ ...running, status: 'exited' }]
+    state.server = { ...onServer, options: {} }
+    const first = render(<ServiceTerminalPanel orgId="o" serviceId="svc" />)
+    expect(first.container.textContent).toBe('')
+    cleanup()
+    state.server = onServer
+    state.can = {}
+    const second = render(<ServiceTerminalPanel orgId="o" serviceId="svc" />)
+    expect(second.container.textContent).toBe('')
   })
 
   it('shows the plain words and a settings link to a manager when the switch is off', () => {
