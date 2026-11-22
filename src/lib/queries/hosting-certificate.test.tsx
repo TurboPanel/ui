@@ -65,6 +65,23 @@ describe('hosting certificate queries', () => {
     expect(interval([waiting])).toBe(30_000)
     expect(interval([{ ...waiting, tlsId: 'tls-1' }])).toBe(false)
     expect(interval([])).toBe(false)
+    const issue = (code: string) => ({
+      code,
+      message: 'm',
+      failedAt: '2030-01-02T03:04:05.000Z',
+      attempts: 1,
+      nextTryAt: null,
+    })
+    for (const code of ['unsupported_provider', 'no_badge', 'zone_not_covered']) {
+      expect(interval([{ ...waiting, originCertificateIssue: issue(code) }])).toBe(false)
+    }
+    for (const code of ['provider_error', 'origin_certificate_limit', 'queued', 'brand_new_code']) {
+      expect(interval([{ ...waiting, originCertificateIssue: issue(code) }])).toBe(30_000)
+    }
+    // One blocked name does not stop the poll for another that can still be issued.
+    expect(interval([{ ...waiting, originCertificateIssue: issue('no_badge') }, waiting])).toBe(
+      30_000
+    )
   })
 
   it('use Let’s Encrypt asks for the hosting and refreshes the hosting lists', async () => {

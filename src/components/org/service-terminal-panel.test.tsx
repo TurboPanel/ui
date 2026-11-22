@@ -102,6 +102,17 @@ describe('Terminal entry on a service', () => {
     expect(screen.queryByText('Open Terminal')).toBeNull()
   })
 
+  it('anchors on a service container, never on a proxy row', () => {
+    const proxy = { ...running, id: 'p1', serverId: 'edge', role: 'ingress', status: 'exited' }
+    state.containers = [proxy]
+    const only = render(<ServiceTerminalPanel orgId="o" serviceId="svc" />)
+    expect(only.container.textContent).toBe('')
+    cleanup()
+    state.containers = [proxy, { ...running, status: 'exited' }]
+    render(<ServiceTerminalPanel orgId="o" serviceId="svc" />)
+    expect(screen.getByText(NO_RUNNING_CONTAINER)).toBeTruthy()
+  })
+
   it('hides the not-running line when the switch is off or the person may not open one', () => {
     state.containers = [{ ...running, status: 'exited' }]
     state.server = { ...onServer, options: {} }

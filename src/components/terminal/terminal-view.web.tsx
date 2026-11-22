@@ -31,6 +31,16 @@ async function readClipboard(): Promise<string> {
 }
 
 /**
+ * Closes a session. One that never opened has no shell to take a close frame,
+ * so its grant is ended on the server too; it would otherwise sit open there.
+ */
+function closeSession(session: TerminalSession, serverId: string): void {
+  const unopened = session.state.phase === 'connecting'
+  session.close()
+  if (unopened) void endTerminalSession(serverId, session.sid).catch(() => undefined)
+}
+
+/**
  * A browser terminal into one container. xterm loads when this opens, so it is
  * not in the main bundle. The session never reconnects: when it ends the
  * status bar says why and a new terminal needs the Open button again.
@@ -120,7 +130,7 @@ export function TerminalView({
         input.dispose()
         binary.dispose()
         sized.dispose()
-        session.close()
+        closeSession(session, serverId)
         term.dispose()
       }
       await session.start()
@@ -174,7 +184,7 @@ export function TerminalView({
             size="sm"
             variant={ended ? 'secondary' : 'danger'}
             onPress={() => {
-              sessionRef.current?.close()
+              if (sessionRef.current) closeSession(sessionRef.current, serverId)
               onClose()
             }}
           />

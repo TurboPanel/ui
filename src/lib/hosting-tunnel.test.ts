@@ -90,9 +90,11 @@ describe('tunnelOnlyCertificateView follows the name’s certificate', () => {
     ])
     expect(view.label).toBe(ORIGIN_CERTIFICATE_LABEL)
     expect(view.tone).toBe('pending')
-    expect(view.lines.join(' ')).toContain('Waiting: No Cloudflare token')
+    expect(view.lines.join(' ')).toContain(
+      'Waiting for the origin certificate. No Cloudflare token'
+    )
     const plain = tunnelOnlyCertificateView(tunnel, [pick('cloudflare_origin')])
-    expect(plain.lines.join(' ')).toContain('Waiting for the certificate to be issued')
+    expect(plain.lines.join(' ')).toContain('Waiting for the origin certificate to be issued')
   })
 
   it('says pinned for a library certificate and Let’s Encrypt for either challenge', () => {
@@ -137,7 +139,9 @@ describe('tunnelOnlyCertificateView follows the name’s certificate', () => {
     expect(view.tone).toBe('pending')
     expect(view.lines.some((line) => line.startsWith('a.example: Issued'))).toBe(true)
     expect(
-      view.lines.some((line) => line.startsWith('b.example: Waiting: No Cloudflare token'))
+      view.lines.some((line) =>
+        line.startsWith('b.example: Waiting for the origin certificate. No Cloudflare token')
+      )
     ).toBe(true)
   })
 

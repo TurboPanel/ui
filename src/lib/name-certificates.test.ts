@@ -419,6 +419,7 @@ describe('origin certificate issues', () => {
       'badge_cannot_certify',
       'origin_certificate_limit',
       'origin_certificate_names',
+      'queued',
     ]
     const sentences = codes.map((code) => originIssueText(issue(code), 'en-US'))
     for (const sentence of sentences) expect(sentence).not.toContain('The server says so.')
@@ -426,6 +427,21 @@ describe('origin certificate issues', () => {
     expect(sentences[0]).toContain(
       'No Cloudflare token in this organization can issue certificates for this zone. Add one in Badges.'
     )
+  })
+
+  it('reads a queued name as a plain wait: no date, no tries, no error', () => {
+    const queued = issue('queued', { failedAt: null, attempts: 0, message: 'Queued.' })
+    const text = originIssueText(queued, 'en-US')
+    expect(text).toBe('The first attempt to issue the certificate has not run yet.')
+    expect(text).not.toMatch(/Invalid Date|tries|Next try/)
+    const state = nameState(
+      { certificate: 'cloudflare_origin', tlsId: null, originCertificateIssue: queued },
+      [],
+      null,
+      'en-US'
+    )
+    expect(state.tone).toBe('pending')
+    expect(state.label).toBe('Waiting')
   })
 
   it('falls back to the server message for a code it does not know', () => {
