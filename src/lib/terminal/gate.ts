@@ -38,7 +38,6 @@ export function isValidLoginUser(value: string): boolean {
 
 /** The bytes of an xterm binary string (one char per byte, 0 to 255). */
 export function binaryStringBytes(text: string): Uint8Array {
-  const out = new Uint8Array(text.length)
-  for (let i = 0; i < text.length; i++) out[i] = text.charCodeAt(i) & 0xff
-  return out
+  // xterm only sends chars 0 to 255 here, so a code point is one byte.
+  return Uint8Array.from(text, (char) => (char.codePointAt(0) as number) & 0xff)
 }
