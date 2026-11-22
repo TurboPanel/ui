@@ -36,6 +36,7 @@ import { ServerMetricsSensorsPanel } from '@/components/org/server-metrics-senso
 import { ServerBuildLimitsPanel } from '@/components/org/server-build-limits-panel'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
 import { ServerNetworkSharesPanel } from '@/components/org/server-network-shares-panel'
+import { ServerTerminalPanel } from '@/components/org/server-terminal-panel'
 import { ServerWebServerPanel } from '@/components/org/server-web-server-panel'
 import { LocationEditorPanel } from '@/components/org/location-editor-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
@@ -1092,6 +1093,8 @@ function ServerOverviewTab({
       <ServerWebServerPanel orgId={orgId} server={server} canManage={canManage} />
 
       <ServerNetworkSharesPanel orgId={orgId} server={server} canManage={canManage} />
+
+      <ServerTerminalPanel orgId={orgId} server={server} canManage={canManage} />
 
       <ServerMachineClassPanel orgId={orgId} server={server} canManage={canManage} />
 

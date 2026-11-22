@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { LoadingState, TextLink } from '@/components/ui'
 import { ServiceRuntimeLogPanel } from '@/components/logs/service-runtime-log'
+import { ServiceTerminalPanel } from '@/components/org/service-terminal-panel'
 import { NodeSettingsPanel } from '@/components/org/node-settings-panel'
 import { ServiceSettingsPanel } from '@/components/org/service-settings-panel'
 import { ServiceReleasesPanel } from '@/components/org/project/service-releases-panel'
@@ -128,6 +129,7 @@ export function EnvironmentServiceScreen() {
         />
       </Section>
       <ServiceRuntimeLogPanel orgId={orgId} serviceId={service.id} serviceName={name} />
+      <ServiceTerminalPanel orgId={orgId} serviceId={service.id} />
       {/* Only Git-backed services have releases; the panel hides itself for the rest. */}
       <ServiceReleasesPanel
         orgId={orgId}
