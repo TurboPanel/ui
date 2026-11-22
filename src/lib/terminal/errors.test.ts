@@ -40,6 +40,7 @@ describe('terminal error wording', () => {
     expect(terminalCodeMessage(undefined)).toBe('The terminal could not be opened. Try again.')
     expect(terminalErrorMessage(new Error('HTTP 403'))).toMatch(/^No permission/)
     expect(terminalErrorMessage(new Error('HTTP 401'))).toMatch(/^Sign in again/)
+    expect(terminalErrorMessage(post(400, 'bad_request'))).toMatch(/Check the login user/)
     expect(terminalErrorMessage(new Error('boom'))).toBe(
       'The terminal could not be opened. Try again.'
     )

@@ -3,8 +3,9 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Button } from '@/components/ui/button'
 import { panelStyles } from '@/components/ui/panel-styles'
 import type { TerminalViewProps } from '@/components/terminal/terminal-view-types'
-import { openTerminalSession, terminalSocketUrl } from '@/lib/instance-api'
+import { endTerminalSession, openTerminalSession, terminalSocketUrl } from '@/lib/instance-api'
 import { statusText, terminalErrorMessage } from '@/lib/terminal/errors'
+import { binaryStringBytes } from '@/lib/terminal/gate'
 import { TerminalSession, type TerminalState } from '@/lib/terminal/session'
 import { useColors } from '@/lib/theme-preference'
 import { useRegisterOpenDialog } from '@/lib/version-prompt-gate'
@@ -17,6 +18,8 @@ const INITIAL: TerminalState = {
   end: null,
 }
 const encoder = new TextEncoder()
+const COPIED_MS = 1500
+const DROPPED_INPUT = 'That input was too large to send and was dropped.'
 
 /** Looks up the clipboard without throwing where it is blocked. */
 async function readClipboard(): Promise<string> {
@@ -45,10 +48,14 @@ export function TerminalView({
   const [state, setState] = useState<TerminalState>(INITIAL)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [dropped, setDropped] = useState(false)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const selectionRef = useRef<() => string>(() => '')
   const pasteRef = useRef<(text: string) => void>(() => undefined)
-  // An open terminal holds the new-version prompt back, like any dialog.
-  useRegisterOpenDialog(error === null && state.phase !== 'ended')
+  // The terminal holds the new-version prompt back until the person closes it,
+  // also after the shell has ended, like any dialog.
+  useRegisterOpenDialog(true)
+  useEffect(() => () => clearTimeout(copiedTimer.current), [])
 
   useEffect(() => {
     let cancelled = false
@@ -82,12 +89,14 @@ export function TerminalView({
         })
         if (cancelled) {
           term.dispose()
+          // The grant is already minted: end it so it does not sit open on the server.
+          void endTerminalSession(serverId, grant.sid).catch(() => undefined)
           return
         }
         session = new TerminalSession(
           { ...grant, wsUrl: terminalSocketUrl(grant.wsUrl) },
           { cols: term.cols, rows: term.rows },
-          { onData: (data) => term.write(data), onState: setState }
+          { onData: (data, drawn) => term.write(data, drawn), onState: setState }
         )
       } catch (err) {
         term.dispose()
@@ -97,9 +106,10 @@ export function TerminalView({
         return
       }
       sessionRef.current = session
-      const input = term.onData((text) => {
-        session.write(encoder.encode(text))
-      })
+      const send = (bytes: Uint8Array) =>
+        setDropped(!session.write(bytes) && session.state.phase !== 'ended')
+      const input = term.onData((text) => send(encoder.encode(text)))
+      const binary = term.onBinary((text) => send(binaryStringBytes(text)))
       const sized = term.onResize(({ cols, rows }) => session.resize(cols, rows))
       const observer = new ResizeObserver(() => fit.fit())
       observer.observe(element)
@@ -108,6 +118,7 @@ export function TerminalView({
       dispose = () => {
         observer.disconnect()
         input.dispose()
+        binary.dispose()
         sized.dispose()
         session.close()
         term.dispose()
@@ -131,7 +142,8 @@ export function TerminalView({
     try {
       await navigator.clipboard.writeText(text)
       setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      clearTimeout(copiedTimer.current)
+      copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS)
     } catch {
       setCopied(false)
     }
@@ -169,6 +181,7 @@ export function TerminalView({
         </View>
       </View>
       {state.notice ? <Text style={panelStyles.muted}>{state.notice}</Text> : null}
+      {dropped ? <Text style={panelStyles.error}>{DROPPED_INPUT}</Text> : null}
       <div
         ref={host}
         style={{ height: 360, width: '100%', backgroundColor: colors.bg, padding: 4 }}

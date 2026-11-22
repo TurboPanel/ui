@@ -6,7 +6,10 @@
  * Rules (see `frames.ts` for the wire):
  * - the socket opens once, from a grant the control plane just minted; there is
  *   no reconnect, a new terminal needs a new grant;
- * - output is acknowledged every 32 KiB or 100 ms, whichever comes first;
+ * - output is acknowledged once the screen has drawn it, every 64 KiB or
+ *   100 ms, whichever comes first, so a slow screen slows the shell down;
+ * - everything from the socket (text frames, binary frames, the close) is
+ *   handled in the order it arrived, even though decrypting takes time;
  * - at most 64 KiB of typed input is unacknowledged at any time, the rest waits;
  * - a resize is sent after the size has been still for 100 ms;
  * - any frame that does not authenticate, or arrives out of order, ends the
@@ -30,7 +33,7 @@ import {
 export const SHELL_PROTOCOL = 'tp-shell.v1'
 export const TICKET_PROTOCOL_PREFIX = 'tp-ticket.'
 
-export const ACK_EVERY_BYTES = 32 * 1024
+export const ACK_EVERY_BYTES = 64 * 1024
 export const ACK_EVERY_MS = 100
 export const STDIN_WINDOW_BYTES = 64 * 1024
 /** One DATA frame of typed or pasted input; the control plane caps a frame at 16 KiB. */
@@ -90,8 +93,12 @@ export type TerminalState = {
 }
 
 export type TerminalHandlers = {
-  /** Output bytes for the screen, in order. */
-  onData: (data: Uint8Array) => void
+  /**
+   * Output bytes for the screen, in order. Call `drawn` once the screen has
+   * taken the bytes in (for xterm, from the `write` callback): only drawn bytes
+   * are acknowledged to the daemon.
+   */
+  onData: (data: Uint8Array, drawn: () => void) => void
   onState: (state: TerminalState) => void
 }
 
@@ -194,6 +201,8 @@ export class TerminalSession {
     end: null,
   }
   #exitCode: number | undefined
+  /** Socket events run one after another in arrival order. */
+  #inbound: Promise<void> = Promise.resolve()
   #outUnacked = 0
   #ackTimer: ReturnType<typeof setTimeout> | undefined
   #stdinUnacked = 0
@@ -251,11 +260,12 @@ export class TerminalSession {
       return
     }
     socket.binaryType = 'arraybuffer'
-    socket.onmessage = (event) => this.#onMessage(event.data, opener)
-    socket.onclose = (event) => {
-      if (this.#state.phase === 'ended') return
-      this.#finish(endForSocketClose(event.code, this.#opened), false)
-    }
+    socket.onmessage = (event) => this.#enqueue(() => this.#onMessage(event.data, opener))
+    socket.onclose = (event) =>
+      this.#enqueue(() => {
+        if (this.#state.phase === 'ended') return
+        this.#finish(endForSocketClose(event.code, this.#opened), false)
+      })
     this.#link = { socket, sealer, opener }
   }
 
@@ -263,12 +273,23 @@ export class TerminalSession {
     return this.#state.phase === 'connected'
   }
 
-  #onMessage(data: unknown, opener: FrameOpener): void {
+  /**
+   * Runs `step` after every earlier socket event has finished. A binary frame
+   * waits on WebCrypto, so a text frame or the close that follows it must wait
+   * too, or the last output would be dropped.
+   */
+  #enqueue(step: () => void | Promise<void>): void {
+    this.#inbound = this.#inbound.then(step).catch((error: unknown) => {
+      this.#kill(error instanceof FrameError ? error.code : 'malformed')
+    })
+  }
+
+  async #onMessage(data: unknown, opener: FrameOpener): Promise<void> {
     if (this.#state.phase === 'ended') return
     if (typeof data === 'string') {
       this.#onControl(data)
     } else if (data instanceof ArrayBuffer) {
-      this.#onFrame(new Uint8Array(data), opener)
+      this.#onPlain(decodePlain(await opener.open(new Uint8Array(data))))
     } else {
       this.#kill('malformed')
     }
@@ -295,15 +316,6 @@ export class TerminalSession {
         opened: this.#opened,
       })
     }
-  }
-
-  #onFrame(frame: Uint8Array, opener: FrameOpener): void {
-    opener
-      .open(frame)
-      .then((plain) => this.#onPlain(decodePlain(plain)))
-      .catch((error: unknown) => {
-        this.#kill(error instanceof FrameError ? error.code : 'malformed')
-      })
   }
 
   #onPlain(message: PlainMessage): void {
@@ -336,8 +348,18 @@ export class TerminalSession {
   }
 
   #onOutput(data: Uint8Array): void {
-    this.#handlers.onData(data)
-    this.#outUnacked += data.length
+    let counted = false
+    this.#handlers.onData(data, () => {
+      if (counted) return
+      counted = true
+      this.#onDrawn(data.length)
+    })
+  }
+
+  /** The screen has drawn `bytes` of output: they may be acknowledged. */
+  #onDrawn(bytes: number): void {
+    if (this.#state.phase === 'ended') return
+    this.#outUnacked += bytes
     if (this.#outUnacked >= ACK_EVERY_BYTES) {
       this.#flushAck()
     } else if (this.#ackTimer === undefined) {

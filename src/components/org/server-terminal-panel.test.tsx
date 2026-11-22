@@ -119,6 +119,8 @@ describe('ServerTerminalPanel', () => {
     render(<ServerTerminalPanel orgId="o" server={serverWith({})} canManage={false} />)
     expect(screen.getByLabelText(TOGGLE).hasAttribute('disabled')).toBe(true)
     expect(screen.getByText('Manage permission required.')).toBeTruthy()
+    // The hint stays visible to people who cannot change the switch.
+    expect(screen.getByText(/Turning it off ends open terminals/)).toBeTruthy()
     fireEvent.click(screen.getByLabelText(TOGGLE))
     expect(state.mutate).not.toHaveBeenCalled()
   })
@@ -130,5 +132,34 @@ describe('ServerTerminalPanel', () => {
     render(<ServerTerminalPanel orgId="o" server={serverWith({})} canManage />)
     fireEvent.click(screen.getByLabelText(TOGGLE))
     expect(screen.getByText('Failed to save terminal settings')).toBeTruthy()
+  })
+
+  it.each([
+    [3, 'Ended 3 terminals.'],
+    [1, 'Ended 1 terminal.'],
+  ])('says how many terminals ended when the switch goes off (%i)', (count, words) => {
+    state.mutate.mockImplementation(
+      (_body: unknown, opts: { onSuccess: (r: { ended: number }) => void }) =>
+        opts.onSuccess({ ended: count })
+    )
+    render(
+      <ServerTerminalPanel
+        orgId="o"
+        server={serverWith({ options: { terminal: { container: true } } })}
+        canManage
+      />
+    )
+    fireEvent.click(screen.getByLabelText(TOGGLE))
+    expect(screen.getByText(words)).toBeTruthy()
+  })
+
+  it('says nothing when no terminal was open', () => {
+    state.mutate.mockImplementation(
+      (_body: unknown, opts: { onSuccess: (r: { ended: number }) => void }) =>
+        opts.onSuccess({ ended: 0 })
+    )
+    render(<ServerTerminalPanel orgId="o" server={serverWith({})} canManage />)
+    fireEvent.click(screen.getByLabelText(TOGGLE))
+    expect(screen.queryByText(/^Ended /)).toBeNull()
   })
 })

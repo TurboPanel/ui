@@ -19,12 +19,15 @@ export function ServerTerminalPanel({
 }: Readonly<{ orgId: string; server: ServerDetailRecord; canManage: boolean }>) {
   const mutation = useSetServerTerminal(orgId, server.id)
   const [error, setError] = useState<string | null>(null)
+  const [ended, setEnded] = useState<number | null>(null)
   const enabled = terminalSwitchOn(server.options)
 
   const save = () => {
     if (!canManage) return
     setError(null)
+    setEnded(null)
     mutation.mutate(!enabled, {
+      onSuccess: (result) => setEnded(result.ended > 0 ? result.ended : null),
       onError: (err) => setError(userErrorMessage(err, 'Failed to save terminal settings')),
     })
   }
@@ -37,7 +40,12 @@ export function ServerTerminalPanel({
       defaultCollapsed
     >
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
-      <SettingRow label={TERMINAL_LABEL} description={canManage ? TERMINAL_HINT : undefined}>
+      {ended === null ? null : (
+        <Text style={panelStyles.muted}>
+          {`Ended ${ended} ${ended === 1 ? 'terminal' : 'terminals'}.`}
+        </Text>
+      )}
+      <SettingRow label={TERMINAL_LABEL} description={TERMINAL_HINT}>
         <Toggle
           value={enabled}
           disabled={!canManage || mutation.isPending}

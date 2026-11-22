@@ -29,6 +29,7 @@ const CODE_COPY: Record<string, string> = {
   bad_kind: 'The terminal could not start. Try again.',
 }
 
+const BAD_REQUEST = 'The terminal request was not accepted. Check the login user and try again.'
 const FALLBACK = 'The terminal could not be opened. Try again.'
 
 function errorText(error: unknown): string {
@@ -53,6 +54,7 @@ export function terminalErrorMessage(error: unknown): string {
   if (code) return CODE_COPY[code]
   const message = errorText(error)
   if (/HTTP 403/.test(message)) return CODE_COPY.forbidden
+  if (/HTTP 400/.test(message)) return BAD_REQUEST
   if (/HTTP 401/.test(message)) return 'Sign in again to open a terminal.'
   return FALLBACK
 }

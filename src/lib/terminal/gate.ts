@@ -28,3 +28,17 @@ export function terminalSwitchOn(options: Record<string, unknown> | null | undef
 export function serverPinned(trustPinnedBy: string | null | undefined): boolean {
   return trustPinnedBy === 'install' || trustPinnedBy === 'upgrade' || trustPinnedBy === 'unsafe'
 }
+
+const LOGIN_USER_RE = /^(?:[a-z_][a-z0-9_-]{0,31}|\d{1,10}(?::\d{1,10})?)$/
+
+/** Same rule as the control plane: a user name, or a numeric uid with an optional gid. */
+export function isValidLoginUser(value: string): boolean {
+  return LOGIN_USER_RE.test(value)
+}
+
+/** The bytes of an xterm binary string (one char per byte, 0 to 255). */
+export function binaryStringBytes(text: string): Uint8Array {
+  const out = new Uint8Array(text.length)
+  for (let i = 0; i < text.length; i++) out[i] = text.charCodeAt(i) & 0xff
+  return out
+}

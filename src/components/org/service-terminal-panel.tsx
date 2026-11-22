@@ -11,7 +11,15 @@ import { useContainers } from '@/lib/queries/containers'
 import { useCan } from '@/lib/query-client'
 import { useServerDetail } from '@/lib/queries/servers'
 import { isTerminalDisabledError, terminalErrorMessage } from '@/lib/terminal/errors'
-import { serverPinned, terminalEntryAllowed, terminalSwitchOn } from '@/lib/terminal/gate'
+import {
+  isValidLoginUser,
+  serverPinned,
+  terminalEntryAllowed,
+  terminalSwitchOn,
+} from '@/lib/terminal/gate'
+
+export const LOGIN_USER_ERROR =
+  'Login user must be a user name (lowercase letters, digits, _ or -) or a numeric id such as 1000 or 1000:1000.'
 
 /** The running container of the service that a shell can open in. */
 export function terminalContainer(containers: readonly ContainerRecord[]): ContainerRecord | null {
@@ -73,6 +81,7 @@ function TerminalEntry({
   const [run, setRun] = useState<{ n: number; user: string } | null>(null)
   const [error, setError] = useState<unknown>(null)
   const [count, setCount] = useState(0)
+  const [userError, setUserError] = useState(false)
 
   if (run) {
     return (
@@ -105,19 +114,28 @@ function TerminalEntry({
       <TextField
         label="Login User"
         value={user}
-        onChangeText={setUser}
+        onChangeText={(value) => {
+          setUser(value)
+          setUserError(false)
+        }}
         autoCapitalize="none"
         autoCorrect={false}
         hint="Leave empty to use the image's user."
+        error={userError ? LOGIN_USER_ERROR : undefined}
       />
       <View style={styles.row}>
         <Button
           label="Open Terminal"
           variant="primary"
           onPress={() => {
+            const login = user.trim()
+            if (login !== '' && !isValidLoginUser(login)) {
+              setUserError(true)
+              return
+            }
             setError(null)
             setCount(count + 1)
-            setRun({ n: count + 1, user: user.trim() })
+            setRun({ n: count + 1, user: login })
           }}
         />
       </View>

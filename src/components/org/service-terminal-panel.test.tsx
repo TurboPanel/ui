@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ServiceTerminalPanel, terminalContainer } from './service-terminal-panel'
+import { LOGIN_USER_ERROR, ServiceTerminalPanel, terminalContainer } from './service-terminal-panel'
 
 const state = vi.hoisted(() => ({
   containers: [] as unknown[],
@@ -46,11 +46,18 @@ vi.mock('@/components/ui', () => ({
     label,
     value,
     onChangeText,
+    error,
   }: {
     label: string
     value: string
     onChangeText: (v: string) => void
-  }) => <input aria-label={label} value={value} onChange={(e) => onChangeText(e.target.value)} />,
+    error?: string
+  }) => (
+    <div>
+      <input aria-label={label} value={value} onChange={(e) => onChangeText(e.target.value)} />
+      {error ? <p>{error}</p> : null}
+    </div>
+  ),
 }))
 
 const running = { id: 'c1', serverId: 's1', role: 'service', status: 'running', containerId: 'abc' }
@@ -101,6 +108,18 @@ describe('Terminal entry on a service', () => {
     fireEvent.click(screen.getByText('fail open'))
     expect(screen.getByText('Terminal is turned off for this server.')).toBeTruthy()
     expect(screen.queryByText('Open server settings')).toBeNull()
+  })
+
+  it('refuses a bad login user in the browser and opens once it is fixed', () => {
+    render(<ServiceTerminalPanel orgId="o" serviceId="svc" />)
+    fireEvent.change(screen.getByLabelText('Login User'), { target: { value: 'Not Valid' } })
+    fireEvent.click(screen.getByText('Open Terminal'))
+    expect(screen.getByText(LOGIN_USER_ERROR)).toBeTruthy()
+    expect(screen.queryByText('fail open')).toBeNull()
+    fireEvent.change(screen.getByLabelText('Login User'), { target: { value: 'www-data' } })
+    expect(screen.queryByText(LOGIN_USER_ERROR)).toBeNull()
+    fireEvent.click(screen.getByText('Open Terminal'))
+    expect(screen.getByText('fail open')).toBeTruthy()
   })
 
   it('picks only a running service container with a Docker id', () => {

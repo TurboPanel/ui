@@ -54,11 +54,12 @@ const SID = vectors.sid
 // WebCrypto finishes on another thread, so give it real time (the fake clock only covers setTimeout).
 const flush = () => sleep(10)
 
-async function setup() {
+async function setup(holdDraw = false) {
   const key = await importSessionKey(hexToBytes(vectors.keyHex))
   const sockets: FakeSocket[] = []
   const output: number[] = []
   const states: TerminalState[] = []
+  const pendingDraws: (() => void)[] = []
   const session = new TerminalSession(
     {
       sid: SID,
@@ -69,7 +70,14 @@ async function setup() {
       maxSec: 3600,
     },
     { cols: 80, rows: 24 },
-    { onData: (d) => output.push(d.length), onState: (s) => states.push(s) },
+    {
+      onData: (d, drawn) => {
+        output.push(d.length)
+        if (holdDraw) pendingDraws.push(drawn)
+        else drawn()
+      },
+      onState: (s) => states.push(s),
+    },
     {
       createSocket: (url, protocols) => {
         const socket = new FakeSocket(url, protocols)
@@ -98,7 +106,19 @@ async function setup() {
     return out
   }
   const open = () => text({ type: 'opened', sid: SID, shell: '/bin/sh', user: 'root' })
-  return { session, socket, sockets, output, states, toBrowser, text, sentMessages, open, daemon }
+  return {
+    session,
+    socket,
+    sockets,
+    output,
+    states,
+    pendingDraws,
+    toBrowser,
+    text,
+    sentMessages,
+    open,
+    daemon,
+  }
 }
 
 beforeEach(() => {
@@ -149,6 +169,7 @@ describe('connect and control frames', () => {
     await t.text({ type: 'weird', sid: SID })
     expect(t.session.state.phase).toBe('connecting')
     t.socket.onmessage?.({ data: 'not json' })
+    await flush()
     expect(t.session.state.phase).toBe('connecting')
     await t.text({ type: 'opened', sid: '00000000-0000-4000-8000-000000000000' })
     expect(t.session.state.end).toMatchObject({ reason: 'protocol', code: 'sid' })
@@ -158,8 +179,10 @@ describe('connect and control frames', () => {
   it('ends on a non-text, non-binary message and on a binary frame sent before start', async () => {
     const t = await setup()
     t.socket.onmessage?.({ data: 5 })
+    await flush()
     expect(t.session.state.end).toMatchObject({ reason: 'protocol', code: 'malformed' })
     t.socket.onmessage?.({ data: 'ignored after the end' })
+    await flush()
   })
 
   it('ends as a bad key or when the socket cannot be created', async () => {
@@ -222,7 +245,7 @@ describe('output and acknowledgements', () => {
     expect(await t.sentMessages()).toEqual([])
   })
 
-  it('acknowledges at once at 32 KiB', async () => {
+  it('acknowledges at once at 64 KiB', async () => {
     const t = await setup()
     await t.open()
     await t.toBrowser(encodeData(new Uint8Array(ACK_EVERY_BYTES - 1)))
@@ -232,6 +255,87 @@ describe('output and acknowledgements', () => {
     // The pending timer was cleared: nothing more is sent.
     vi.advanceTimersByTime(ACK_EVERY_MS * 2)
     expect(await t.sentMessages()).toEqual([])
+  })
+
+  it('acknowledges only what the screen has drawn', async () => {
+    const t = await setup(true)
+    await t.open()
+    for (let i = 0; i < 4; i++) await t.toBrowser(encodeData(new Uint8Array(ACK_EVERY_BYTES / 4)))
+    await t.toBrowser(encodeData(new Uint8Array(10)))
+    vi.advanceTimersByTime(ACK_EVERY_MS * 3)
+    expect(await t.sentMessages()).toEqual([])
+    for (let i = 0; i < 3; i++) t.pendingDraws[i]()
+    expect(await t.sentMessages()).toEqual([])
+    t.pendingDraws[3]()
+    t.pendingDraws[3]() // a second call for the same bytes counts nothing
+    expect(await t.sentMessages()).toEqual([{ type: 'ack', bytes: ACK_EVERY_BYTES }])
+    t.pendingDraws[4]()
+    vi.advanceTimersByTime(ACK_EVERY_MS)
+    expect(await t.sentMessages()).toEqual([{ type: 'ack', bytes: 10 }])
+  })
+
+  it('counts nothing drawn after the session ended', async () => {
+    const t = await setup(true)
+    await t.open()
+    await t.toBrowser(encodeData(new Uint8Array(100)))
+    t.session.close()
+    t.pendingDraws[0]()
+    vi.advanceTimersByTime(ACK_EVERY_MS)
+    const sent = await t.sentMessages()
+    expect(sent.some((m) => m.type === 'ack')).toBe(false)
+  })
+
+  it('keeps the message rate far under the control plane budget at a high output rate', async () => {
+    const t = await setup()
+    await t.open()
+    const frames = 1500
+    const size = 16 * 1024
+    for (let i = 0; i < frames; i++) {
+      t.socket.onmessage?.({ data: (await t.daemon.seal(encodeData(new Uint8Array(size)))).buffer })
+    }
+    await flush()
+    vi.advanceTimersByTime(ACK_EVERY_MS)
+    const sent = await t.sentMessages()
+    const acks = sent.filter((m) => m.type === 'ack')
+    expect(t.output).toHaveLength(frames)
+    const total = acks.reduce((sum, m) => sum + (m.type === 'ack' ? m.bytes : 0), 0)
+    expect(total).toBe(frames * size)
+    // 24 MiB of output is 384 acknowledgements; the budget is 2000 messages per 10 s.
+    expect(acks.length).toBeLessThanOrEqual(Math.ceil((frames * size) / ACK_EVERY_BYTES))
+    expect(acks.length).toBeLessThan(500)
+  })
+})
+
+describe('socket events keep their order', () => {
+  it('delivers a binary frame, a text frame and the close in order', async () => {
+    const t = await setup()
+    await t.open()
+    t.socket.onmessage?.({ data: (await t.daemon.seal(encodeData(new Uint8Array(7)))).buffer })
+    t.socket.onmessage?.({ data: (await t.daemon.seal(encodeExit(3))).buffer })
+    t.socket.onmessage?.({ data: (await t.daemon.seal(encodeData(new Uint8Array(9)))).buffer })
+    t.socket.onmessage?.({
+      data: JSON.stringify({
+        type: 'closed',
+        sid: SID,
+        reason: 'exit',
+        confirmed: true,
+        exitCode: 3,
+      }),
+    })
+    t.socket.onclose?.({ code: 1000 })
+    await flush()
+    expect(t.output).toEqual([7, 9])
+    expect(t.session.state.end).toMatchObject({ reason: 'exit', confirmed: true, exitCode: 3 })
+  })
+
+  it('does not end the session on a close before the frames sent ahead of it are read', async () => {
+    const t = await setup()
+    await t.open()
+    t.socket.onmessage?.({ data: (await t.daemon.seal(encodeData(new Uint8Array(5)))).buffer })
+    t.socket.onclose?.({ code: 4431 })
+    await flush()
+    expect(t.output).toEqual([5])
+    expect(t.session.state.end).toMatchObject({ reason: 'daemon_lost', opened: true })
   })
 })
 
@@ -364,8 +468,10 @@ describe('end of session', () => {
     const t = await setup()
     await t.open()
     t.socket.onclose?.({ code: 4431 })
+    await flush()
     expect(t.session.state.end).toEqual({ reason: 'daemon_lost', confirmed: false, opened: true })
     t.socket.onclose?.({ code: 1006 })
+    await flush()
     expect(t.session.state.end?.reason).toBe('daemon_lost')
     expect(endForSocketClose(4428, false).reason).toBe('protocol')
     expect(endForSocketClose(4429, false).reason).toBe('budget')
