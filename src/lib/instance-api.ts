@@ -1228,6 +1228,58 @@ export async function saveServerLabels(
   return body.labels
 }
 
+/** What `POST /servers/:id/terminal-sessions` hands back; the key and ticket are for this one terminal only. */
+export type TerminalSessionGrant = {
+  ok: true
+  sid: string
+  /** A path on the control plane; {@link terminalSocketUrl} makes the socket URL. */
+  wsUrl: string
+  ticket: string
+  /** base64url, 32 bytes. */
+  key: string
+  protocol: 'tp-shell.v1'
+  idleSec: number
+  maxSec: number
+  expiresAt: string
+}
+
+/** Opens a shell in one container. `containerId` is the container's id in this app, not the Docker id. */
+export async function openTerminalSession(
+  serverId: string,
+  body: { containerId: string; user?: string; cols: number; rows: number }
+): Promise<TerminalSessionGrant> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/terminal-sessions`, {
+    method: 'POST',
+    body: JSON.stringify({ kind: 'container', ...body }),
+  })
+}
+
+/** Ends one of the caller's open terminals (a manager may end anyone's). */
+export async function endTerminalSession(
+  serverId: string,
+  sid: string
+): Promise<{ ok: true; ended: boolean }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/terminal-sessions/${sid}`, {
+    method: 'DELETE',
+  })
+}
+
+/** The absolute `wss://` (or `ws://`) URL of a terminal socket from the grant's path. */
+export function terminalSocketUrl(wsPath: string): string {
+  return controlPlaneUrl(wsPath).replace(/^http/i, 'ws')
+}
+
+/** Turns browser terminals into this server's containers on or off; off also ends the open ones. */
+export async function setServerTerminal(
+  serverId: string,
+  container: boolean
+): Promise<{ ok: true; container: boolean; ended: number }> {
+  return await apiFetch(`${CLIENT_API}/servers/${serverId}/terminal`, {
+    method: 'PUT',
+    body: JSON.stringify({ container }),
+  })
+}
+
 export async function updateServer(
   serverId: string,
   body: {
@@ -3767,6 +3819,7 @@ export type PermissionKey =
   | 'system:operate'
   | 'system:manage'
   | 'environments.deploy_network_shares'
+  | 'terminal:container'
 
 export type PermissionRecord = {
   key: PermissionKey

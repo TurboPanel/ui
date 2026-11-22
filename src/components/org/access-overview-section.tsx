@@ -32,7 +32,11 @@ import {
   useTeams,
 } from '@/lib/queries/access'
 import { getAccessManagementPermissionKey, useCan } from '@/lib/query-client'
-import { PERMISSIONS_BY_SCOPE, grantPermissionLabel } from '@/lib/access-permissions'
+import {
+  PERMISSIONS_BY_SCOPE,
+  grantPermissionLabel,
+  permissionTitle,
+} from '@/lib/access-permissions'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -382,7 +386,9 @@ function AddGrantForm({
                 style={[styles.pickerRow, selected && styles.pickerRowSelected]}
                 onPress={() => onPermissionSelect(permission.key)}
               >
-                <Text style={styles.pickerTitle}>{permission.displayName}</Text>
+                <Text style={styles.pickerTitle}>
+                  {permissionTitle(permission.key, permission.displayName)}
+                </Text>
                 <Text style={styles.pickerMeta}>{permission.key}</Text>
               </Pressable>
             )
