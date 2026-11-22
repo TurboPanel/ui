@@ -76,7 +76,9 @@ describe('notification hooks', () => {
       notifications: [{ id: 'n-1', title: 'Server db-1 went offline', readAt: null }],
       unread: 1,
     })
-    const { result } = renderHook(() => useNotificationsQuery({ limit: 10 }), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useNotificationsQuery({ limit: 10 }), {
+      wrapper: createWrapper(),
+    })
     await waitFor(() => expect(result.current.data?.unread).toBe(1))
     expect(fetchNotifications).toHaveBeenCalledWith({ limit: 10 })
   })
@@ -120,7 +122,7 @@ describe('notification hooks', () => {
         address: 'https://hooks.slack.com/x',
         rules: [{ event: '*', minSeverity: 'warning' }],
       },
-      undefined,
+      undefined
     )
     await waitFor(() => expect(fetchNotificationChannels).toHaveBeenCalledTimes(2))
   })
