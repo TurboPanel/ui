@@ -167,9 +167,10 @@ export function HostingTunnelNames({
   locked: boolean
 }>) {
   const hostingQuery = useHostingCertificate(orgId, hostingId)
-  const tunnelsQuery = useTunnels(orgId)
+  const tunnelsQuery = useTunnels(orgId, { enabled: canManage })
   const hosting = hostingQuery.data?.hosting
-  const tunnels = tunnelsQuery.data?.tunnels
+  // Only people who manage the organization read the list; for the rest it is never asked for.
+  const tunnels = canManage ? tunnelsQuery.data?.tunnels : []
   if (hostingQuery.isError || (canManage && tunnelsQuery.isError)) {
     return (
       <View style={styles.wrap}>

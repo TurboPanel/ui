@@ -70,11 +70,30 @@ describe('tunnel queries', () => {
     api.fetchTunnels.mockRejectedValueOnce(new Error('/x failed: HTTP 403: forbidden'))
     const refused = renderHook(() => useTunnels(orgId), { wrapper: createWrapper() })
     await waitFor(() => expect(refused.result.current.isSuccess).toBe(true))
-    expect(refused.result.current.data).toEqual({ tunnels: [] })
+    expect(refused.result.current.data).toEqual({ tunnels: [], forbidden: true })
 
     api.fetchTunnels.mockRejectedValueOnce(new Error('boom'))
     const broken = renderHook(() => useTunnels(orgId), { wrapper: createWrapper() })
     await waitFor(() => expect(broken.result.current.isError).toBe(true))
+  })
+
+  it('stops refreshing the list after a refusal and keeps the half-minute pace otherwise', async () => {
+    const interval = (client: ReturnType<typeof createAppQueryClient>) => {
+      const query = client.getQueryCache().find({ queryKey: queryKeys.org(orgId).tunnels })!
+      const option = (query.observers[0]?.options as { refetchInterval?: unknown }).refetchInterval
+      return typeof option === 'function' ? option(query) : option
+    }
+    api.fetchTunnels.mockRejectedValueOnce(new Error('/x failed: HTTP 403: forbidden'))
+    const refusedClient = createAppQueryClient()
+    const refused = renderHook(() => useTunnels(orgId), { wrapper: createWrapper(refusedClient) })
+    await waitFor(() => expect(refused.result.current.isSuccess).toBe(true))
+    expect(interval(refusedClient)).toBe(false)
+
+    api.fetchTunnels.mockResolvedValueOnce({ tunnels: [] })
+    const okClient = createAppQueryClient()
+    const ok = renderHook(() => useTunnels(orgId), { wrapper: createWrapper(okClient) })
+    await waitFor(() => expect(ok.result.current.isSuccess).toBe(true))
+    expect(interval(okClient)).toBe(30_000)
   })
 
   it('loads one tunnel’s hostnames only when asked', async () => {
