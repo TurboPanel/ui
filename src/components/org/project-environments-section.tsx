@@ -348,7 +348,7 @@ export function ProjectEnvironmentsSection({
     if (defaultNameLoading || environmentsQuery.isLoading) return
     if (environments.length === 0 && canOwn && provisionAttemptedFor.current !== projectId) {
       provisionAttemptedFor.current = projectId
-      createEnvironment
+      void createEnvironment
         .run({
           projectId,
           name: defaultEnvironmentName,
