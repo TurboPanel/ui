@@ -96,6 +96,21 @@ describe('tunnel queries', () => {
     expect(interval(okClient)).toBe(30_000)
   })
 
+  it('reads the list again at once when the role is granted after a refusal', async () => {
+    api.fetchTunnels.mockRejectedValueOnce(new Error('/x failed: HTTP 403: forbidden'))
+    api.fetchTunnels.mockResolvedValueOnce({ tunnels: [{ id: 't1', name: 'Edge' }] })
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useTunnels(orgId, { enabled }),
+      { wrapper: createWrapper(), initialProps: { enabled: true } }
+    )
+    await waitFor(() => expect(result.current.data).toEqual({ tunnels: [], forbidden: true }))
+    rerender({ enabled: false })
+    rerender({ enabled: true })
+    await waitFor(() => expect(result.current.data?.tunnels).toHaveLength(1))
+    expect(api.fetchTunnels).toHaveBeenCalledTimes(2)
+    expect(result.current.data).not.toHaveProperty('forbidden')
+  })
+
   it('loads one tunnel’s hostnames only when asked', async () => {
     api.fetchTunnelHostnames.mockResolvedValueOnce({ hostnames: [] })
     const { result } = renderHook(() => useTunnelHostnames(orgId, 't1'), {

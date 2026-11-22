@@ -40,6 +40,8 @@ export function useTunnels(orgId: string, options?: Readonly<{ enabled?: boolean
       }
     },
     enabled: (options?.enabled ?? true) && orgId.length > 0,
+    // A refusal is never kept as fresh, so a role granted later reads the list at once.
+    staleTime: (query) => (query.state.data && 'forbidden' in query.state.data ? 0 : 5 * 60 * 1000),
     // A run-token rotation moves on its own: follow it a little closer while one runs.
     refetchInterval: (query) => {
       const data = query.state.data
