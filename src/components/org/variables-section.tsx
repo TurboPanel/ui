@@ -1022,8 +1022,8 @@ export function VariablesSection({
           setSecretNewValue('')
         }
       },
-      onError: () => {
-        setError(deleteMutation.actionError ?? 'Failed to delete variable')
+      onError: (err) => {
+        setError(userErrorMessage(err, 'Failed to delete variable'))
       },
     })
   }
@@ -1064,8 +1064,7 @@ export function VariablesSection({
           setShowAddForm(false)
         },
         onError: (err) => {
-          const message =
-            createMutation.actionError ?? userErrorMessage(err, 'Failed to create variable')
+          const message = userErrorMessage(err, 'Failed to create variable')
           // The code is matched on the raw message: the shown one drops it.
           const raw = err instanceof Error ? err.message : message
           if (raw.includes('binding_key_conflict') || raw.includes('binding_owned_variable')) {
@@ -1121,8 +1120,8 @@ export function VariablesSection({
         onSuccess: () => {
           setEditingId(null)
         },
-        onError: () => {
-          setError(updateMutation.actionError ?? 'Failed to update variable')
+        onError: (err) => {
+          setError(userErrorMessage(err, 'Failed to update variable'))
         },
       }
     )
@@ -1148,8 +1147,8 @@ export function VariablesSection({
           setUpdatingSecretId(null)
           setSecretNewValue('')
         },
-        onError: () => {
-          setError(updateMutation.actionError ?? 'Failed to update secret value')
+        onError: (err) => {
+          setError(userErrorMessage(err, 'Failed to update secret value'))
         },
       }
     )
@@ -1167,8 +1166,8 @@ export function VariablesSection({
         onSuccess: () => {
           setTogglingKey((current) => (current === pendingKey ? null : current))
         },
-        onError: () => {
-          setError(updateMutation.actionError ?? 'Failed to update variable')
+        onError: (err) => {
+          setError(userErrorMessage(err, 'Failed to update variable'))
           setTogglingKey((current) => (current === pendingKey ? null : current))
         },
       }

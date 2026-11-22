@@ -94,7 +94,7 @@ import { resolveEffectiveServerId } from '@/lib/project-options'
 import { resolveServerLabel } from '@/lib/resource-labels'
 import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
-import { userErrorMessage, failedRunMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 type TrackedCommand = {
   environmentId: string

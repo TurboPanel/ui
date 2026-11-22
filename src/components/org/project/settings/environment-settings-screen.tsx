@@ -7,7 +7,7 @@ import { EnvironmentGitSourceSection } from '@/components/org/project/overview-e
 import { EnvironmentSettingsView } from '@/components/org/project/settings/environment-settings-view'
 import { LoadingState } from '@/components/ui'
 import { projectSettingsHref } from '@/lib/project-navigation'
-import { userErrorMessage, failedRunMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 import { useMakeEnvironmentPrimary, useOrgServers, useUpdateEnvironment } from '@/lib/queries'
 import { PRIMARY_DELETE_EXPLANATION } from '@/lib/v4/primary-environment'
 import {

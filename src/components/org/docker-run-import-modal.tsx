@@ -24,8 +24,15 @@ import {
   TextField,
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
-import { composeDocumentToYaml, normalizeCompose, type ComposeDocument } from '@/lib/compose'
-import { COMPOSE_SERVICE_NAME_RE, serviceNameFromCommand } from '@/lib/docker-run-import'
+import {
+  composeDocumentToYaml,
+  normalizeCompose,
+  type ComposeDocument,
+} from '@/lib/compose'
+import {
+  COMPOSE_SERVICE_NAME_RE,
+  serviceNameFromCommand,
+} from '@/lib/docker-run-import'
 import type {
   DockerRunDiagnostic,
   DockerRunImportResponse,
@@ -57,7 +64,9 @@ function DiagnosticList({
   )
 }
 
-function RiskList({ riskFlags }: Readonly<{ riskFlags: readonly DockerRunRiskFlag[] }>) {
+function RiskList({
+  riskFlags,
+}: Readonly<{ riskFlags: readonly DockerRunRiskFlag[] }>) {
   if (riskFlags.length === 0) return null
   return (
     <View style={styles.block}>
@@ -73,7 +82,11 @@ function RiskList({ riskFlags }: Readonly<{ riskFlags: readonly DockerRunRiskFla
   )
 }
 
-function importRequestBody(serviceName: string, argv: string, projectId: string | undefined) {
+function importRequestBody(
+  serviceName: string,
+  argv: string,
+  projectId: string | undefined,
+) {
   if (projectId) return { serviceName, argv, projectId }
   return { serviceName, argv }
 }
@@ -88,7 +101,8 @@ function serviceNameFieldError(serviceName: string, nameValid: boolean) {
 function collisionHintProps(serviceName: string, nameCollides: boolean) {
   if (!nameCollides) return {}
   return {
-    hint: `"${serviceName}" already exists — the import will be merged into it.`,
+    hint:
+      `"${serviceName}" already exists — the import will be merged into it.`,
   }
 }
 
@@ -114,7 +128,8 @@ function ImportFooter({
   // Risk flags describe what a *successful* import would grant; a refused one
   // has nothing to grant, so there are none to show.
   const riskFlags = result?.ok ? result.riskFlags : []
-  const canMerge = result?.ok === true && (riskFlags.length === 0 || acknowledged)
+  const canMerge = result?.ok === true &&
+    (riskFlags.length === 0 || acknowledged)
   return (
     <ButtonRow align="end">
       <Button label="Cancel" onPress={onCancel} disabled={busy} />
@@ -175,18 +190,26 @@ function ImportedResultBlocks({
   onToggleAcknowledged: () => void
 }>) {
   const riskFlags = result.riskFlags
-  const advisoryDiagnostics = result.diagnostics.filter((diagnostic) => !diagnostic.blocking)
+  const advisoryDiagnostics = result.diagnostics.filter(
+    (diagnostic) => !diagnostic.blocking,
+  )
   const previewYaml = composeDocumentToYaml(normalizeCompose(result.compose))
   const needsAcknowledgement = riskFlags.length > 0
   return (
     <>
       <RiskList riskFlags={riskFlags} />
-      <DiagnosticList title="Not carried over" diagnostics={advisoryDiagnostics} />
+      <DiagnosticList
+        title="Not carried over"
+        diagnostics={advisoryDiagnostics}
+      />
       {result.composeIssues.length > 0 ? (
         <View style={styles.block}>
           <Text style={styles.blockTitle}>Compose issues</Text>
           {result.composeIssues.map((issue) => (
-            <Text key={`${issue.path}:${issue.message}`} style={styles.diagnostic}>
+            <Text
+              key={`${issue.path}:${issue.message}`}
+              style={styles.diagnostic}
+            >
               {issue.path} — {issue.message}
             </Text>
           ))}
@@ -283,11 +306,14 @@ export function DockerRunImportModal({
   }
 
   const nameCollides = existingServiceNames.includes(serviceName)
-  const nameValid = serviceName.length > 0 && COMPOSE_SERVICE_NAME_RE.test(serviceName)
+  const nameValid = serviceName.length > 0 &&
+    COMPOSE_SERVICE_NAME_RE.test(serviceName)
 
   const runImport = async () => {
     setError(null)
-    const outcome = await importMutation.run(importRequestBody(serviceName, command, projectId))
+    const outcome = await importMutation.run(
+      importRequestBody(serviceName, command, projectId),
+    )
     if (!outcome.ok) {
       setError(failedRunMessage(outcome, 'Could not read that command'))
       return

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectShell } from './project-shell'
@@ -294,8 +294,7 @@ describe('renaming the project', () => {
     const input = screen.getByLabelText('Project name')
     fireEvent.change(input, { target: { value: next } })
     fireEvent.blur(input)
-    await Promise.resolve()
-    await Promise.resolve()
+    await waitFor(() => expect(state.updateRun).toHaveBeenCalled())
   }
 
   it('shows the refusal from the failed save, not a stale mutation state', async () => {
@@ -305,7 +304,7 @@ describe('renaming the project', () => {
     render(<ProjectShell>body</ProjectShell>)
     await rename('Webshop')
     expect(state.updateRun).toHaveBeenCalledWith({ name: 'Webshop' })
-    expect(setError).toHaveBeenLastCalledWith('That name is taken.')
+    await waitFor(() => expect(setError).toHaveBeenLastCalledWith('That name is taken.'))
   })
 
   it('shows nothing when the save works', async () => {

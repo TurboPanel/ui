@@ -359,8 +359,8 @@ export function EmailSettingsSection() {
         setSuccess('Settings saved.')
         setSaveError(null)
       },
-      onError: () => {
-        setSaveError(saveMutation.actionError ?? 'Failed to save email settings')
+      onError: (err) => {
+        setSaveError(userErrorMessage(err, 'Failed to save email settings'))
         setSuccess(null)
       },
     })

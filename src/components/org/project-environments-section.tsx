@@ -33,7 +33,7 @@ import { DISPLAY_NAME_MAX_LENGTH } from '@/lib/display-name'
 import { useOrgDefaultEnvironmentName } from '@/lib/org-default-environment'
 import { useCan } from '@/lib/query-client'
 import { chrome, colors, spacing } from '@/lib/theme'
-import { userErrorMessage, failedRunMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 function environmentLabel(environment: EnvironmentRecord): string {
   return environment.name?.trim() || 'Unnamed environment'

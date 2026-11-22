@@ -57,7 +57,10 @@ export function ComposeScopeBanner() {
     invalidateEnvironments,
     setError,
   } = useProjectContext()
-  const persistEnvironmentCompose = usePersistEnvironmentCompose(orgId, selectedEnvironmentId ?? '')
+  const persistEnvironmentCompose = usePersistEnvironmentCompose(
+    orgId,
+    selectedEnvironmentId ?? '',
+  )
 
   const canMutate = canManage && projectAllowsMutations
   const saving = persistEnvironmentCompose.isPending
@@ -71,12 +74,19 @@ export function ComposeScopeBanner() {
       return
     }
     await invalidateEnvironments()
-  }, [selectedEnvironmentId, persistEnvironmentCompose, setError, invalidateEnvironments])
+  }, [
+    selectedEnvironmentId,
+    persistEnvironmentCompose,
+    setError,
+    invalidateEnvironments,
+  ])
 
   if (isSystemProject || !project || baseSelected) return null
   if (!selectedEnvironment) return null
 
-  const overlayState = resolveComposeOverlayState(selectedEnvironment.options?.compose)
+  const overlayState = resolveComposeOverlayState(
+    selectedEnvironment.options?.compose,
+  )
   if (overlayState.blank) return null
 
   return (

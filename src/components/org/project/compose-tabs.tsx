@@ -110,7 +110,7 @@ import { useStorage } from '@/lib/queries/storage'
 import { isActiveContainerStatus, serviceStatusTone } from '@/lib/container-status'
 import { countDistinctProjectServers, resolveEffectiveServerId } from '@/lib/project-options'
 import { spacing } from '@/lib/theme'
-import { userErrorMessage, failedRunMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 /** Stable empty list so the facts memo does not thrash on every render. */
 const EMPTY_STORAGE: readonly StorageRecord[] = []
