@@ -50,16 +50,24 @@ export function useNotificationsQuery(options?: Readonly<{ enabled?: boolean; li
     queryKey: [...queryKeys.notifications.inbox, options?.limit ?? 30] as const,
     queryFn: () => fetchNotifications({ limit: options?.limit ?? 30 }),
     enabled: options?.enabled ?? true,
+    // Opening the bell really asks; a cached inbox is never shown as current.
+    refetchOnMount: 'always',
     retry: false,
   })
   // The inbox response already carries the unread total: opening the panel
-  // updates the badge at once instead of waiting for the next poll.
+  // updates the badge at once instead of waiting for the next poll. Only a
+  // total newer than the badge's own answer is copied, so an old cached inbox
+  // never overwrites a fresher poll.
   const unread = query.data?.unread
+  const inboxUpdatedAt = query.dataUpdatedAt
   useEffect(() => {
-    if (unread !== undefined) {
-      queryClient.setQueryData(queryKeys.notifications.unread, unread)
-    }
-  }, [queryClient, unread])
+    if (unread === undefined) return
+    const badge = queryClient.getQueryState(queryKeys.notifications.unread)
+    if (badge?.data !== undefined && badge.dataUpdatedAt >= inboxUpdatedAt) return
+    queryClient.setQueryData(queryKeys.notifications.unread, unread, {
+      updatedAt: inboxUpdatedAt,
+    })
+  }, [queryClient, unread, inboxUpdatedAt])
   return query
 }
 

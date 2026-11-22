@@ -13,6 +13,7 @@ import {
   useUnreadNotificationsQuery,
 } from '@/lib/queries/notifications'
 import { useUnreadNotificationCount } from '@/lib/notifications'
+import { queryKeys } from '@/lib/query-keys'
 
 const {
   fetchNotifications,
@@ -75,9 +76,7 @@ describe('notification hooks', () => {
       notifications: [{ id: 'n-1', title: 'Server db-1 went offline', readAt: null }],
       unread: 1,
     })
-    const { result } = renderHook(() => useNotificationsQuery({ limit: 10 }), {
-      wrapper: createWrapper(),
-    })
+    const { result } = renderHook(() => useNotificationsQuery({ limit: 10 }), { wrapper: createWrapper() })
     await waitFor(() => expect(result.current.data?.unread).toBe(1))
     expect(fetchNotifications).toHaveBeenCalledWith({ limit: 10 })
   })
@@ -121,7 +120,7 @@ describe('notification hooks', () => {
         address: 'https://hooks.slack.com/x',
         rules: [{ event: '*', minSeverity: 'warning' }],
       },
-      undefined
+      undefined,
     )
     await waitFor(() => expect(fetchNotificationChannels).toHaveBeenCalledTimes(2))
   })
@@ -189,5 +188,31 @@ describe('unread count polling', () => {
     renderHook(() => useNotificationsQuery(), { wrapper })
     await waitFor(() => expect(badge.result.current).toBe(4))
     expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not copy an older cached inbox total over a newer badge count', async () => {
+    const client = createAppQueryClient()
+    const wrapper = createWrapper(client)
+    client.setQueryData(
+      [...queryKeys.notifications.inbox, 20],
+      { notifications: [], unread: 0 },
+      { updatedAt: 1_000 }
+    )
+    client.setQueryData(queryKeys.notifications.unread, 2, { updatedAt: 5_000 })
+    fetchNotifications.mockImplementation(() => new Promise(() => {}))
+    renderHook(() => useNotificationsQuery({ limit: 20 }), { wrapper })
+    await vi.waitFor(() => expect(fetchNotifications).toHaveBeenCalledTimes(1))
+    expect(client.getQueryData(queryKeys.notifications.unread)).toBe(2)
+  })
+
+  it('reopening the bell fetches the inbox again even when the cached one is fresh', async () => {
+    fetchNotifications.mockResolvedValue({ notifications: [], unread: 3 })
+    const client = createAppQueryClient()
+    const wrapper = createWrapper(client)
+    const first = renderHook(() => useNotificationsQuery({ limit: 20 }), { wrapper })
+    await waitFor(() => expect(first.result.current.data?.unread).toBe(3))
+    first.unmount()
+    renderHook(() => useNotificationsQuery({ limit: 20 }), { wrapper })
+    await waitFor(() => expect(fetchNotifications).toHaveBeenCalledTimes(2))
   })
 })
