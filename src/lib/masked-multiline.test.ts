@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { maskedMultilineProps } from './masked-multiline'
+
+vi.mock('react-native', () => ({ Platform: { OS: 'web' } }))
 
 describe('maskedMultilineProps', () => {
   it('leaves a plain value multi-line and visible', () => {

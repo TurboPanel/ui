@@ -101,7 +101,7 @@ describe('VariablesSection new secret value box', () => {
     vi.stubGlobal('CSS', { supports: () => true })
     const box = valueBox()
     expect(box.getAttribute('data-text-security')).toBeNull()
-    fireEvent.click(screen.getByText('Secret'))
+    fireEvent.click(screen.getByRole('button', { name: 'Secret' }))
     const secret = screen.getByPlaceholderText('Secret value (write-only)')
     expect(secret.getAttribute('data-multiline')).toBe('yes')
     expect(secret.getAttribute('data-text-security')).toBe('disc')
@@ -111,7 +111,7 @@ describe('VariablesSection new secret value box', () => {
     env.os = 'web'
     vi.stubGlobal('CSS', { supports: () => false })
     valueBox()
-    fireEvent.click(screen.getByText('Secret'))
+    fireEvent.click(screen.getByRole('button', { name: 'Secret' }))
     const secret = screen.getByPlaceholderText('Secret value (write-only)')
     expect(secret.getAttribute('type')).toBe('password')
     expect(secret.getAttribute('data-multiline')).toBeNull()
