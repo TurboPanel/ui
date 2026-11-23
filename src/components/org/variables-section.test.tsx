@@ -17,8 +17,16 @@ vi.mock(
 )
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
-  Checkbox: ({ label, onPress }: { label?: string; onPress?: () => void }) =>
-    label ? <button onClick={onPress}>{label}</button> : null,
+  // Only a live labelled box renders (the add row's Secret); read-only ones stay empty.
+  Checkbox: ({
+    label,
+    disabled,
+    onPress,
+  }: {
+    label?: string
+    disabled?: boolean
+    onPress?: () => void
+  }) => (label && !disabled ? <button onClick={onPress}>{label}</button> : null),
   LoadingState: () => null,
   SectionPanel: ({ children }: { children?: unknown }) => <section>{children as never}</section>,
 }))
