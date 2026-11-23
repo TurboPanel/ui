@@ -1,8 +1,5 @@
 import type { ProjectRecord } from '@/lib/instance-api'
-import {
-  SYSTEM_PROJECT_KIND,
-  TURBOPANEL_WORKSPACE_BADGE_LABEL,
-} from '@/lib/system-inventory'
+import { SYSTEM_PROJECT_KIND, TURBOPANEL_WORKSPACE_BADGE_LABEL } from '@/lib/system-inventory'
 
 /** True when the project has not yet chosen compose / template / managed. */
 export function projectNeedsSetup(project: ProjectRecord): boolean {
@@ -80,11 +77,7 @@ export const COMPOSE_PROJECT_TAB_IDS = [
 export type ComposeProjectTabId = (typeof COMPOSE_PROJECT_TAB_IDS)[number]
 
 /** Create-wizard draft has no environments and no row to configure — lenses only. */
-export const DRAFT_COMPOSE_PROJECT_TAB_IDS = [
-  'overview',
-  'compose',
-  'services',
-] as const
+export const DRAFT_COMPOSE_PROJECT_TAB_IDS = ['overview', 'compose', 'services'] as const
 
 /** Platform projects never accept mutations from the UI. */
 export function systemProjectAllowsMutations(): boolean {
@@ -102,11 +95,7 @@ export const COMPOSE_PROJECT_TAB_LABELS: Record<ComposeProjectTabId, string> = {
 }
 
 /** The three lenses on the compose artifact, in lens-bar order. */
-export const COMPOSE_PROJECT_LENS_IDS = [
-  'overview',
-  'compose',
-  'services',
-] as const
+export const COMPOSE_PROJECT_LENS_IDS = ['overview', 'compose', 'services'] as const
 
 export function isComposeProjectLens(tabId: ComposeProjectTabId): boolean {
   return (COMPOSE_PROJECT_LENS_IDS as readonly string[]).includes(tabId)
@@ -132,17 +121,11 @@ export type RetiredManagedTabId = (typeof RETIRED_MANAGED_TAB_IDS)[number]
 
 export type ProjectTabId = ComposeProjectTabId | RetiredManagedTabId
 
-export function projectHref(
-  orgId: string,
-  projectId: string,
-): `/${string}/projects/${string}` {
+export function projectHref(orgId: string, projectId: string): `/${string}/projects/${string}` {
   return `/${orgId}/projects/${projectId}`
 }
 
-export function projectSetupHref(
-  orgId: string,
-  projectId: string,
-): string {
+export function projectSetupHref(orgId: string, projectId: string): string {
   return `${projectHref(orgId, projectId)}/setup`
 }
 
@@ -151,18 +134,11 @@ export function projectSetupHref(
  * in its first environment (server, hostname, Hosting Account, variables)
  * and deploys it.
  */
-export function projectEnvironmentSetupHref(
-  orgId: string,
-  projectId: string,
-): string {
+export function projectEnvironmentSetupHref(orgId: string, projectId: string): string {
   return `${projectSetupHref(orgId, projectId)}/environment`
 }
 
-export function projectTabHref(
-  orgId: string,
-  projectId: string,
-  tabId: ProjectTabId,
-): string {
+export function projectTabHref(orgId: string, projectId: string, tabId: ProjectTabId): string {
   return `${projectHref(orgId, projectId)}/${tabId}`
 }
 
@@ -186,10 +162,7 @@ export function projectComposeHref(orgId: string, projectId: string): string {
  * Services (visual) editor for Project scope (the Base tab).
  * Path: `/projects/:projectId/base/services` (not `/services/:serviceId`).
  */
-export function projectServicesEditHref(
-  orgId: string,
-  projectId: string,
-): string {
+export function projectServicesEditHref(orgId: string, projectId: string): string {
   return `${projectBaseHref(orgId, projectId)}/services`
 }
 
@@ -241,7 +214,7 @@ export function projectBaseHref(orgId: string, projectId: string): string {
 export function projectEnvironmentHref(
   orgId: string,
   projectId: string,
-  environmentId: string,
+  environmentId: string
 ): string {
   return `${projectHref(orgId, projectId)}/environments/${encodeURIComponent(environmentId)}`
 }
@@ -250,7 +223,7 @@ export function projectEnvironmentHref(
 export function projectEnvironmentDeploymentsHref(
   orgId: string,
   projectId: string,
-  environmentId: string,
+  environmentId: string
 ): string {
   return `${projectEnvironmentHref(orgId, projectId, environmentId)}/deployments`
 }
@@ -260,7 +233,7 @@ export function projectEnvironmentDeploymentHref(
   orgId: string,
   projectId: string,
   environmentId: string,
-  deploymentId: string,
+  deploymentId: string
 ): string {
   return `${projectEnvironmentDeploymentsHref(orgId, projectId, environmentId)}/${encodeURIComponent(deploymentId)}`
 }
@@ -272,7 +245,7 @@ export function projectEnvironmentDeploymentHref(
 export function projectEnvironmentConfigurationHref(
   orgId: string,
   projectId: string,
-  environmentId: string,
+  environmentId: string
 ): string {
   return `${projectEnvironmentHref(orgId, projectId, environmentId)}/configuration`
 }
@@ -281,7 +254,7 @@ export function projectEnvironmentConfigurationHref(
 export function projectEnvironmentComposeHref(
   orgId: string,
   projectId: string,
-  environmentId: string,
+  environmentId: string
 ): string {
   return `${projectEnvironmentConfigurationHref(orgId, projectId, environmentId)}/compose`
 }
@@ -290,7 +263,7 @@ export function projectEnvironmentComposeHref(
 export function projectEnvironmentServicesHref(
   orgId: string,
   projectId: string,
-  environmentId: string,
+  environmentId: string
 ): string {
   return projectEnvironmentConfigurationHref(orgId, projectId, environmentId)
 }
@@ -299,7 +272,7 @@ export function projectEnvironmentServicesHref(
 export function projectEnvironmentHostingHref(
   orgId: string,
   projectId: string,
-  environmentId: string,
+  environmentId: string
 ): string {
   return `${projectEnvironmentConfigurationHref(orgId, projectId, environmentId)}/hosting`
 }
@@ -308,7 +281,7 @@ export function projectEnvironmentHostingHref(
 export function projectEnvironmentBindingsHref(
   orgId: string,
   projectId: string,
-  environmentId: string,
+  environmentId: string
 ): string {
   return `${projectEnvironmentConfigurationHref(orgId, projectId, environmentId)}/bindings`
 }
@@ -317,7 +290,7 @@ export function projectEnvironmentBindingsHref(
 export function projectEnvironmentStorageHref(
   orgId: string,
   projectId: string,
-  environmentId: string,
+  environmentId: string
 ): string {
   return `${projectEnvironmentConfigurationHref(orgId, projectId, environmentId)}/storage`
 }
@@ -326,7 +299,7 @@ export function projectEnvironmentStorageHref(
 export function projectEnvironmentSettingsHref(
   orgId: string,
   projectId: string,
-  environmentId: string,
+  environmentId: string
 ): string {
   return `${projectEnvironmentHref(orgId, projectId, environmentId)}/settings`
 }
@@ -336,11 +309,7 @@ export function projectEnvironmentSettingsHref(
  * the environment that runs it ({@link projectEnvironmentServiceHref}). Kept for
  * links that cannot know the environment (a database's connected services).
  */
-export function projectServiceHref(
-  orgId: string,
-  projectId: string,
-  serviceId: string,
-): string {
+export function projectServiceHref(orgId: string, projectId: string, serviceId: string): string {
   return `${projectHref(orgId, projectId)}/services/${serviceId}`
 }
 
@@ -393,10 +362,7 @@ type ProjectPathParts = Readonly<{
   segments: readonly string[]
 }>
 
-function splitProjectPath(
-  pathname: string,
-  projectId: string,
-): ProjectPathParts | null {
+function splitProjectPath(pathname: string, projectId: string): ProjectPathParts | null {
   const marker = `/projects/${projectId}`
   const idx = pathname.indexOf(marker)
   if (idx < 0) return null
@@ -427,7 +393,7 @@ const LEGACY_SECTION_LENS: ReadonlyMap<string, ComposeProjectTabId> = new Map([
 function lensFromSegments(
   segments: readonly string[],
   tabSegment: 'base' | 'configuration',
-  defaultLens: ComposeProjectTabId,
+  defaultLens: ComposeProjectTabId
 ): ComposeProjectTabId | null {
   if (segments[0] === tabSegment) {
     return LENS_SUBROUTES.get(segments[1] ?? '') ?? defaultLens
@@ -439,10 +405,7 @@ function lensFromSegments(
  * Resolve the Compose / Services section from the pathname.
  * Returns null on Overview / environment index / service detail paths.
  */
-export function parseComposeEditView(
-  pathname: string,
-  projectId: string,
-): ComposeEditView | null {
+export function parseComposeEditView(pathname: string, projectId: string): ComposeEditView | null {
   const parts = splitProjectPath(pathname, projectId)
   if (!parts) return null
   const { environmentId, segments } = parts
@@ -461,10 +424,7 @@ export function parseComposeEditView(
 }
 
 /** Active compose section tab for the path (Overview when not a named section). */
-export function parseComposeProjectTab(
-  pathname: string,
-  projectId: string,
-): ComposeProjectTabId {
+export function parseComposeProjectTab(pathname: string, projectId: string): ComposeProjectTabId {
   const parts = splitProjectPath(pathname, projectId)
   if (!parts) return 'overview'
   const { environmentId, segments } = parts
@@ -486,11 +446,7 @@ const COMPOSE_SECTION_HREFS: Readonly<
   Record<
     ComposeProjectTabId,
     Readonly<{
-      environment: (
-        orgId: string,
-        projectId: string,
-        environmentId: string,
-      ) => string
+      environment: (orgId: string, projectId: string, environmentId: string) => string
       project: (orgId: string, projectId: string) => string
     }>
   >
@@ -533,7 +489,7 @@ export function projectComposeSectionHref(
   orgId: string,
   projectId: string,
   tab: ComposeProjectTabId,
-  environmentId?: string | null,
+  environmentId?: string | null
 ): string {
   const href = COMPOSE_SECTION_HREFS[tab]
   return environmentId
@@ -548,19 +504,12 @@ export function projectComposeEditHref(
   options: Readonly<{
     environmentId?: string | null
     view?: ComposeEditView
-  }> = {},
+  }> = {}
 ): string {
   const view = options.view ?? 'editor'
   const tab: ComposeProjectTabId = view === 'visual' ? 'services' : 'compose'
-  return projectComposeSectionHref(
-    orgId,
-    projectId,
-    tab,
-    options.environmentId,
-  )
+  return projectComposeSectionHref(orgId, projectId, tab, options.environmentId)
 }
-
-
 
 /**
  * Sticky Project vs environment scope. Project overview clears the flag;
@@ -570,7 +519,7 @@ export function projectComposeEditHref(
 export function resolveEnvironmentScopeActive(
   baseSelected: boolean,
   pathEnvironmentId: string | null,
-  previousActive: boolean,
+  previousActive: boolean
 ): boolean {
   if (baseSelected) return false
   if (pathEnvironmentId != null) return true
@@ -583,10 +532,7 @@ export function resolveEnvironmentScopeActive(
  * Compose no longer exposes an Environments section tab (bare `/environments` redirects
  * to Overview); managed still uses the index route.
  */
-export function parseProjectEnvironmentId(
-  pathname: string,
-  projectId: string,
-): string | null {
+export function parseProjectEnvironmentId(pathname: string, projectId: string): string | null {
   const marker = `/projects/${projectId}/environments/`
   const idx = pathname.indexOf(marker)
   if (idx < 0) return null
@@ -605,10 +551,7 @@ export function parseProjectEnvironmentId(
  * its lens routes (`/base`, `/base/compose`, …), Settings, the retired
  * section paths that redirect there, and the bare index.
  */
-export function isProjectOverviewBasePath(
-  pathname: string,
-  projectId: string,
-): boolean {
+export function isProjectOverviewBasePath(pathname: string, projectId: string): boolean {
   const parts = splitProjectPath(pathname, projectId)
   if (!parts || parts.environmentId) return false
   // The managed Environments index (`/environments`) is not project scope.
@@ -634,22 +577,33 @@ const PROJECT_SCOPE_SEGMENTS: ReadonlySet<string> = new Set([
  * Overview edits shared Base compose when on the Overview Base path.
  * `/environments/:id` selects that environment (not Base).
  */
-export function resolveBaseComposeSelected(
-  pathname: string,
-  projectId: string,
-): boolean {
+export function resolveBaseComposeSelected(pathname: string, projectId: string): boolean {
   return isProjectOverviewBasePath(pathname, projectId)
 }
 
 export function resolveSelectedEnvironmentId(
   preferred: string | null | undefined,
-  environments: readonly { id: string }[],
+  environments: readonly { id: string }[]
 ): string | null {
   if (environments.length === 0) return null
   if (preferred && environments.some((env) => env.id === preferred)) {
     return preferred
   }
   return environments[0]?.id ?? null
+}
+
+/**
+ * The environment the page shows. The path wins when it names one of the environments, so
+ * moving from /environments/A to /environments/B never shows A; otherwise the selection.
+ */
+export function resolveShownEnvironment<T extends { id: string }>(
+  environments: readonly T[],
+  selectedId: string | null | undefined,
+  pathEnvironmentId: string | null | undefined
+): T | null {
+  const byId = (id: string | null | undefined) =>
+    id ? environments.find((env) => env.id === id) : undefined
+  return byId(pathEnvironmentId) ?? byId(selectedId) ?? null
 }
 
 /**
@@ -660,7 +614,7 @@ export function resolveSelectedEnvironmentId(
 export function recentProjectHref(
   orgId: string,
   project: ProjectRecord,
-  environments: readonly Readonly<{ id: string }>[] | undefined,
+  environments: readonly Readonly<{ id: string }>[] | undefined
 ): string {
   const only = environments?.length === 1 ? environments[0] : undefined
   if (only && isComposeProject(project)) {
@@ -744,7 +698,7 @@ export const ENVIRONMENT_PAGE_TAB_LABELS: Record<EnvironmentPageTabId, string> =
 export function projectPageTabHref(
   orgId: string,
   projectId: string,
-  tabId: ProjectPageTabId,
+  tabId: ProjectPageTabId
 ): string {
   if (isSectionPageTab(tabId)) return `${projectBaseHref(orgId, projectId)}/${tabId}`
   return `${projectHref(orgId, projectId)}/${tabId}`
@@ -754,7 +708,7 @@ export function environmentPageTabHref(
   orgId: string,
   projectId: string,
   environmentId: string,
-  tabId: EnvironmentPageTabId,
+  tabId: EnvironmentPageTabId
 ): string {
   const root = projectEnvironmentHref(orgId, projectId, environmentId)
   if (tabId === 'overview') return root
@@ -768,10 +722,7 @@ export function environmentPageTabHref(
  * Compose (the editor's toggle) and Storage lights Base; retired section paths
  * belong to the tab they redirect to.
  */
-export function parseProjectPageTab(
-  pathname: string,
-  projectId: string,
-): ProjectPageTabId | null {
+export function parseProjectPageTab(pathname: string, projectId: string): ProjectPageTabId | null {
   const parts = splitProjectPath(pathname, projectId)
   if (!parts || parts.environmentId) return null
   const first = parts.segments[0]
@@ -800,7 +751,7 @@ export function parseProjectPageTab(
  */
 export function parseEnvironmentPageTab(
   pathname: string,
-  projectId: string,
+  projectId: string
 ): EnvironmentPageTabId | null {
   const parts = splitProjectPath(pathname, projectId)
   if (!parts?.environmentId) return null
@@ -817,11 +768,7 @@ export function parseEnvironmentPageTab(
 }
 
 /** Retired project-scope section → where it lives now. */
-function legacyProjectHrefFor(
-  orgId: string,
-  projectId: string,
-  segment: string,
-): string | null {
+function legacyProjectHrefFor(orgId: string, projectId: string, segment: string): string | null {
   if (segment === 'map') return projectOverviewHref(orgId, projectId)
   const lens = LEGACY_SECTION_LENS.get(segment)
   if (!lens || lens === 'overview') return null
@@ -833,7 +780,7 @@ function legacyEnvironmentHrefFor(
   orgId: string,
   projectId: string,
   environmentId: string,
-  segment: string,
+  segment: string
 ): string | null {
   if (segment === 'map') {
     return projectEnvironmentHref(orgId, projectId, environmentId)
@@ -851,7 +798,7 @@ export function legacyProjectRedirectHref(
   orgId: string,
   projectId: string,
   segment: string,
-  environmentId?: string | null,
+  environmentId?: string | null
 ): string | null {
   return environmentId
     ? legacyEnvironmentHrefFor(orgId, projectId, environmentId, segment)
@@ -879,7 +826,7 @@ export type LegacyProjectSegment = (typeof LEGACY_PROJECT_SEGMENTS)[number]
 export function withCarriedQuery(
   href: string,
   params: Readonly<Record<string, string | readonly string[] | undefined>>,
-  omit: readonly string[],
+  omit: readonly string[]
 ): string {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(params)) {

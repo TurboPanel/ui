@@ -47,7 +47,7 @@ import type {
   MapVolume,
 } from './map-layout'
 import { isAppService, isDataStoreContainer, serviceKindLabel } from './service-roles'
-import { nativeDeployKey, type NativeRunFallback } from './project-home'
+import { isContainerOfService, nativeDeployKey, type NativeRunFallback } from './project-home'
 import { runStateKey } from './run-state'
 import { statusInfo } from './status-vocab'
 import { relationText, sourceLabel } from './change-labels'
@@ -192,18 +192,15 @@ const BUSY_CONTAINER = new Set(['restarting', 'created', 'paused'])
 const STOPPED_CONTAINER = new Set(['exited', 'dead', 'removing'])
 
 /**
- * The app's own containers (not the per-service ingress), matched by record id or by
- * compose name like the environment card does. A row the id match misses must not turn a
- * running app into "Not deployed yet".
+ * The app's own containers (not the per-service ingress). A row the id match misses must
+ * not turn a running app into "Not deployed yet", so the compose name counts too.
+ * Unlike the card (which falls back to every row), an ingress-only app reads as not running.
  */
 function isOwnContainer(
   container: ContainerRecord,
-  recordId: string | undefined,
-  serviceName: string | undefined
+  service: Readonly<{ id?: string; name?: string; environmentId?: string }>
 ): boolean {
-  if (container.role !== 'service') return false
-  if (recordId !== undefined && container.serviceId === recordId) return true
-  return serviceName !== undefined && container.composeServiceName === serviceName
+  return container.role === 'service' && isContainerOfService(container, service)
 }
 
 /**
@@ -216,12 +213,14 @@ export function runStatusKey(
   containers: readonly ContainerRecord[] | undefined,
   services: readonly ServiceRecord[] = [],
   native?: NativeRunFallback,
-  serviceName?: string
+  match?: Readonly<{ name: string; environmentId: string }>
 ): string | null {
   const reported = services.find((service) => service.id === recordId)?.runState
   if (reported !== undefined && reported.state !== 'unknown') return runStateKey(reported.state)
   if (containers === undefined) return null
-  const own = containers.filter((container) => isOwnContainer(container, recordId, serviceName))
+  const own = containers.filter((container) =>
+    isOwnContainer(container, { id: recordId, ...match })
+  )
   if (own.length === 0) return native ? (nativeDeployKey(native.latest) ?? null) : 'never'
   const states = own.map((container) => container.status)
   if (states.includes('running')) return 'running'
@@ -712,7 +711,7 @@ export function mapInputOf(source: OverviewSource, mode: MapMode): MapInput {
               source.containers,
               source.services,
               nativeOf(source, service.kind),
-              service.name
+              { name: service.name, environmentId: source.view.environmentId }
             )
           ),
   }
@@ -790,7 +789,7 @@ export function appRows(source: OverviewSource): OverviewServiceRow[] {
           source.containers,
           source.services,
           nativeOf(source, v4.kind),
-          service.name
+          { name: service.name, environmentId: source.view.environmentId }
         ),
         runState: runStateOf(source, recordOf.get(service.name)),
         source: origin,
@@ -817,7 +816,7 @@ export function dataRows(source: OverviewSource): OverviewDataRow[] {
         source.containers,
         source.services,
         undefined,
-        service.name
+        { name: service.name, environmentId: source.view.environmentId }
       ),
       recordId: recordOf.get(service.name),
     }))

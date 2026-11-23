@@ -34,6 +34,22 @@ import type { ConfigSource, V4Service } from './types'
 
 // --- What runs now -------------------------------------------------------------
 
+/**
+ * Whether a container row belongs to a service: by record id, or by compose name inside the
+ * environment. The environment check keeps a same-name row from another environment (the
+ * list keeps the previous one's data while the next loads) from counting.
+ */
+export function isContainerOfService(
+  container: ContainerRecord,
+  service: Readonly<{ id?: string; name?: string; environmentId?: string }>
+): boolean {
+  if (service.environmentId !== undefined && container.environmentId !== service.environmentId) {
+    return false
+  }
+  if (service.id !== undefined && container.serviceId === service.id) return true
+  return service.name !== undefined && container.composeServiceName === service.name
+}
+
 /** The containers that answer for the app itself (not the per-service ingress). */
 function serviceContainers(containers: readonly ContainerRecord[]): readonly ContainerRecord[] {
   const own = containers.filter((row) => row.role === 'service')
@@ -533,7 +549,9 @@ export function environmentCardData(
   )
   const statusOf = (serviceName: string) =>
     serviceStatusKey(
-      (containers ?? []).filter((row) => row.composeServiceName === serviceName),
+      (containers ?? []).filter((row) =>
+        isContainerOfService(row, { name: serviceName, environmentId: view?.environmentId })
+      ),
       nativeNames.has(serviceName) ? { latest: input.latest } : undefined
     )
   return {
