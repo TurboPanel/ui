@@ -193,6 +193,21 @@ describe('runStatusKey', () => {
     expect(runStatusKey('s-web', containers, report('starting'))).toBe('busy')
     expect(runStatusKey('s-web', undefined, report('crashing'))).toBe('crashing')
   })
+  const here = { name: 'shop', environmentId: 'env-1' }
+  it('ignores a same-name container of another environment', () => {
+    const stale = { ...container('shop', 'running'), serviceId: 's-old', environmentId: 'other' }
+    expect(runStatusKey('s-shop', [stale], [], undefined, here)).toBe('never')
+  })
+  it('counts a running container the id match misses, by its compose name', () => {
+    const other = { ...container('shop', 'running'), serviceId: 's-elsewhere' }
+    expect(runStatusKey('s-shop', [other])).toBe('never')
+    expect(runStatusKey('s-shop', [other], [], undefined, here)).toBe('running')
+    expect(runStatusKey(undefined, [other], [], undefined, here)).toBe('running')
+  })
+  it('still ignores an ingress row when matching by compose name', () => {
+    const rows = [container('shop', 'running', 'ingress')]
+    expect(runStatusKey('s-shop', rows, [], undefined, here)).toBe('never')
+  })
   it('gives a native app with no containers the newest deploy', () => {
     const ok = { latest: { status: 'succeeded' } as DeploymentGroup }
     expect(runStatusKey('s-api', containers, [], ok)).toBe('deployed')

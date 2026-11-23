@@ -30,6 +30,7 @@ import {
   resolveBaseComposeSelected,
   resolveEnvironmentScopeActive,
   resolveSelectedEnvironmentId,
+  resolveShownEnvironment,
   type ComposeProjectTabId,
 } from '@/lib/project-navigation'
 import { queryKeys, useCan } from '@/lib/query-client'
@@ -276,7 +277,13 @@ export function ProjectProvider({
     router.push(projectOverviewHref(orgId, projectId) as Href)
   }, [router, orgId, projectId])
 
-  const selectedEnvironment = environments.find((env) => env.id === selectedEnvironmentId) ?? null
+  // The path names the environment on its own pages, so the header and its menu never wait
+  // for the state above to catch up with the list.
+  const selectedEnvironment = resolveShownEnvironment(
+    environments,
+    selectedEnvironmentId,
+    pathEnvironmentId
+  )
 
   // A draft is always Project scope: it has no environments to select and its
   // section tabs are local state, so nothing may be inferred from the URL.
