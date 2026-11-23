@@ -67,6 +67,13 @@ describe('environmentActionItems', () => {
     expect(ids({ ...base, hasContainers: false, isRunning: false })).not.toContain('stop')
   })
 
+  it('keeps Destroy reachable when nothing is known to be deployed or running', () => {
+    const unknown = { ...base, hasContainers: false, isRunning: false }
+    expect(ids(unknown)).toContain('destroy')
+    const destroy = environmentActionItems(unknown).find((entry) => entry.id === 'destroy')
+    expect(destroy?.disabledReason).toBeNull()
+  })
+
   it('leaves Stop out of a stopped environment', () => {
     const stopped = ids({ ...base, isRunning: false })
     expect(stopped).toContain('cacheless')

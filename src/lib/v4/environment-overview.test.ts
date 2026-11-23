@@ -193,6 +193,20 @@ describe('runStatusKey', () => {
     expect(runStatusKey('s-web', containers, report('starting'))).toBe('busy')
     expect(runStatusKey('s-web', undefined, report('crashing'))).toBe('crashing')
   })
+  it('counts a running container the id match misses, by its compose name', () => {
+    const other = { ...container('shop', 'running'), serviceId: 's-elsewhere' }
+    expect(runStatusKey('s-shop', [other])).toBe('never')
+    expect(runStatusKey('s-shop', [other], [], undefined, 'shop')).toBe('running')
+    expect(runStatusKey(undefined, [other], [], undefined, 'shop')).toBe('running')
+  })
+  it('reads an app whose only rows are not the service role from them, like the card', () => {
+    const rows = [container('shop', 'running', 'ingress')]
+    expect(runStatusKey('s-shop', rows, [], undefined, 'shop')).toBe('running')
+  })
+  it('prefers the service role over the ingress row', () => {
+    const rows = [container('shop', 'exited', 'ingress'), container('shop', 'running')]
+    expect(runStatusKey('s-shop', rows, [], undefined, 'shop')).toBe('running')
+  })
   it('gives a native app with no containers the newest deploy', () => {
     const ok = { latest: { status: 'succeeded' } as DeploymentGroup }
     expect(runStatusKey('s-api', containers, [], ok)).toBe('deployed')

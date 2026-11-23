@@ -35,7 +35,9 @@ import type { ConfigSource, V4Service } from './types'
 // --- What runs now -------------------------------------------------------------
 
 /** The containers that answer for the app itself (not the per-service ingress). */
-function serviceContainers(containers: readonly ContainerRecord[]): readonly ContainerRecord[] {
+export function serviceContainers(
+  containers: readonly ContainerRecord[]
+): readonly ContainerRecord[] {
   const own = containers.filter((row) => row.role === 'service')
   return own.length > 0 ? own : containers
 }

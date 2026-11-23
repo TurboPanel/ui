@@ -47,7 +47,7 @@ import type {
   MapVolume,
 } from './map-layout'
 import { isAppService, isDataStoreContainer, serviceKindLabel } from './service-roles'
-import { nativeDeployKey, type NativeRunFallback } from './project-home'
+import { nativeDeployKey, serviceContainers, type NativeRunFallback } from './project-home'
 import { runStateKey } from './run-state'
 import { statusInfo } from './status-vocab'
 import { relationText, sourceLabel } from './change-labels'
@@ -200,13 +200,21 @@ export function runStatusKey(
   recordId: string | undefined,
   containers: readonly ContainerRecord[] | undefined,
   services: readonly ServiceRecord[] = [],
-  native?: NativeRunFallback
+  native?: NativeRunFallback,
+  serviceName?: string
 ): string | null {
   const reported = services.find((service) => service.id === recordId)?.runState
   if (reported !== undefined && reported.state !== 'unknown') return runStateKey(reported.state)
   if (containers === undefined) return null
-  const own = containers.filter(
-    (container) => container.serviceId === recordId && container.role === 'service'
+  // The same rows the environment card counts: matched by record id or compose name, the
+  // app's own containers first, any other row only when it has none. A row the id match
+  // misses must not turn a running app into "Not deployed yet".
+  const own = serviceContainers(
+    containers.filter(
+      (container) =>
+        (recordId !== undefined && container.serviceId === recordId) ||
+        (serviceName !== undefined && container.composeServiceName === serviceName)
+    )
   )
   if (own.length === 0) return native ? (nativeDeployKey(native.latest) ?? null) : 'never'
   const states = own.map((container) => container.status)
@@ -697,7 +705,8 @@ export function mapInputOf(source: OverviewSource, mode: MapMode): MapInput {
               recordOf.get(service.id),
               source.containers,
               source.services,
-              nativeOf(source, service.kind)
+              nativeOf(source, service.kind),
+              service.name
             )
           ),
   }
@@ -774,7 +783,8 @@ export function appRows(source: OverviewSource): OverviewServiceRow[] {
           recordOf.get(service.name),
           source.containers,
           source.services,
-          nativeOf(source, v4.kind)
+          nativeOf(source, v4.kind),
+          service.name
         ),
         runState: runStateOf(source, recordOf.get(service.name)),
         source: origin,
@@ -796,7 +806,13 @@ export function dataRows(source: OverviewSource): OverviewDataRow[] {
       kind: 'store',
       name: service.name,
       sub: service.image ?? serviceKindLabel(service.kind),
-      statusKey: runStatusKey(recordOf.get(service.name), source.containers, source.services),
+      statusKey: runStatusKey(
+        recordOf.get(service.name),
+        source.containers,
+        source.services,
+        undefined,
+        service.name
+      ),
       recordId: recordOf.get(service.name),
     }))
   const databases = databasesOf(source).map<OverviewDataRow>((service) => ({
