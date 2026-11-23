@@ -234,7 +234,9 @@ describe('DeploymentLogScreen on a direct link', () => {
     expect(
       screen.getByText(/\/usr\/bin\/migrate failed after the new release went live/)
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Open Releases to Roll Back' })).toBeTruthy()
+    // Roll Back waits for the workspace kind (it is offered only on a user
+    // workspace), which loads after the deploy list, so wait for the button.
+    expect(await screen.findByRole('button', { name: 'Open Releases to Roll Back' })).toBeTruthy()
     expect(screen.queryByText(/post_deploy_failed_after_switch/)).toBeNull()
     expect(screen.queryByText(/rel-123/)).toBeNull()
     expect(screen.queryByText('Show full error')).toBeNull()
