@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { env } from '@/components/ui/v4/rn-stub'
 import { VariablesSection } from './variables-section'
 
 const state = vi.hoisted(() => ({
@@ -16,7 +17,8 @@ vi.mock(
 )
 vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: {} }))
 vi.mock('@/components/ui', () => ({
-  Checkbox: () => null,
+  Checkbox: ({ label, onPress }: { label?: string; onPress?: () => void }) =>
+    label ? <button onClick={onPress}>{label}</button> : null,
   LoadingState: () => null,
   SectionPanel: ({ children }: { children?: unknown }) => <section>{children as never}</section>,
 }))
@@ -80,5 +82,38 @@ describe('VariablesSection failed saves', () => {
     render(<VariablesSection orgId="o" parentField={{ projectId: 'p' } as never} />)
     fireEvent.click(screen.getByText('Delete'))
     expect(screen.getByText('Failed to delete variable')).toBeTruthy()
+  })
+})
+
+describe('VariablesSection new secret value box', () => {
+  function valueBox() {
+    render(<VariablesSection orgId="o" parentField={{ projectId: 'p' } as never} initialShowAdd />)
+    return screen.getByPlaceholderText('Plaintext value')
+  }
+
+  afterEach(() => {
+    env.os = 'ios'
+    vi.unstubAllGlobals()
+  })
+
+  it('hides a multi-line secret with CSS on the web', () => {
+    env.os = 'web'
+    vi.stubGlobal('CSS', { supports: () => true })
+    const box = valueBox()
+    expect(box.getAttribute('data-text-security')).toBeNull()
+    fireEvent.click(screen.getByText('Secret'))
+    const secret = screen.getByPlaceholderText('Secret value (write-only)')
+    expect(secret.getAttribute('data-multiline')).toBe('yes')
+    expect(secret.getAttribute('data-text-security')).toBe('disc')
+  })
+
+  it('falls back to a single-line password box when the browser cannot hide text', () => {
+    env.os = 'web'
+    vi.stubGlobal('CSS', { supports: () => false })
+    valueBox()
+    fireEvent.click(screen.getByText('Secret'))
+    const secret = screen.getByPlaceholderText('Secret value (write-only)')
+    expect(secret.getAttribute('type')).toBe('password')
+    expect(secret.getAttribute('data-multiline')).toBeNull()
   })
 })

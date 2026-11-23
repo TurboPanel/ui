@@ -14,6 +14,7 @@ import { looksLikeSecretVariable, SECRET_LOOKING_VARIABLE_HINT } from '@/lib/var
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
 import { NO_AUTOFILL, secretAutoComplete } from '@/lib/field-autofill'
+import { maskedMultilineProps } from '@/lib/masked-multiline'
 
 /** Secret values are write-only end to end — never rendered, even masked with real characters. */
 const HIDDEN_VALUE_LABEL = '***HIDDEN***'
@@ -588,6 +589,7 @@ function NewVariableRow({
   onSubmit: () => void
   onCancel: () => void
 }>) {
+  const masked = maskedMultilineProps(newIsSecret)
   return (
     <View style={[styles.row, styles.rowNew]}>
       <View style={styles.colType}>
@@ -628,7 +630,7 @@ function NewVariableRow({
       </View>
       <View style={styles.colValue}>
         <TextInput
-          style={[cellInputStyle(false), styles.cellMultiline]}
+          style={[cellInputStyle(false), styles.cellMultiline, masked.style]}
           value={newValue}
           onChangeText={onValueChange}
           {...trimOnBlur(newValue, onValueChange)}
@@ -637,9 +639,9 @@ function NewVariableRow({
           autoCapitalize="none"
           autoCorrect={false}
           editable={!adding}
-          secureTextEntry={newIsSecret}
           autoComplete={newIsSecret ? secretAutoComplete() : NO_AUTOFILL}
-          multiline
+          multiline={masked.multiline}
+          secureTextEntry={masked.secureTextEntry}
         />
       </View>
       <View style={[styles.colBuild, styles.colCenter]}>
