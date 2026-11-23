@@ -120,6 +120,7 @@ const PRESET_NAMES: Record<BindingPreset, (engine: ManagedServiceEngine) => stri
     'MB_DB_DBNAME',
     'MB_DB_USER',
     'MB_DB_PASS',
+    'MB_DB_CONNECTION_URI',
   ],
   'uptime-kuma': () => [
     'UPTIME_KUMA_DB_TYPE',
