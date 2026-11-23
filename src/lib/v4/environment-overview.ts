@@ -192,6 +192,21 @@ const BUSY_CONTAINER = new Set(['restarting', 'created', 'paused'])
 const STOPPED_CONTAINER = new Set(['exited', 'dead', 'removing'])
 
 /**
+ * The app's own containers (not the per-service ingress), matched by record id or by
+ * compose name like the environment card does. A row the id match misses must not turn a
+ * running app into "Not deployed yet".
+ */
+function isOwnContainer(
+  container: ContainerRecord,
+  recordId: string | undefined,
+  serviceName: string | undefined
+): boolean {
+  if (container.role !== 'service') return false
+  if (recordId !== undefined && container.serviceId === recordId) return true
+  return serviceName !== undefined && container.composeServiceName === serviceName
+}
+
+/**
  * Run state of one service. The daemon's own report wins when it has one
  * (starting, running, crashing, stopped after crashes); without it the stored
  * container status gives the plain words.
@@ -206,15 +221,7 @@ export function runStatusKey(
   const reported = services.find((service) => service.id === recordId)?.runState
   if (reported !== undefined && reported.state !== 'unknown') return runStateKey(reported.state)
   if (containers === undefined) return null
-  // The app's own containers (not the per-service ingress), matched by record id or by
-  // compose name like the environment card does. A row the id match misses must not turn a
-  // running app into "Not deployed yet".
-  const own = containers.filter(
-    (container) =>
-      container.role === 'service' &&
-      ((recordId !== undefined && container.serviceId === recordId) ||
-        (serviceName !== undefined && container.composeServiceName === serviceName))
-  )
+  const own = containers.filter((container) => isOwnContainer(container, recordId, serviceName))
   if (own.length === 0) return native ? (nativeDeployKey(native.latest) ?? null) : 'never'
   const states = own.map((container) => container.status)
   if (states.includes('running')) return 'running'
