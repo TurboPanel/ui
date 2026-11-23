@@ -199,13 +199,9 @@ describe('runStatusKey', () => {
     expect(runStatusKey('s-shop', [other], [], undefined, 'shop')).toBe('running')
     expect(runStatusKey(undefined, [other], [], undefined, 'shop')).toBe('running')
   })
-  it('reads an app whose only rows are not the service role from them, like the card', () => {
+  it('still ignores an ingress row when matching by compose name', () => {
     const rows = [container('shop', 'running', 'ingress')]
-    expect(runStatusKey('s-shop', rows, [], undefined, 'shop')).toBe('running')
-  })
-  it('prefers the service role over the ingress row', () => {
-    const rows = [container('shop', 'exited', 'ingress'), container('shop', 'running')]
-    expect(runStatusKey('s-shop', rows, [], undefined, 'shop')).toBe('running')
+    expect(runStatusKey('s-shop', rows, [], undefined, 'shop')).toBe('never')
   })
   it('gives a native app with no containers the newest deploy', () => {
     const ok = { latest: { status: 'succeeded' } as DeploymentGroup }

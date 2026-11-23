@@ -47,7 +47,7 @@ import type {
   MapVolume,
 } from './map-layout'
 import { isAppService, isDataStoreContainer, serviceKindLabel } from './service-roles'
-import { nativeDeployKey, serviceContainers, type NativeRunFallback } from './project-home'
+import { nativeDeployKey, type NativeRunFallback } from './project-home'
 import { runStateKey } from './run-state'
 import { statusInfo } from './status-vocab'
 import { relationText, sourceLabel } from './change-labels'
@@ -206,15 +206,14 @@ export function runStatusKey(
   const reported = services.find((service) => service.id === recordId)?.runState
   if (reported !== undefined && reported.state !== 'unknown') return runStateKey(reported.state)
   if (containers === undefined) return null
-  // The same rows the environment card counts: matched by record id or compose name, the
-  // app's own containers first, any other row only when it has none. A row the id match
-  // misses must not turn a running app into "Not deployed yet".
-  const own = serviceContainers(
-    containers.filter(
-      (container) =>
-        (recordId !== undefined && container.serviceId === recordId) ||
-        (serviceName !== undefined && container.composeServiceName === serviceName)
-    )
+  // The app's own containers (not the per-service ingress), matched by record id or by
+  // compose name like the environment card does. A row the id match misses must not turn a
+  // running app into "Not deployed yet".
+  const own = containers.filter(
+    (container) =>
+      container.role === 'service' &&
+      ((recordId !== undefined && container.serviceId === recordId) ||
+        (serviceName !== undefined && container.composeServiceName === serviceName))
   )
   if (own.length === 0) return native ? (nativeDeployKey(native.latest) ?? null) : 'never'
   const states = own.map((container) => container.status)
