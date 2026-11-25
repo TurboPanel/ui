@@ -18,10 +18,13 @@ import {
 } from '@/components/ui'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { ListGroup, ListRow, PageTitle, SectionHeading } from '@/components/ui/v4'
+import { readHostingHostname, wwwSiblingHostname } from '@/lib/compose/hosting-extension'
+import { tunnelOnlyOf } from '@/lib/hosting-tunnel'
 import type { ComposeDocument, OrgServerRecord } from '@/lib/instance-api'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { useOrgProjectFormDefaults } from '@/lib/org-project-settings'
 import { useOrgAllowsLetsEncrypt } from '@/lib/queries/org-tls-settings'
+import { useTunnelOnlyNames } from '@/lib/queries/tunnel-only'
 import {
   declaredHostname,
   defaultAlsoWww,
@@ -119,10 +122,18 @@ export function EnvironmentSetupForm({
   // Most projects keep one environment, so its name stays tucked away unless
   // the organization opens the section by default (or the name has an error).
   const { openEnvironmentSectionByDefault } = useOrgProjectFormDefaults(orgId)
+  // A name a tunnel already carries gets the internal certificate: no request, no warning.
+  const tunnelNames = useTunnelOnlyNames(orgId)
+  const typedName = readHostingHostname(hostname)
+  // The www name counts too when the switch is on: the control plane needs every name locked.
+  const wwwName = alsoWww && typedName ? wwwSiblingHostname(typedName) : null
+  const tunnelOnly =
+    tunnelOnlyOf([typedName ?? '', ...(wwwName ? [wwwName] : [])], tunnelNames) !== null
   const certificateNote = setupCertificateNote({
     hostname,
     acmeEnabled,
     tlsChosen: declared?.tls !== undefined,
+    tunnelOnly,
   })
 
   const shownName = name.trim() || environmentName
@@ -137,7 +148,7 @@ export function EnvironmentSetupForm({
       serviceName,
       hostname,
       alsoWww,
-      letsEncrypt: acmeEnabled === true,
+      letsEncrypt: acmeEnabled === true && !tunnelOnly,
     })
     onSubmit({ name: name.trim(), serverId, compose: next, variables }, intent)
   }
@@ -185,6 +196,7 @@ export function EnvironmentSetupForm({
         wwwSwitch={setupWwwSwitch(hostname, declared)}
         error={errors.hostname}
         certificateNote={certificateNote}
+        tunnelOnly={tunnelOnly}
         settingsHref={orgSettingsTabHref(orgId, 'domains')}
         onServiceNameChange={setServiceName}
         onHostnameChange={setHostname}
@@ -240,6 +252,7 @@ function HostnameSection({
   wwwSwitch,
   error,
   certificateNote,
+  tunnelOnly,
   settingsHref,
   onServiceNameChange,
   onHostnameChange,
@@ -252,6 +265,7 @@ function HostnameSection({
   wwwSwitch: Readonly<{ label: string; description: string }> | null
   error?: string
   certificateNote: SetupCertificateNote | null
+  tunnelOnly: boolean
   settingsHref: string
   onServiceNameChange: (name: string) => void
   onHostnameChange: (hostname: string) => void
@@ -285,7 +299,11 @@ function HostnameSection({
             autoCorrect={false}
             mono
             accessibilityLabel="Visitors reach it at"
-            hint="Optional. Point the name's DNS at the server. Later changes go in the Hosting tab."
+            hint={
+              tunnelOnly
+                ? 'Optional. The tunnel already carries this name. Later changes go in the Hosting tab.'
+                : "Optional. Point the name's DNS at the server. Later changes go in the Hosting tab."
+            }
             error={error}
           />
           {wwwSwitch ? (

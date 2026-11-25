@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
+import { ServerBuildLimitsSettingsSection } from '@/components/org/server-build-limits-settings-section'
 import { ServerCapacitySettingsSection } from '@/components/org/server-capacity-settings-section'
 import { ServerHostDefaultsSettingsSection } from '@/components/org/server-host-defaults-settings-section'
 import { ServerWebServerSettingsSection } from '@/components/org/server-web-server-settings-section'
@@ -17,6 +18,7 @@ export default function ServerSettingsScreen() {
       <ServerTemperatureUnitSettingsSection orgId={id} />
       <ServerHostDefaultsSettingsSection orgId={id} />
       <ServerWebServerSettingsSection orgId={id} />
+      <ServerBuildLimitsSettingsSection orgId={id} />
       <ServerCapacitySettingsSection orgId={id} />
     </View>
   )

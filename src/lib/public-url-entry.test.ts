@@ -14,10 +14,12 @@ import {
 
 describe('buildPublicUrlEntry', () => {
   it('composes scheme, host, and port', () => {
-    expect(buildPublicUrlEntry({ scheme: 'https', host: 'studio.lan', port: '8443' })).toEqual({
+    expect(
+      buildPublicUrlEntry({ scheme: 'https', host: 'dev-workstation.example.lan', port: '8443' })
+    ).toEqual({
       ok: true,
-      value: 'https://studio.lan:8443',
-      parts: { scheme: 'https', host: 'studio.lan', port: '8443' },
+      value: 'https://dev-workstation.example.lan:8443',
+      parts: { scheme: 'https', host: 'dev-workstation.example.lan', port: '8443' },
     })
   })
 
@@ -59,10 +61,10 @@ describe('buildPublicUrlEntry', () => {
     expect(
       buildPublicUrlEntry({
         scheme: 'https',
-        host: 'https://studio.lan:8443/something/foo',
+        host: 'https://dev-workstation.example.lan:8443/something/foo',
         port: '',
       })
-    ).toMatchObject({ ok: true, value: 'https://studio.lan:8443' })
+    ).toMatchObject({ ok: true, value: 'https://dev-workstation.example.lan:8443' })
     expect(
       buildPublicUrlEntry({ scheme: 'https', host: 'https://panel.example.com/?a=1#b', port: '' })
     ).toMatchObject({ ok: true, value: 'https://panel.example.com' })
@@ -139,9 +141,9 @@ describe('buildPublicUrlEntry', () => {
 
 describe('parsePublicUrlEntry', () => {
   it('splits a stored entry into parts', () => {
-    expect(parsePublicUrlEntry('https://studio.lan:8443')).toEqual({
+    expect(parsePublicUrlEntry('https://dev-workstation.example.lan:8443')).toEqual({
       scheme: 'https',
-      host: 'studio.lan',
+      host: 'dev-workstation.example.lan',
       port: '8443',
     })
     expect(parsePublicUrlEntry('http://panel.lan')).toEqual({
@@ -321,54 +323,54 @@ describe('buildPublicUrlEntry on the self-hosted runtime', () => {
   })
 
   it('always stores https on 8443, whatever the hidden scheme and port controls hold', () => {
-    expect(build('studio.lan', 'http', '9000')).toMatchObject({
+    expect(build('dev-workstation.example.lan', 'http', '9000')).toMatchObject({
       ok: true,
-      value: 'https://studio.lan:8443',
+      value: 'https://dev-workstation.example.lan:8443',
     })
   })
 
   it.each([
-    'https://studio.lan',
-    'http://studio.lan',
-    'https://studio.lan:8443/admin/access',
-    'studio.lan/admin',
-    'studio.lan?x=1',
-    'studio.lan#top',
-    '//studio.lan:80',
-    '///studio.lan:443',
-    String.raw`studio.lan\admin`,
-    String.raw`\\studio.lan`,
-    'user@studio.lan',
-    'user:pass@studio.lan:8443',
+    'https://dev-workstation.example.lan',
+    'http://dev-workstation.example.lan',
+    'https://dev-workstation.example.lan:8443/admin/access',
+    'dev-workstation.example.lan/admin',
+    'dev-workstation.example.lan?x=1',
+    'dev-workstation.example.lan#top',
+    '//dev-workstation.example.lan:80',
+    '///dev-workstation.example.lan:443',
+    String.raw`dev-workstation.example.lan\admin`,
+    String.raw`\\dev-workstation.example.lan`,
+    'user@dev-workstation.example.lan',
+    'user:pass@dev-workstation.example.lan:8443',
     'studio lan',
     'studio_lan',
     'stüdio.lan',
-    '-studio.lan',
+    '-dev-workstation.example.lan',
     'studio-.lan',
     'studio..lan',
-    '.studio.lan',
-    'studio.lan..',
+    '.dev-workstation.example.lan',
+    'dev-workstation.example.lan..',
     `${'a'.repeat(64)}.lan`,
     `${'a.'.repeat(126)}ab`,
-    'studio.lan:',
-    'studio.lan:8443',
-    'studio.lan:08443',
-    'studio.lan:443',
-    'studio.lan:80',
-    'studio.lan:9443',
+    'dev-workstation.example.lan:',
+    'dev-workstation.example.lan:8443',
+    'dev-workstation.example.lan:08443',
+    'dev-workstation.example.lan:443',
+    'dev-workstation.example.lan:80',
+    'dev-workstation.example.lan:9443',
     '192.168.1.20:8443',
     '[2001:db8::1]:8443',
     '[::1]:8443',
     '[2001:db8::1]:443',
     '10.0.0.1:0',
-    'studio.lan:port',
-    'studio.lan:-1',
+    'dev-workstation.example.lan:port',
+    'dev-workstation.example.lan:-1',
     '256.1.1.1',
     '010.0.0.1',
     '1.2.3',
     'host.123',
     '[2001:db8::1',
-    '[studio.lan]',
+    '[dev-workstation.example.lan]',
     '[2001:db8::1]:',
     '2001:db8::zz',
   ])('refuses %s as not a hostname or IP', (host) => {
@@ -414,10 +416,13 @@ describe('buildPublicUrlEntry on the self-hosted runtime', () => {
 
 describe('buildPublicUrlEntry on High Availability (no selfHosted)', () => {
   it.each([
-    ['https://studio.lan:8443/admin/access', 'https://studio.lan:8443'],
-    ['http://studio.lan:8080/x?y=1', 'http://studio.lan:8080'],
-    ['https://studio.lan:443', 'https://studio.lan'],
-    ['studio.lan:9443', 'https://studio.lan:9443'],
+    [
+      'https://dev-workstation.example.lan:8443/admin/access',
+      'https://dev-workstation.example.lan:8443',
+    ],
+    ['http://dev-workstation.example.lan:8080/x?y=1', 'http://dev-workstation.example.lan:8080'],
+    ['https://dev-workstation.example.lan:443', 'https://dev-workstation.example.lan'],
+    ['dev-workstation.example.lan:9443', 'https://dev-workstation.example.lan:9443'],
   ])('still absorbs %s as before', (host, value) => {
     expect(buildPublicUrlEntry({ scheme: 'https', host, port: '' })).toMatchObject({
       ok: true,

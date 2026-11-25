@@ -25,7 +25,20 @@ export function channelLabel(channel?: string | null): string {
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
 }
 
-/** Why an unsupported daemon receives no commands, and the fix. */
+const UNSUPPORTED_FALLBACK =
+  'This daemon is out of date. It stays connected but gets no commands until it is updated.'
+
+/**
+ * Why an unsupported daemon receives no commands. Uses the control plane's own
+ * `reason` when it sends one (older control planes do not), minus its machine
+ * code prefix; otherwise a plain line that needs no fields.
+ */
 export function daemonUnsupportedLabel(support: DaemonSupport): string {
-  return `Daemon ${support.version ?? 'unknown'} is below the supported minimum ${support.minVersion}: it stays connected but receives no commands until it is updated.`
+  const reason = support.reason
+    ?.trim()
+    .replace(/^[a-z]+(?:_[a-z]+)+:\s*/, '')
+    .replace(/ — update the daemon\.?$/, '')
+  if (!reason) return UNSUPPORTED_FALLBACK
+  const sentence = reason.charAt(0).toUpperCase() + reason.slice(1)
+  return `${sentence.replace(/\.$/, '')}. It stays connected but gets no commands until it is updated.`
 }

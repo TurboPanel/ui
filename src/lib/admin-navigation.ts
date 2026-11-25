@@ -48,6 +48,11 @@ export const ADMIN_AREAS = [
     'Git Providers',
     'GitHub Apps and GitLab OAuth applications shared with every organization'
   ),
+  adminArea(
+    'organizations',
+    'Organizations',
+    'Every organization on this control plane, with its owner and size'
+  ),
   adminArea('signup', 'Sign-Up', 'Public account creation toggle'),
   adminArea(
     'tiers',

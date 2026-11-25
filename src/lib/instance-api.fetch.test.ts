@@ -65,8 +65,6 @@ import {
   cancelWaitingKeyChange,
   fetchKeysetStatement,
   prepareKeysetStatement,
-  fetchSealedSecrets,
-  clearServerSealingKey,
   resolveResourceId,
   retireOrganizationCa,
   rotateOrganizationCa,
@@ -507,7 +505,7 @@ describe('instance-api fetch wrappers', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ ok: true, commandId: 'cmd-2', status: 'queued' })
     )
-    await expect(setServerHostname('srv-1', 'huey')).resolves.toMatchObject({
+    await expect(setServerHostname('srv-1', 'server-a')).resolves.toMatchObject({
       commandId: 'cmd-2',
     })
 
@@ -595,7 +593,7 @@ describe('instance-api fetch wrappers', () => {
     ).resolves.toMatchObject({ commandId: 'cmd-ntp' })
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
-    await expect(updateServer('srv-1', { name: 'Huey' })).resolves.toEqual({
+    await expect(updateServer('srv-1', { name: 'Server A' })).resolves.toEqual({
       ok: true,
     })
   })
@@ -813,18 +811,6 @@ describe('instance-api fetch wrappers', () => {
     await expect(deleteProject('p1')).rejects.toThrow(PROJECT_HAS_RUNNING_SERVICES_ERROR)
   })
 
-  it('keeps the site name and adds friendly text for site_engine_feature_missing', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        { error: 'site_engine_feature_missing', message: 'Site "blog" needs a newer daemon.' },
-        422
-      )
-    )
-    await expect(deleteProject('p1')).rejects.toThrow(
-      /HTTP 422: site_engine_feature_missing — Site "blog" needs a newer daemon\. — This server's daemon is too old/
-    )
-  })
-
   it('replaces the server text for container_not_owned and stays out of 403 recovery', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ error: 'container_not_owned', message: 'forbidden for this user' }, 403)
@@ -843,13 +829,13 @@ describe('instance-api fetch wrappers', () => {
         installCommand: 'curl | sh',
       })
     )
-    await expect(createLicense('Huey', ' https://panel.example/ ')).resolves.toMatchObject({
+    await expect(createLicense('Server A', ' https://panel.example/ ')).resolves.toMatchObject({
       licenseId: 'lic-1',
     })
     const [, init] = fetchMock.mock.calls[0] ?? []
     expect((init as RequestInit).method).toBe('POST')
     expect(JSON.parse(String((init as RequestInit).body))).toEqual({
-      name: 'Huey',
+      name: 'Server A',
       installBaseUrl: 'https://panel.example/',
     })
   })
@@ -913,27 +899,6 @@ describe('instance-api fetch wrappers', () => {
       kind: 'passkeys',
       mark: ['pk-1'],
     })
-  })
-
-  it('fetchSealedSecrets reads the sealed-secrets route', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, receivingPlaintext: 0, servers: [] }))
-    await expect(fetchSealedSecrets()).resolves.toMatchObject({ receivingPlaintext: 0 })
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      '/api/admin/v1/instance/identity/sealed-secrets'
-    )
-  })
-
-  it('clearServerSealingKey deletes the key with the typed server name', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, cleared: true }))
-    await expect(clearServerSealingKey('srv/1', 'web 1')).resolves.toEqual({
-      ok: true,
-      cleared: true,
-    })
-    const [url, init] = fetchMock.mock.calls[0] ?? []
-    expect(String(url)).toContain(
-      '/api/admin/v1/instance/identity/sealed-secrets/srv%2F1/key?confirmName=web+1'
-    )
-    expect((init as RequestInit).method).toBe('DELETE')
   })
 
   it('createLicense sends the license tier chosen in Add Server', async () => {

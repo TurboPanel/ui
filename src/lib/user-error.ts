@@ -21,6 +21,9 @@ export const LETS_ENCRYPT_OFF_COPY =
 export const MANAGED_HAS_BINDINGS_COPY =
   'One or more services are still connected to this cluster. Remove those connections first, then destroy it.'
 
+export const ROLLBACK_BASE_UNRECORDED_COPY =
+  'This release was deployed before TurboPanel recorded which compose file it used, so it cannot be rolled back while the project follows the repository. Stop following the file in the Base settings, then roll back.'
+
 /** API error codes (the part after `HTTP <status>:`) with one fixed sentence. */
 const API_ERROR_COPY: Readonly<Record<string, string>> = {
   upgrade_run_active: UPDATE_ALREADY_ACTIVE_COPY,
@@ -28,9 +31,16 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   managed_has_bindings: MANAGED_HAS_BINDINGS_COPY,
   principal_required_for_service_kind: 'Add a Hosting Account under Bindings first.',
   provider_origin_managed:
-    'A Tunnel manages this certificate. Turn off Verified Connection on the Tunnel and it is removed once no site uses it.',
+    'A Tunnel manages this certificate. Give the names that use it another certificate and deploy the site again, then it is removed once no site uses it.',
   tls_in_use:
-    'A site still uses this certificate. Turn off Verified Connection on its Tunnel and deploy the site again first.',
+    'A site still uses this certificate. Give its names another certificate and deploy the site again first.',
+  name_certificates_need_update:
+    'Names with different certificates need a server on a newer version. Update the servers that run this site, or give every name the same certificate.',
+  name_not_served: 'One of those names is not a name this site answers on. Save the names first.',
+  tls_order_open:
+    'A certificate is being ordered for this entry. Try again when the order has finished.',
+  tls_dns_records_outstanding:
+    'This certificate still has DNS records to remove. Try again in a few minutes.',
   tls_organization_ca:
     'The Organization CA can\u2019t be deleted. Replace it with Rotate on the Organization CA panel.',
   server_offline: 'The server is offline. Try again when it is back.',
@@ -43,8 +53,6 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
   deploy_too_late:
     'This deploy is already switching over, so it can no longer be stopped. It will finish.',
   daemon_unavailable: 'TurboPanel could not reach this server right now. Try again in a moment.',
-  cancel_unsupported:
-    "This server's TurboPanel daemon is too old to cancel deploys. Update it first.",
   lets_encrypt_not_enabled: LETS_ENCRYPT_OFF_COPY,
   acme_requires_public_bind:
     'Let\u2019s Encrypt needs this domain to be reachable from the internet.',
@@ -86,6 +94,8 @@ const API_ERROR_COPY: Readonly<Record<string, string>> = {
     'That environment is not part of this project. Reload the page and try again.',
   edit_target_mixed:
     'An environment change cannot carry project settings in the same save. Save them separately.',
+  rollback_base_unrecorded: ROLLBACK_BASE_UNRECORDED_COPY,
+  compose_source_missing: 'This project was not created from a repository compose file.',
   environment_start_invalid: 'Pick whether the new environment starts as a copy or empty.',
   environment_start_conflict:
     'A new environment cannot start from a copy and also bring its own configuration.',

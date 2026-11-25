@@ -15,6 +15,7 @@ import { useRepositories, useUpdateRepository } from '@/lib/queries/releases'
 import { repositoryLabel } from '@/lib/repository-label'
 import { colors, spacing } from '@/lib/theme'
 import { pushDeployLine } from '@/lib/v4/push-deploy'
+import { failedRunMessage } from '@/lib/user-error'
 
 /** Plain-language origin of the branch an environment builds. */
 function branchOriginLabel(binding: EnvironmentSourceBinding): string {
@@ -208,7 +209,7 @@ export function EnvironmentGitSourcePanel({
     })
     const result = await persist.run(next)
     setSavingService(null)
-    if (!result.ok) setError(persist.actionError ?? 'Failed to save the branch')
+    if (!result.ok) setError(failedRunMessage(result, 'Failed to save the branch'))
   }
 
   return (

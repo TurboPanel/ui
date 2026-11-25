@@ -49,6 +49,9 @@ vi.mock('@/components/ui/panel-styles', () => ({ panelStyles: { muted: {} } }))
 vi.mock('@/components/logs/service-runtime-log', () => ({
   ServiceRuntimeLogPanel: () => <div>runtime log</div>,
 }))
+vi.mock('@/components/org/service-terminal-panel', () => ({
+  ServiceTerminalPanel: () => <div>terminal entry</div>,
+}))
 vi.mock('@/components/org/node-settings-panel', () => ({
   NodeSettingsPanel: ({ environmentId }: Readonly<{ environmentId: string }>) => (
     <div>{`node settings in ${environmentId}`}</div>

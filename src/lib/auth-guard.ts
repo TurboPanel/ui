@@ -96,6 +96,19 @@ function resolveSessionRouteHref(ctx: AuthGuardContext): Href | null {
   return null
 }
 
+/**
+ * Signed-out forms the static export pre-renders. While the session is still
+ * loading these paint at once and only the redirect waits.
+ */
+export function isPrerenderedAuthRoute(topSegment: string | undefined): boolean {
+  return (
+    topSegment === 'sign-in' ||
+    topSegment === 'sign-up' ||
+    topSegment === 'forgot-password' ||
+    topSegment === 'reset-password'
+  )
+}
+
 function isPublicAuthRoute(topSegment: string | undefined): boolean {
   return (
     topSegment === 'sign-in' ||

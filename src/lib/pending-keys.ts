@@ -30,7 +30,7 @@ export function unusedRegistrationKeysLabel(count: number): string {
 }
 
 /**
- * `1 server provisioning (adrastea) since 26/09/2026, 23:50` for one key,
+ * `1 server provisioning (host-a) since 26/09/2026, 23:50` for one key,
  * `2 servers provisioning` for more; `null` when none is.
  */
 export function provisioningServersLabel(rows: readonly LicenseRecord[]): string | null {

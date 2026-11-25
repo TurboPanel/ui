@@ -13,8 +13,10 @@ import {
 import type {
   DatacenterRecord,
   OrgServerRecord,
+  TunnelPeerHop,
   TunnelPortal,
   TunnelRecord,
+  TunnelStatusPorts,
 } from '@/lib/instance-api'
 import { useDeleteTunnel, useUpdateTunnelPlacement } from '@/lib/queries/tunnel-routes'
 import { spacing } from '@/lib/theme'
@@ -23,17 +25,19 @@ import {
   connectorLine,
   draftFromTunnel,
   placementBody,
+  peerHopState,
   placementSummary,
   portalState,
+  reportedLabel,
   seenLabel,
   serverLabel,
+  statusPortsState,
   tunnelHealth,
   type PlacementDraft,
 } from '@/lib/tunnel-runs'
 import { NetworkTunnelHostnames } from './network-tunnel-hostnames'
 import { NetworkTunnelPlacement } from './network-tunnel-placement'
 import { NetworkTunnelRotate } from './network-tunnel-rotate'
-import { NetworkTunnelVerify } from './network-tunnel-verify'
 
 function PortalRow({ portal, serverName }: Readonly<{ portal: TunnelPortal; serverName: string }>) {
   const state = portalState(portal)
@@ -49,6 +53,36 @@ function PortalRow({ portal, serverName }: Readonly<{ portal: TunnelPortal; serv
         </Text>
       )}
       {portal.lastError ? <Text style={panelStyles.error}>{portal.lastError}</Text> : null}
+    </View>
+  )
+}
+
+function PeerHopRow({ hop, serverName }: Readonly<{ hop: TunnelPeerHop; serverName: string }>) {
+  const state = peerHopState(hop)
+  const reported = hop.mode === 'none' ? null : reportedLabel(hop.reportedAt)
+  return (
+    <View style={panelStyles.detailCard}>
+      <View style={styles.titleRow}>
+        <Text style={panelStyles.detailTitle}>{serverName}</Text>
+        <Badge label={state.label} tone={state.tone} />
+      </View>
+      <Text style={hop.downgraded ? panelStyles.error : panelStyles.muted}>{state.note}</Text>
+      {reported ? <Text style={panelStyles.muted}>{reported}</Text> : null}
+    </View>
+  )
+}
+
+function StatusPortsRow({
+  ports,
+  serverName,
+}: Readonly<{ ports: TunnelStatusPorts; serverName: string }>) {
+  const state = statusPortsState(ports)
+  const checked = reportedLabel(ports.checkedAt)
+  return (
+    <View style={panelStyles.detailCard} testID={`status-ports-${ports.serverId}`}>
+      <Text style={panelStyles.detailTitle}>{serverName}</Text>
+      <Text style={state.open ? panelStyles.error : panelStyles.muted}>{state.label}</Text>
+      {checked ? <Text style={panelStyles.muted}>{checked}</Text> : null}
     </View>
   )
 }
@@ -186,10 +220,44 @@ export function NetworkTunnelCard({
           />
         ))}
       </View>
+      {tunnel.peerHop && tunnel.peerHop.length > 0 ? (
+        <View style={styles.list}>
+          <Text style={panelStyles.detailTitle}>Server-to-Server Checks</Text>
+          <Text style={panelStyles.muted}>
+            How each server checks a client certificate when another server connects to it.
+          </Text>
+          {tunnel.peerHop.map((hop) => (
+            <PeerHopRow
+              key={hop.serverId}
+              hop={hop}
+              serverName={names.get(hop.serverId) ?? hop.serverId.slice(0, 8)}
+            />
+          ))}
+        </View>
+      ) : null}
+      {tunnel.statusPorts && tunnel.statusPorts.length > 0 ? (
+        <View style={styles.list}>
+          <Text style={panelStyles.detailTitle}>Status Ports</Text>
+          <Text style={panelStyles.muted}>
+            Whether the connector status ports are locked on each server, as last reported. Locked
+            is the safe state.
+          </Text>
+          {tunnel.statusPorts.map((ports) => (
+            <StatusPortsRow
+              key={ports.serverId}
+              ports={ports}
+              serverName={names.get(ports.serverId) ?? ports.serverId.slice(0, 8)}
+            />
+          ))}
+        </View>
+      ) : null}
       <PlacementEditor orgId={orgId} tunnel={tunnel} servers={servers} datacenters={datacenters} />
-      <NetworkTunnelVerify orgId={orgId} tunnel={tunnel} />
       <NetworkTunnelRotate orgId={orgId} tunnel={tunnel} names={names} />
-      <NetworkTunnelHostnames orgId={orgId} tunnelId={tunnel.id} />
+      <NetworkTunnelHostnames
+        orgId={orgId}
+        tunnelId={tunnel.id}
+        verifiedNames={tunnel.verifiedNames}
+      />
       <ButtonRow>
         <TypeNameDeleteButton
           label="Remove Tunnel"

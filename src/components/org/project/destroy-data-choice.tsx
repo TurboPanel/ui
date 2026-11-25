@@ -9,7 +9,6 @@ import {
   DESTROY_NO_VOLUMES_COPY,
   DESTROY_VOLUMES_HEADING,
   destroyConfirmNameHint,
-  destroyOutdatedServersCopy,
   destroyStaysOnCopy,
 } from '@/lib/environment-menu'
 import { colors, spacing } from '@/lib/theme'
@@ -76,9 +75,6 @@ export function DestroyDataChoice({
   error: string | null
   disabled: boolean
 }>) {
-  const outdated = destroyOutdatedServersCopy(
-    data?.outdatedServers.map((server) => server.name) ?? []
-  )
   return (
     <View style={styles.root}>
       <Checkbox
@@ -92,7 +88,6 @@ export function DestroyDataChoice({
           {loading ? <Text style={styles.hint}>Loading the volumes…</Text> : null}
           {error ? <Text style={panelStyles.error}>{error}</Text> : null}
           {data ? <DataVolumeList data={data} /> : null}
-          {outdated ? <Text style={panelStyles.error}>{outdated}</Text> : null}
           <TextField
             label={DESTROY_CONFIRM_NAME_LABEL}
             hint={destroyConfirmNameHint(expectedName)}

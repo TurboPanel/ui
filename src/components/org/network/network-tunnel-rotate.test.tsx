@@ -43,8 +43,8 @@ vi.mock('@/lib/queries/tunnel-routes', () => ({
 }))
 
 const names = new Map([
-  ['s1', 'juliet'],
-  ['s2', 'panvm'],
+  ['s1', 'server-b'],
+  ['s2', 'server-h'],
 ])
 
 const tunnel = (extra: Partial<TunnelRecord> = {}): TunnelRecord =>
@@ -101,7 +101,7 @@ describe('Rotate Run Token on a tunnel card', () => {
   it('shows progress, and no action, while a rotation runs', () => {
     show(tunnel({ runTokenRotation: rotation() }))
     expect(
-      screen.getByText('Rotating run token: juliet moved, panvm next (about 10 min)')
+      screen.getByText('Rotating run token: server-b moved, server-h next (about 10 min)')
     ).toBeTruthy()
     expect(screen.queryByRole('button')).toBeNull()
   })
@@ -125,12 +125,12 @@ describe('Rotate Run Token on a tunnel card', () => {
   it('disables the action with the reason when it cannot start', () => {
     show(
       tunnel({
-        runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: ['s2'] },
+        runTokenRotationBlock: { code: 'tunnel_not_ready', message: 'x' },
       })
     )
     const button = screen.getByRole('button', { name: 'Rotate Run Token' }) as HTMLButtonElement
     expect(button.disabled).toBe(true)
-    expect(screen.getByText(/Update the daemon on panvm first/)).toBeTruthy()
+    expect(screen.getByText('This tunnel does not exist at the provider yet.')).toBeTruthy()
   })
 
   it('offers Resume for a stopped rotation, also while a server is out of reach', async () => {
@@ -146,9 +146,9 @@ describe('Rotate Run Token on a tunnel card', () => {
       })
     )
     expect(
-      screen.getByText('Run token rotation stopped: Server panvm cannot be reached')
+      screen.getByText('Run token rotation stopped: Server server-h cannot be reached')
     ).toBeTruthy()
-    expect(screen.getByText(/panvm keeps the old token/)).toBeTruthy()
+    expect(screen.getByText(/server-h keeps the old token/)).toBeTruthy()
     // The reachability block is not shown as a reason: the control plane waits for the server.
     expect(screen.queryByText(/cannot be reached right now/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Rotate Run Token' })).toBeNull()
@@ -160,12 +160,12 @@ describe('Rotate Run Token on a tunnel card', () => {
     show(
       tunnel({
         runTokenRotation: rotation({ phase: 'stopped', stoppedReason: 'The provider refused' }),
-        runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: ['s2'] },
+        runTokenRotationBlock: { code: 'tunnel_not_ready', message: 'x' },
       })
     )
     expect(screen.getByText('Run token rotation stopped: The provider refused')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Resume Rotation' })).toBeNull()
-    expect(screen.getByText(/Update the daemon on panvm first/)).toBeTruthy()
+    expect(screen.getByText('This tunnel does not exist at the provider yet.')).toBeTruthy()
   })
 
   it('shows a failed start in plain words', async () => {

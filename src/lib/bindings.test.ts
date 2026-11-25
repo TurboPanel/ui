@@ -75,6 +75,8 @@ describe('binding presets', () => {
       'DB_NAME',
     ])
     expect(presetKeyNames('metabase', 'mariadb')).toContain('MB_DB_DBNAME')
+    expect(presetKeyNames('metabase', 'postgres')).toContain('MB_DB_CONNECTION_URI')
+    expect(isBindingSecretKey('MB_DB_CONNECTION_URI')).toBe(false)
   })
 })
 

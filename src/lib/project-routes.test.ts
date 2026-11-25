@@ -74,7 +74,7 @@ describe('route files behind the links', () => {
         const file = routeFileFor(href)
         expect(file, href).not.toBeNull()
         expect(readFileSync(file as string, 'utf8')).toContain(
-          `<LegacyProjectRedirect segment="${segment}" />`,
+          `<LegacyProjectRedirect segment="${segment}" />`
         )
       }
     }
@@ -96,9 +96,7 @@ describe('route files behind the links', () => {
       existsSync(path.join(APP_ROOT, 'environments/[environmentId]/services/[serviceId].tsx'))
     ).toBe(true)
     expect(existsSync(path.join(APP_ROOT, 'environments/index.tsx'))).toBe(true)
-    expect(
-      existsSync(path.join(APP_ROOT, 'environments/[environmentId]/_layout.tsx')),
-    ).toBe(true)
+    expect(existsSync(path.join(APP_ROOT, 'environments/[environmentId]/_layout.tsx'))).toBe(true)
   })
 })
 
@@ -147,10 +145,7 @@ const OFF_BAR_ROUTES: readonly (readonly [href: string, reachedBy: string])[] = 
     projectComposeEditHref('o', 'p', { view: 'visual' }),
     "the Base Compose editor's Compose / Services toggle",
   ],
-  [
-    projectEnvironmentDeploymentHref('o', 'p', 'e', 'd'),
-    "Deployments rows and the Overview progress card's Open full log",
-  ],
+  [projectEnvironmentDeploymentHref('o', 'p', 'e', 'd'), 'Deployments rows'],
   [
     projectEnvironmentStorageHref('o', 'p', 'e'),
     'volume rows on the environment overview (lights Services)',

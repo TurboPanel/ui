@@ -16,8 +16,6 @@ import {
   requiresPlatformCaConfirm,
 } from '@/lib/instance-certificates'
 
-const CAPABLE = { 'instance-cert-sources-per-hostname': true }
-
 describe('INSTANCE_HOSTNAME_SOURCE_LABELS', () => {
   it("names Platform CA, Uploaded, and both Let's Encrypt sources", () => {
     expect(INSTANCE_HOSTNAME_SOURCE_LABELS['platform-ca']).toBe('Platform CA')
@@ -54,20 +52,8 @@ describe('hostnameStatusPresentation', () => {
 })
 
 describe('certificateSourceEligibility', () => {
-  it("refuses uploaded and Let's Encrypt when the daemon cannot render them", () => {
-    const refused = certificateSourceEligibility('panel.example.com', {
-      certificates: [{ dnsNames: ['panel.example.com'] }],
-      capabilities: { 'instance-cert-sources-per-hostname': false },
-    })
-    expect(refused.uploaded).toContain('too old')
-    expect(refused['acme-http-01']).toContain('too old')
-  })
-
   it('refuses DNS-01 for anything but one exact public DNS name', () => {
-    const ready = {
-      certificates: [],
-      capabilities: { 'instance-cert-sources-per-hostname': true },
-    }
+    const ready = { certificates: [] }
     for (const host of ['10.0.0.5', '[::1]', 'localhost', 'panel', '*.example.com']) {
       expect(certificateSourceEligibility(host, ready)['acme-dns-01'], host).toBeTruthy()
     }
@@ -75,11 +61,6 @@ describe('certificateSourceEligibility', () => {
       'wildcard'
     )
     expect(certificateSourceEligibility('panel.example.com', ready)['acme-dns-01']).toBeUndefined()
-    expect(
-      certificateSourceEligibility('panel.example.com', { ...ready, capabilities: {} })[
-        'acme-dns-01'
-      ]
-    ).toContain('too old')
   })
 
   it('names why the daemon state blocks a source instead of calling it too old', () => {
@@ -89,7 +70,6 @@ describe('certificateSourceEligibility', () => {
     ] as const) {
       const refused = certificateSourceEligibility('panel.example.com', {
         certificates: [],
-        capabilities: undefined,
         capabilitiesStatus: status,
       })
       expect(refused['acme-http-01']).toContain(phrase)
@@ -114,14 +94,12 @@ describe('certificateSourceEligibility', () => {
   it('says the daemon is still being read, or unreadable, rather than "too old"', () => {
     const loading = certificateSourceEligibility('panel.example.com', {
       certificates: [],
-      capabilities: null,
       capabilitiesStatus: 'loading',
     })
     expect(loading['acme-http-01']).toContain('Checking')
     expect(loading['acme-http-01']).not.toContain('too old')
     const failed = certificateSourceEligibility('panel.example.com', {
       certificates: [],
-      capabilities: null,
       capabilitiesStatus: 'error',
     })
     expect(failed.uploaded).toContain("Couldn't read")
@@ -131,12 +109,10 @@ describe('certificateSourceEligibility', () => {
   it("refuses Let's Encrypt for private and wildcard names", () => {
     const privateName = certificateSourceEligibility('panel.lan', {
       certificates: [],
-      capabilities: CAPABLE,
     })
     expect(privateName['acme-http-01']).toContain('private')
     const wildcard = certificateSourceEligibility('*.example.com', {
       certificates: [{ dnsNames: ['*.example.com'] }],
-      capabilities: CAPABLE,
     })
     expect(wildcard['acme-http-01']).toContain('wildcard')
     expect(wildcard.uploaded).toBeUndefined()
@@ -145,7 +121,6 @@ describe('certificateSourceEligibility', () => {
   it('refuses an uploaded source nothing covers', () => {
     const refused = certificateSourceEligibility('panel.example.com', {
       certificates: [{ dnsNames: ['other.example.com'] }],
-      capabilities: CAPABLE,
     })
     expect(refused.uploaded).toContain('No uploaded certificate')
     expect(refused['acme-http-01']).toBeUndefined()

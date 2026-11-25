@@ -276,8 +276,10 @@ function useHomeCards(
   projects: ReturnType<typeof useScopedProjects>['projects'],
   now: number
 ) {
-  const environmentsQuery = useEnvironments(orgId, undefined, { enabled: projects.length > 0 })
-  const containersQuery = useContainers(orgId, undefined, { enabled: projects.length > 0 })
+  // Both are org-wide lists that need no project id, so they load beside the
+  // projects instead of after them.
+  const environmentsQuery = useEnvironments(orgId)
+  const containersQuery = useContainers(orgId)
   const environments = useMemo(() => {
     const ids = new Set(projects.map((project) => project.id))
     return orEmptyArray(environmentsQuery.data?.environments).filter((env) =>

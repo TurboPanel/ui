@@ -29,10 +29,9 @@ describe('principal-name-scheme', () => {
     expect(isNameScheme('nope')).toBe(false)
   })
 
-  it('resolves the effective scheme with legacy fallback', () => {
+  it('resolves the effective scheme', () => {
     expect(effectiveNameScheme({ effectiveNameScheme: 'random' })).toBe('random')
-    expect(effectiveNameScheme({ effectiveRandomizedUsernames: false })).toBe('plain')
-    expect(effectiveNameScheme({ effectiveRandomizedUsernames: true })).toBe('partial')
+    expect(effectiveNameScheme({})).toBe('partial')
     expect(effectiveNameScheme(undefined)).toBe('partial')
   })
 

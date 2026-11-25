@@ -106,8 +106,8 @@ function rollbackPrompt(release: ReleaseRecord): string {
  */
 function ReleaseImageIdentity({ release }: Readonly<{ release: ReleaseRecord }>) {
   if (!release.imageTag) return null
-  const frontendVersion = release.builderFrontendVersion ?? release.railpackFrontendVersion
-  const planVersion = release.builderPlanVersion ?? release.railpackPlanVersion
+  const frontendVersion = release.builderFrontendVersion
+  const planVersion = release.builderPlanVersion
   const built = [
     frontendVersion ? `Builder ${frontendVersion}` : null,
     planVersion ? `plan ${planVersion}` : null,
@@ -497,7 +497,7 @@ export function ServiceReleasesPanel({
       ) : null}
       {rollback.actionError ? (
         <Text style={panelStyles.error} accessibilityRole="alert">
-          {rollback.actionError}
+          {userErrorMessage(rollback.error, rollback.actionError)}
         </Text>
       ) : null}
       {!releasesQuery.isLoading && releases.length === 0 ? (

@@ -25,7 +25,10 @@ import {
   normalizeHostname,
   placementBody,
   placementSummary,
+  peerHopState,
+  statusPortsState,
   portalState,
+  reportedLabel,
   seenLabel,
   serverChoices,
   serverInDatacenter,
@@ -38,7 +41,9 @@ import {
   withPlacementKind,
   type PlacementDraft,
   issuedCertificateNote,
-  verifyOriginSummary,
+  hostnameReach,
+  nameVerification,
+  reachChangeNote,
 } from './tunnel-runs'
 
 function server(
@@ -68,7 +73,7 @@ function tunnel(extra: Partial<TunnelRecord> = {}): TunnelRecord {
     carryingServerIds: [],
     warnings: [],
     doorwayCount: 0,
-    verifyOrigin: { enabled: false, active: false, pendingNames: [] },
+    verifiedNames: [],
     ...extra,
   }
 }
@@ -296,6 +301,41 @@ describe('words for status', () => {
     expect(portalState(portal({ reported: 'error' })).label).toBe('Error')
     expect(portalState(portal({ reported: 'unknown' })).label).toBe('Not Reported Yet')
   })
+  it('describes the peer hop mode of a server', () => {
+    const none = peerHopState({ mode: 'none', downgraded: false })
+    expect(none).toMatchObject({ label: 'No Mode Reported', tone: 'pending' })
+    expect(peerHopState({ mode: 'require', downgraded: false })).toMatchObject({
+      label: 'Require',
+      tone: 'ok',
+    })
+    expect(peerHopState({ mode: 'verify', downgraded: false })).toMatchObject({
+      label: 'Verify',
+      tone: 'info',
+    })
+    const down = peerHopState({ mode: 'verify', downgraded: true })
+    expect(down).toMatchObject({ label: 'Downgraded', tone: 'danger' })
+    expect(down.note).toContain('cannot be used as a client certificate')
+  })
+  it('describes the status port lock and never reads unknown as locked', () => {
+    expect(statusPortsState({ locked: true, reason: null })).toEqual({
+      label: 'Status ports locked',
+      open: false,
+    })
+    expect(statusPortsState({ locked: false, reason: 'nft failed' })).toEqual({
+      label: 'Status ports open: nft failed',
+      open: true,
+    })
+    expect(statusPortsState({ locked: false, reason: null }).label).toBe('Status ports open')
+    expect(statusPortsState({ locked: null, reason: null })).toEqual({
+      label: 'Not reported yet',
+      open: false,
+    })
+  })
+  it('words when a peer hop mode was reported', () => {
+    expect(reportedLabel(null)).toBeNull()
+    expect(reportedLabel('nope')).toBeNull()
+    expect(reportedLabel('2026-11-03T14:05:00Z')).toMatch(/^Reported /)
+  })
   it('reads versions and dates defensively', () => {
     expect(connectorLine({ connectorVersion: '2026.5.2' })).toBe('Connector 2026.5.2')
     expect(connectorLine({ connectorVersion: null })).toMatch(/not reported/)
@@ -362,37 +402,44 @@ describe('hostnames', () => {
   })
 })
 
-describe('verifyOriginSummary', () => {
-  it('reads a missing field, as sent by an older panel, as off', () => {
-    expect(verifyOriginSummary(undefined).label).toBe('Off')
-    expect(verifyOriginSummary(null).label).toBe('Off')
+describe('nameVerification', () => {
+  it('reads a missing list, as sent by an older panel, as not verified', () => {
+    expect(nameVerification(undefined, 'a.example.com')).toMatchObject({
+      verified: false,
+      label: 'Not Verified',
+    })
   })
-  it('says Off, On and Waiting in plain words, and names what it waits for', () => {
-    expect(verifyOriginSummary({ enabled: false, active: false, pendingNames: [] }).label).toBe(
-      'Off'
-    )
-    expect(verifyOriginSummary({ enabled: true, active: true, pendingNames: [] })).toMatchObject({
-      label: 'On',
+  it('matches a verified name without regard to case or spaces', () => {
+    expect(nameVerification(['A.example.com'], ' a.EXAMPLE.com ')).toMatchObject({
+      verified: true,
+      label: 'Verified',
       tone: 'ok',
     })
-    const one = verifyOriginSummary({
-      enabled: true,
-      active: false,
-      pendingNames: ['a.example.com'],
+    expect(nameVerification(['a.example.com'], 'b.example.com').verified).toBe(false)
+  })
+})
+
+describe('hostnameReach', () => {
+  it('describes a tunnel-only name and offers to open it', () => {
+    expect(hostnameReach({ isLocalOnly: true })).toMatchObject({
+      label: 'Tunnel Only',
+      actionLabel: 'Also Reach Directly',
     })
-    expect(one.label).toBe('Waiting')
-    expect(one.line).toContain('a.example.com')
-    expect(one.line).toContain('it has a site and a certificate')
-    const two = verifyOriginSummary({
-      enabled: true,
-      active: false,
-      pendingNames: ['a.example.com', 'b.example.com'],
+  })
+  it('describes a name reached both ways and offers to close it', () => {
+    expect(hostnameReach({ isLocalOnly: false })).toMatchObject({
+      label: 'Tunnel and Direct',
+      actionLabel: 'Tunnel Only',
     })
-    expect(two.line).toContain('a.example.com, b.example.com')
-    expect(two.line).toContain('they have sites and certificates')
-    expect(verifyOriginSummary({ enabled: true, active: false, pendingNames: [] }).line).toContain(
-      'Add a hostname'
-    )
+  })
+})
+
+describe('reachChangeNote', () => {
+  it('names the moved certificates and the deploy, or just says saved', () => {
+    expect(reachChangeNote({ certificateChangedNames: [], needsDeploy: false })).toBe('Saved.')
+    const note = reachChangeNote({ certificateChangedNames: ['a.example.com'], needsDeploy: true })
+    expect(note).toContain('a.example.com moved to the default certificate')
+    expect(note).toContain('Deploy the site')
   })
 })
 
@@ -430,8 +477,8 @@ describe('run token rotation', () => {
   const A = '00000000-0000-4000-8000-00000000000a'
   const B = '00000000-0000-4000-8000-00000000000b'
   const names = new Map([
-    [A, 'juliet'],
-    [B, 'panvm'],
+    [A, 'server-b'],
+    [B, 'server-h'],
   ])
   const base = {
     phase: 'rolling' as const,
@@ -445,10 +492,10 @@ describe('run token rotation', () => {
 
   it('says which servers moved and which is next', () => {
     expect(rotationProgressLine(base, names)).toBe(
-      'Rotating run token: juliet moved, panvm next (about 10 min)'
+      'Rotating run token: server-b moved, server-h next (about 10 min)'
     )
     expect(rotationProgressLine({ ...base, currentServerId: A }, names)).toBe(
-      'Rotating run token: juliet moving now'
+      'Rotating run token: server-b moving now'
     )
     expect(rotationProgressLine({ ...base, phase: 'starting', movedServerIds: [] }, names)).toBe(
       'Rotating run token: asking for a new token'
@@ -472,15 +519,15 @@ describe('run token rotation', () => {
         { ...base, phase: 'stopped', stoppedReason: `Server ${B} is offline` },
         names
       )
-    ).toBe('Run token rotation stopped: Server panvm is offline')
+    ).toBe('Run token rotation stopped: Server server-h is offline')
     expect(rotationStoppedLine(base, names)).toBeNull()
-    expect(withServerNames(`a ${A} b ${A}`, names)).toBe('a juliet b juliet')
+    expect(withServerNames(`a ${A} b ${A}`, names)).toBe('a server-b b server-b')
   })
 
   it('says whether a stop carries on by itself, and which servers keep the old token meanwhile', () => {
     const stopped = { ...base, phase: 'stopped' as const, oldTokenServerIds: [B] }
     expect(rotationStoppedHint({ ...stopped, resumesOnItsOwn: true }, names)).toBe(
-      'It tries again by itself in a few minutes, or resume it now. Until then panvm keeps the old token, which cannot reconnect after a restart.'
+      'It tries again by itself in a few minutes, or resume it now. Until then server-h keeps the old token, which cannot reconnect after a restart.'
     )
     expect(rotationStoppedHint({ ...stopped, oldTokenServerIds: [] }, names)).toBe(
       'Resuming carries on from where it stopped, with the token already issued.'
@@ -492,20 +539,11 @@ describe('run token rotation', () => {
       rotationBlockedReason(
         {
           status: 'active',
-          runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: [B] },
-        },
-        names
-      )
-    ).toContain('Update the daemon on panvm')
-    expect(
-      rotationBlockedReason(
-        {
-          status: 'active',
           runTokenRotationBlock: { code: 'server_not_ready', message: 'x', serverIds: [A] },
         },
         names
       )
-    ).toBe('juliet cannot be reached right now. Try again once it is back.')
+    ).toBe('server-b cannot be reached right now. Try again once it is back.')
     expect(
       rotationBlockedReason(
         {
@@ -514,16 +552,7 @@ describe('run token rotation', () => {
         },
         names
       )
-    ).toBe('juliet, panvm cannot be reached right now. Try again once they are back.')
-    expect(
-      rotationBlockedReason(
-        {
-          status: 'active',
-          runTokenRotationBlock: { code: 'tunnel_daemon_too_old', message: 'x', serverIds: [A, B] },
-        },
-        names
-      )
-    ).toContain('they cannot move their connectors')
+    ).toBe('server-b, server-h cannot be reached right now. Try again once they are back.')
     expect(
       rotationBlockedReason(
         { status: 'active', runTokenRotationBlock: { code: 'tunnel_not_ready', message: 'x' } },
@@ -553,7 +582,7 @@ describe('run token rotation', () => {
     })
     expect(rotationResumable(tunnel(null))).toBe(true)
     expect(rotationResumable(tunnel('server_not_ready'))).toBe(true)
-    expect(rotationResumable(tunnel('tunnel_daemon_too_old'))).toBe(false)
+    expect(rotationResumable(tunnel('tunnel_not_ready'))).toBe(false)
     expect(rotationResumable(tunnel(null, 'removing'))).toBe(false)
     expect(rotationResumable({ ...tunnel(null), runTokenRotation: base })).toBe(false)
   })

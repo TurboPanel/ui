@@ -58,7 +58,6 @@ describe('step-up copy and input', () => {
   it('names the action in app vocabulary and has a fallback', () => {
     expect(stepUpActionLabel('project.delete')).toBe('delete this project')
     expect(stepUpActionLabel('panel.identity_next.set')).toBe("change the control plane's next key")
-    expect(stepUpActionLabel('server.sealing_key.clear')).toBe("clear this server's sealing key")
     expect(stepUpActionLabel('instance.tunnel_token.set')).toBe('change the tunnel token')
     expect(stepUpActionLabel('server.reenroll_ticket.issue')).toBe('issue a re-enroll token')
     expect(stepUpActionLabel('server.colocated_repair')).toBe("repair this server's connection")
@@ -257,5 +256,26 @@ describe('reauth wrappers', () => {
     expect(urlOf(1)).toContain('/organizations/org-1/reauth-settings')
     expect(initOf(1)?.method).toBe('PUT')
     expect(JSON.parse(String(initOf(1)?.body))).toEqual({ requireReauthForDestructive: true })
+  })
+
+  it('tells any number of watchers when a prompt opens and closes', () => {
+    const challenge: StepUpChallenge = { action: 'server.delete', methods: ['password'] }
+    const broker = createStepUpBroker()
+    broker.subscribe(() => {})
+    const first = vi.fn()
+    const second = vi.fn()
+    const stopFirst = broker.watch(first)
+    broker.watch(second)
+    expect(broker.isOpen()).toBe(false)
+    broker.request(challenge).catch(() => {})
+    expect(broker.isOpen()).toBe(true)
+    expect([first.mock.calls.length, second.mock.calls.length]).toEqual([1, 1])
+    stopFirst()
+    broker.settle(false)
+    expect(broker.isOpen()).toBe(false)
+    expect([first.mock.calls.length, second.mock.calls.length]).toEqual([1, 2])
+    // A settle with nothing open is not news.
+    broker.settle(false)
+    expect(second.mock.calls).toHaveLength(2)
   })
 })

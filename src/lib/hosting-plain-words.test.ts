@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { TlsRecord } from '@/lib/instance-api'
+import { CONTROL_PLANE_UNREACHABLE_COPY } from '@/lib/user-error'
 import {
   type ConfiguredHostingState,
   certificateChoiceText,
@@ -15,14 +16,19 @@ import {
   DEPLOY_RUNNING_MESSAGE,
   HOSTING_ACTION_FAILED_MESSAGE,
   hostingActionErrorMessage,
+  hostingSaveErrorMessage,
   HOSTNAME_IN_USE_MESSAGE,
+  hostnameReleasedMessage,
+  releaseHostnameNow,
+  REMOVE_NOW_DEPLOY_RUNNING_MESSAGE,
+  removeNowErrorMessage,
   COMPOSE_HOSTNAME_HINT,
   COMPOSE_PROXY_NOTE,
   EMPTY_COMPOSE_HOSTNAME_MESSAGE,
   LETS_ENCRYPT_CHOICE_TEXT,
   manageHereInsteadPrompt,
   missingCertificateMessage,
-  panelCertificateHint,
+  NEW_HOSTING_CERTIFICATE_HINT,
   PENDING_REMOVAL_CERTIFICATE_HINT,
   pendingRemovalNote,
   removeHostnamePrompt,
@@ -83,8 +89,7 @@ describe('plain hosting words', () => {
       ...RAW_REFUSALS.map((refusal) => hostingActionErrorMessage(refusal)),
       pendingRemovalNote(true),
       pendingRemovalNote(false),
-      panelCertificateHint(true),
-      panelCertificateHint(false),
+      NEW_HOSTING_CERTIFICATE_HINT,
       PENDING_REMOVAL_CERTIFICATE_HINT,
       ...STATES.flatMap((state) => [
         removeHostnamePrompt('example.test', state),
@@ -101,12 +106,6 @@ describe('plain hosting words', () => {
   it('says what the next deploy does with a hostname removed from the file', () => {
     expect(pendingRemovalNote(false)).toMatch(/^This hostname will be removed on the next deploy\./)
     expect(pendingRemovalNote(true)).toMatch(/managed on this screen again/)
-  })
-
-  it('points at the Let’s Encrypt box only while it is shown', () => {
-    expect(panelCertificateHint(true)).toMatch(/tick the box below/)
-    expect(panelCertificateHint(false)).not.toMatch(/tick the box/)
-    expect(panelCertificateHint(false)).toMatch(/enter a hostname and keep Self-signed picked/)
   })
 
   it('names a library certificate by its name, then its first name on it, then its id', () => {
@@ -197,7 +196,7 @@ describe('plain hosting words', () => {
   })
 
   it('says what Remove hostname really does in each state', () => {
-    expect(removeHostnamePrompt('example.test', 'deployed')).toContain('stops being served')
+    expect(removeHostnamePrompt('example.test', 'deployed')).toContain('released at once')
     expect(removeHostnamePrompt('example.test', 'adopted')).toContain(
       'managed on this screen again'
     )
@@ -205,11 +204,110 @@ describe('plain hosting words', () => {
     expect(removeHostnamePrompt('example.test', 'not-deployed')).toContain('not served yet')
   })
 
+  it('says the name is released, and the route goes at the next deploy only when a server holds it', () => {
+    expect(
+      hostnameReleasedMessage('example.test', { removed: true, serverUpdate: 'next_deploy' })
+    ).toBe('example.test is released. The server stops serving it at the next deploy.')
+    expect(
+      hostnameReleasedMessage('example.test', { removed: true, serverUpdate: 'not_deployed' })
+    ).toBe('example.test is released.')
+    expect(hostnameReleasedMessage('example.test', { removed: true })).toBe(
+      'example.test is released.'
+    )
+    expect(hostnameReleasedMessage('example.test', { removed: false })).toBe(
+      'example.test is managed on this screen again.'
+    )
+  })
+
+  it('names the hostnames the control plane freed', () => {
+    expect(
+      hostnameReleasedMessage('fallback.test', {
+        removed: true,
+        hostnames: ['example.test', 'www.example.test'],
+        serverUpdate: 'next_deploy',
+      })
+    ).toBe(
+      'example.test, www.example.test are released. The server stops serving them at the next deploy.'
+    )
+    expect(hostnameReleasedMessage('fallback.test', { removed: true, hostnames: [] })).toBe(
+      'fallback.test is released.'
+    )
+  })
+
+  it('words a release refused because a deploy is running, pointing at Release now', () => {
+    expect(
+      removeNowErrorMessage({
+        error:
+          '/api/client/v1/hostings/abc/remove-now failed: HTTP 409: environment_deploy_running — A deploy is running.',
+      })
+    ).toBe(REMOVE_NOW_DEPLOY_RUNNING_MESSAGE)
+    expect(REMOVE_NOW_DEPLOY_RUNNING_MESSAGE).toMatch(/A deploy is running.*Release now/)
+    const other = removeNowErrorMessage({ error: 'Something broke' })
+    expect(other).toContain('could not be released now')
+    expect(other).toContain('Release now')
+  })
+
+  describe('releaseHostnameNow', () => {
+    const refresh = () => vi.fn(async () => undefined)
+
+    it('says released, and refreshes the list', async () => {
+      const done = refresh()
+      const outcome = await releaseHostnameNow('example.test', {
+        run: async () => ({
+          ok: true,
+          value: { removed: true, hostnames: ['example.test'], serverUpdate: 'not_deployed' },
+        }),
+        refresh: done,
+      })
+      expect(outcome).toEqual({ tone: 'ok', message: 'example.test is released.' })
+      expect(done).toHaveBeenCalledTimes(1)
+    })
+
+    it('shows the running-deploy refusal and still refreshes the list', async () => {
+      const done = refresh()
+      const outcome = await releaseHostnameNow('example.test', {
+        run: async () => ({
+          ok: false,
+          error: 'x failed: HTTP 409: environment_deploy_running',
+        }),
+        refresh: done,
+      })
+      expect(outcome).toEqual({ tone: 'error', message: REMOVE_NOW_DEPLOY_RUNNING_MESSAGE })
+      expect(done).toHaveBeenCalledTimes(1)
+    })
+
+    it('treats a 404 as an error, not as released', async () => {
+      const outcome = await releaseHostnameNow('example.test', {
+        run: async () => ({ ok: false, error: 'x failed: HTTP 404: Not found' }),
+        refresh: refresh(),
+      })
+      expect(outcome.tone).toBe('error')
+    })
+  })
+
   it('says what a move keeps, and that undeployed changes stay behind for a deployed hostname', () => {
     expect(manageHereInsteadPrompt('example.test', 'deployed')).toContain('as last deployed')
     expect(manageHereInsteadPrompt('example.test', 'deployed')).toContain('not carried over')
     expect(manageHereInsteadPrompt('example.test', 'not-deployed')).toContain('certificate choice')
     expect(manageHereInsteadPrompt('example.test', 'held-by-panel')).toContain('Finish moving')
+  })
+
+  it('words a hostname save refused with 409 hostname_in_use, and keeps the fallback otherwise', () => {
+    expect(hostingSaveErrorMessage({ error: RAW_REFUSALS[1] }, 'Could not save.')).toBe(
+      HOSTNAME_IN_USE_MESSAGE
+    )
+    expect(
+      hostingSaveErrorMessage({ error: null, cause: undefined }, 'Could not save this hostname.')
+    ).toBe('Could not save this hostname.')
+  })
+
+  it('keeps the unreachable wording for a network failure that also fills error', () => {
+    expect(
+      hostingSaveErrorMessage(
+        { error: 'Failed to fetch', cause: new TypeError('Failed to fetch') },
+        'Could not save this hostname.'
+      )
+    ).toBe(CONTROL_PLANE_UNREACHABLE_COPY)
   })
 
   it('words a refused hosting action without paths or codes', () => {

@@ -11,12 +11,11 @@ import {
   removeTunnelHostname,
   rotateTunnelRunToken,
   setServerTunnelCarrying,
-  setTunnelVerifyOrigin,
+  setTunnelHostnameReach,
   updateTunnelPlacement,
   type ConfirmedDnsRecord,
   type CreateTunnelBody,
   type TunnelPlacementBody,
-  type TunnelVerifyOriginBody,
 } from '@/lib/instance-api'
 import { queryKeys, useApiMutation } from '@/lib/query-client'
 import { rotationRunning } from '@/lib/tunnel-runs'
@@ -24,8 +23,10 @@ import { rotationRunning } from '@/lib/tunnel-runs'
 /**
  * Tunnels of the organization. Owners and managers only: a refusal reads as an
  * empty list so the global 403 handler is not invoked for a role check the
- * screen already shows. Connector status moves on its own, so it refreshes
- * every half minute while the screen is open.
+ * screen already shows, and the answer is marked `forbidden` so the refresh
+ * stops instead of asking again every half minute. Connector status moves on
+ * its own, so for a manager it refreshes every half minute while the screen is
+ * open.
  */
 export function useTunnels(orgId: string, options?: Readonly<{ enabled?: boolean }>) {
   return useQuery({
@@ -34,15 +35,29 @@ export function useTunnels(orgId: string, options?: Readonly<{ enabled?: boolean
       try {
         return await fetchTunnels(orgId)
       } catch (err) {
-        if (isForbiddenError(err)) return { tunnels: [] }
+        if (isForbiddenError(err)) return { tunnels: [], forbidden: true as const }
         throw err
       }
     },
     enabled: (options?.enabled ?? true) && orgId.length > 0,
+    // A refusal is never kept as fresh, so a role granted later reads the list at once.
+    staleTime: (query) => (query.state.data && 'forbidden' in query.state.data ? 0 : 5 * 60 * 1000),
     // A run-token rotation moves on its own: follow it a little closer while one runs.
-    refetchInterval: (query) =>
-      query.state.data?.tunnels.some((t) => rotationRunning(t.runTokenRotation)) ? 15_000 : 30_000,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (data && 'forbidden' in data) return false
+      return data?.tunnels.some((t) => rotationRunning(t.runTokenRotation)) ? 15_000 : 30_000
+    },
   })
+}
+
+/** One tunnel's hostnames; shared so every reader polls and caches them the same way. */
+export function tunnelHostnamesOptions(orgId: string, tunnelId: string) {
+  return {
+    queryKey: queryKeys.org(orgId).tunnelHostnames(tunnelId),
+    queryFn: () => fetchTunnelHostnames(orgId, tunnelId),
+    refetchInterval: 30_000,
+  }
 }
 
 export function useTunnelHostnames(
@@ -51,10 +66,8 @@ export function useTunnelHostnames(
   options?: Readonly<{ enabled?: boolean }>
 ) {
   return useQuery({
-    queryKey: queryKeys.org(orgId).tunnelHostnames(tunnelId),
-    queryFn: () => fetchTunnelHostnames(orgId, tunnelId),
+    ...tunnelHostnamesOptions(orgId, tunnelId),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && tunnelId.length > 0,
-    refetchInterval: 30_000,
   })
 }
 
@@ -107,7 +120,13 @@ export function useDeleteTunnel(orgId: string) {
 }
 
 export function useAddTunnelHostname(orgId: string, tunnelId: string) {
-  const invalidate = useInvalidateTunnels(orgId)
+  const invalidateTunnels = useInvalidateTunnels(orgId)
+  const queryClient = useQueryClient()
+  // A site's certificate options depend on which tunnel carries its names.
+  const invalidate = async () => {
+    await invalidateTunnels()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all })
+  }
   return useApiMutation({
     mutationFn: (body: {
       hostname: string
@@ -146,13 +165,21 @@ export function useSetServerTunnelCarrying(orgId: string) {
   })
 }
 
-export function useSetTunnelVerifyOrigin(orgId: string, tunnelId: string) {
+/** Open or close one tunnel name for direct visitors; refreshes the names and the tunnels (their verified names). */
+export function useSetTunnelHostnameReach(orgId: string, tunnelId: string) {
   const invalidate = useInvalidateTunnels(orgId)
+  const queryClient = useQueryClient()
   return useApiMutation({
-    mutationFn: (body: TunnelVerifyOriginBody) => setTunnelVerifyOrigin(orgId, tunnelId, body),
+    mutationFn: (input: { doorwayId: string; isLocalOnly: boolean }) =>
+      setTunnelHostnameReach(orgId, tunnelId, input.doorwayId, input.isLocalOnly),
     retry: false,
-    onSuccess: invalidate,
-    fallbackError: 'Failed to change the verified connection',
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.org(orgId).tunnelHostnames(tunnelId),
+      })
+      await invalidate()
+    },
+    fallbackError: 'Failed to change how this name is reached',
   })
 }
 

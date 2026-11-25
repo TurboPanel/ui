@@ -10,6 +10,7 @@ import {
   TextInput,
   useWindowDimensions,
   View,
+  type ViewInstance,
 } from 'react-native'
 import { HeaderChevron } from '@/components/header-chevron'
 import { SearchIcon } from '@/components/icons/nav-icons'
@@ -21,6 +22,7 @@ import {
   type SelectOption,
 } from '@/lib/select-options'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
+import { useRegisterOpenDialog } from '@/lib/version-prompt-gate'
 
 export type { SelectOption }
 
@@ -84,9 +86,7 @@ function SelectRow({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ selected: active, disabled }}
-      accessibilityLabel={
-        row.detail ? `${row.label}, ${row.detail}` : row.label
-      }
+      accessibilityLabel={row.detail ? `${row.label}, ${row.detail}` : row.label}
       disabled={disabled}
       style={({ pressed }) => [
         styles.row,
@@ -149,8 +149,7 @@ function SelectPickerPanel({
   // Land the open list on the current value instead of making the operator
   // re-scroll a 600-row list to find where they are (timezones).
   const selectedIndex = rows.findIndex((row) => row.value === value)
-  const initialScrollIndex =
-    query === '' && selectedIndex > 4 ? selectedIndex : undefined
+  const initialScrollIndex = query === '' && selectedIndex > 4 ? selectedIndex : undefined
 
   const card = (
     <View
@@ -167,11 +166,7 @@ function SelectPickerPanel({
       ]}
     >
       {showSearch ? (
-        <SelectSearchField
-          value={query}
-          placeholder={searchPlaceholder}
-          onChange={onQueryChange}
-        />
+        <SelectSearchField value={query} placeholder={searchPlaceholder} onChange={onQueryChange} />
       ) : null}
       {rows.length === 0 ? (
         <EmptyState title="No options match." />
@@ -205,6 +200,9 @@ function SelectPickerPanel({
       )}
     </View>
   )
+
+  // The list is mounted only while open.
+  useRegisterOpenDialog(true)
 
   return (
     <Modal
@@ -279,28 +277,18 @@ export function Select({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [anchor, setAnchor] = useState({ top: 56, left: 16, width: 280 })
-  const triggerRef = useRef<View | null>(null)
+  const triggerRef = useRef<ViewInstance | null>(null)
 
-  const trigger = resolveSelectTriggerLabel(
-    options,
-    value,
-    placeholder,
-    noneLabel,
-  )
-  const showSearch = shouldShowSelectSearch(
-    options.length + (noneLabel != null ? 1 : 0),
-  )
+  const trigger = resolveSelectTriggerLabel(options, value, placeholder, noneLabel)
+  const showSearch = shouldShowSelectSearch(options.length + (noneLabel != null ? 1 : 0))
 
   const rows = useMemo<PickerRow[]>(() => {
     const filtered = filterSelectOptions(options, query)
     if (noneLabel == null) return filtered
     // The none row competes on its label like any option while filtering.
     const needle = query.trim().toLowerCase()
-    const noneMatches =
-      needle === '' || noneLabel.toLowerCase().includes(needle)
-    return noneMatches
-      ? [{ value: null, label: noneLabel }, ...filtered]
-      : filtered
+    const noneMatches = needle === '' || noneLabel.toLowerCase().includes(needle)
+    return noneMatches ? [{ value: null, label: noneLabel }, ...filtered] : filtered
   }, [options, query, noneLabel])
 
   useEffect(() => {

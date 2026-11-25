@@ -75,8 +75,8 @@ describe('words and bodies', () => {
   it('names the access and the server', () => {
     expect(adminToolAccessLabel('admin')).toBe('Database Admin')
     expect(adminToolAccessLabel('read-only')).toBe('Read-Only')
-    expect(hostnameHint('omicron')).toBe(
-      'Point this name at omicron before you deploy, like any site.'
+    expect(hostnameHint('server-f')).toBe(
+      'Point this name at server-f before you deploy, like any site.'
     )
     expect(hostnameHint()).toContain("this Database Cluster's server")
   })
@@ -130,16 +130,6 @@ describe('plainAdminToolNotes', () => {
       ])
     ).toEqual([
       "The tool's login can only connect on shop, blog instead of full Database Admin rights.",
-    ])
-  })
-
-  it('turns both older daemon notes into one sentence', () => {
-    const older = plainAdminToolNotes([
-      "This server's TurboPanel daemon is older than owner roles, so the login was added with read and write access to the data instead of the full Database admin rights. Update the server and apply again to give it the full rights on databases that have an owner role.",
-      "This server's TurboPanel daemon is older than the Database admin login, so the login was added with read and write access instead of all rights on its databases. Update the server and apply again to give it the full rights.",
-    ])
-    expect(older).toEqual([
-      "This server's daemon is older, so the tool's login got read and write access only. Update the server, then apply again.",
     ])
   })
 

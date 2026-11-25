@@ -34,6 +34,7 @@ import { useOrganizationRecord } from '@/lib/queries/auth'
 import { isEmojiIconAllowedOf } from '@/lib/icons'
 import { showsBreadcrumb } from '@/lib/header-breadcrumb'
 import { colors, spacing, webPointer } from '@/lib/theme'
+import { failedRunMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 
 /**
@@ -111,9 +112,7 @@ function ProjectHeader() {
       name: trimmed || undefined,
     })
     if (!result.ok) {
-      if (updateProject.actionError) {
-        setError(updateProject.actionError)
-      }
+      setError(failedRunMessage(result, 'Could not save the project name.'))
     }
   }
 
@@ -246,6 +245,9 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
     project,
     loading,
     error,
+    errorReload,
+    invalidateProject,
+    setError,
     needsSetup,
     isWorkspaceKindResolved,
     isSystemProject,
@@ -280,6 +282,18 @@ export function ProjectShell({ children }: Readonly<{ children: ReactNode }>) {
       <ProjectHeader />
 
       {error ? <Text style={panelStyles.error}>{error}</Text> : null}
+      {error && errorReload ? (
+        <Pressable
+          accessibilityRole="button"
+          style={StyleSheet.flatten([styles.reloadLink, webPointer])}
+          onPress={() => {
+            setError(null)
+            void invalidateProject()
+          }}
+        >
+          <Text style={styles.reloadText}>Reload</Text>
+        </Pressable>
+      ) : null}
 
       <ProjectShellChrome
         managed={managed}
@@ -333,6 +347,16 @@ const styles = StyleSheet.create({
   crumbLinkText: {
     color: colors.textMuted,
     fontSize: 15,
+    fontWeight: '600',
+  },
+  reloadLink: {
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  reloadText: {
+    color: colors.link,
+    fontSize: 14,
     fontWeight: '600',
   },
   backLink: {

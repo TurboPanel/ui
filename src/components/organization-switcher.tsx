@@ -8,6 +8,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type ViewInstance,
 } from 'react-native'
 import { CreateOrganizationModal } from '@/components/create-organization-modal'
 import { GlassSurface } from '@/components/glass/glass-surface'
@@ -104,7 +105,7 @@ export function OrganizationSwitcherSegment({
   const [menuOpen, setMenuOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const buttonRef = useRef<View>(null)
+  const buttonRef = useRef<ViewInstance>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
 
   useEffect(() => {

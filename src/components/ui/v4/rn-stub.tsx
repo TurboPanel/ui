@@ -76,13 +76,20 @@ function aria(props: Props) {
     'aria-expanded': (props['aria-expanded'] as boolean | undefined) ?? state.expanded,
     'aria-live': props.accessibilityLiveRegion as string | undefined,
     'aria-hidden': props.accessibilityElementsHidden ? true : undefined,
+    'data-testid': props.testID as string | undefined,
     'data-style': JSON.stringify(flatten(props.style)),
   }
 }
 
 function dom(tag: string) {
   return function Stub(props: Props) {
-    return createElement(tag, aria(props), props.children)
+    // Pointer and focus handlers, for the components that react to them.
+    const { onPointerEnter, onPointerLeave, onFocus, onBlur } = props as Record<string, never>
+    return createElement(
+      tag,
+      { ...aria(props), onPointerEnter, onPointerLeave, onFocus, onBlur },
+      props.children
+    )
   }
 }
 
@@ -114,6 +121,9 @@ export const reactNativeStub = {
       // As React Native Web: a secure box is a password input, autoComplete is the attribute.
       type: props.secureTextEntry === true && props.multiline !== true ? 'password' : undefined,
       autoComplete: props.autoComplete as string | undefined,
+      // As React Native Web: a multi-line box is a textarea; text-security hides it in CSS.
+      'data-multiline': props.multiline === true ? 'yes' : undefined,
+      'data-text-security': flatten(props.style).WebkitTextSecurity as string | undefined,
       disabled: props.editable === false,
       onChange: (event: { target: { value: string } }) =>
         (props.onChangeText as ((text: string) => void) | undefined)?.(event.target.value),

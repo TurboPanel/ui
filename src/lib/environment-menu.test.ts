@@ -5,7 +5,6 @@ import {
   DESTROY_EXPLANATION,
   destroyConfirmNameHint,
   destroyConfirmReady,
-  destroyOutdatedServersCopy,
   destroyStaysOnCopy,
   LAST_ENVIRONMENT_REASON,
   PRIMARY_ENVIRONMENT_REASON,
@@ -66,6 +65,13 @@ describe('environmentActionItems', () => {
   it('leaves redeploy and stop out until something has been deployed', () => {
     expect(ids({ ...base, hasContainers: false, isRunning: false })).not.toContain('cacheless')
     expect(ids({ ...base, hasContainers: false, isRunning: false })).not.toContain('stop')
+  })
+
+  it('keeps Destroy reachable when nothing is known to be deployed or running', () => {
+    const unknown = { ...base, hasContainers: false, isRunning: false }
+    expect(ids(unknown)).toContain('destroy')
+    const destroy = environmentActionItems(unknown).find((entry) => entry.id === 'destroy')
+    expect(destroy?.disabledReason).toBeNull()
   })
 
   it('leaves Stop out of a stopped environment', () => {
@@ -129,11 +135,7 @@ describe('destroy copy', () => {
     expect(DESTROY_DELETE_VOLUMES_LABEL).toBe('Also Delete the Data Volumes')
   })
 
-  it('names the servers that need a daemon update', () => {
-    expect(destroyOutdatedServersCopy([])).toBeNull()
-    expect(destroyOutdatedServersCopy(['web-1', 'web-2'])).toBe(
-      'Update the daemon on web-1, web-2 before deleting data volumes.'
-    )
+  it('words the confirm hint and where a copy stays', () => {
     expect(destroyConfirmNameHint('staging')).toContain('Type staging')
     expect(destroyStaysOnCopy([])).toBeNull()
     expect(destroyStaysOnCopy(['old-web'])).toBe('A copy on old-web stays.')
@@ -146,19 +148,17 @@ describe('destroyConfirmReady', () => {
     typedName: 'staging',
     expectedName: 'staging',
     volumesLoaded: true,
-    outdatedServerCount: 0,
   }
 
   it('lets a plain Destroy through', () => {
     expect(destroyConfirmReady({ ...ready, deleteVolumes: false, typedName: '' })).toBe(true)
   })
 
-  it('needs the exact name, the list and current daemons to delete data', () => {
+  it('needs the exact name and the list to delete data', () => {
     expect(destroyConfirmReady(ready)).toBe(true)
     expect(destroyConfirmReady({ ...ready, typedName: 'Staging' })).toBe(false)
     expect(destroyConfirmReady({ ...ready, typedName: 'staging ' })).toBe(false)
     expect(destroyConfirmReady({ ...ready, volumesLoaded: false })).toBe(false)
-    expect(destroyConfirmReady({ ...ready, outdatedServerCount: 1 })).toBe(false)
     expect(destroyConfirmReady({ ...ready, expectedName: '', typedName: '' })).toBe(false)
   })
 })

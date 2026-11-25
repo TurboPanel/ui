@@ -6,6 +6,7 @@ import {
 } from '@/lib/instance-api'
 import { useApiMutation, queryKeys } from '@/lib/query-client'
 import { certificatePollInterval } from '@/lib/hosting-certificate'
+import { ORIGIN_WAITING_POLL_MS, waitsForOriginCertificate } from '@/lib/name-certificates'
 
 /** One hosting with its derived certificate block. */
 export function useHostingCertificate(
@@ -18,7 +19,13 @@ export function useHostingCertificate(
     queryFn: () => fetchHosting(hostingId ?? ''),
     enabled: (options?.enabled ?? true) && orgId.length > 0 && hostingId !== null,
     // Follows a certificate the server is still issuing, without a reload.
-    refetchInterval: (query) => certificatePollInterval(query.state.data?.hosting.certificate),
+    refetchInterval: (query) => {
+      const hosting = query.state.data?.hosting
+      return (
+        certificatePollInterval(hosting?.certificate) ||
+        (waitsForOriginCertificate(hosting?.names) && ORIGIN_WAITING_POLL_MS)
+      )
+    },
   })
 }
 
@@ -30,18 +37,6 @@ export function useUseLetsEncrypt(orgId: string, hostingId: string) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all })
     },
-  })
-}
-
-/** The same request for a hosting that was only just saved, so its id is known at call time. */
-export function useRequestLetsEncrypt(orgId: string) {
-  const queryClient = useQueryClient()
-  return useApiMutation({
-    mutationFn: (hostingId: string) => requestLetsEncryptForHosting(hostingId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.org(orgId).hostings.all })
-    },
-    fallbackError: 'Could not start Let’s Encrypt.',
   })
 }
 

@@ -438,7 +438,6 @@ describe('useEnvironmentDataVolumes', () => {
     fetchEnvironmentDataVolumes.mockResolvedValueOnce({
       volumes: [],
       kept: [],
-      outdatedServers: [],
     })
     const { result, rerender } = renderHook(
       ({ enabled }: { enabled: boolean }) =>

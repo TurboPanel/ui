@@ -878,6 +878,7 @@ function ManagedDataPanels({
         busy={inFlight}
       />
       <ManagedBackupLoginSection
+        engine={engine}
         orgId={orgId}
         environmentId={environmentId}
         canManage={canManage}

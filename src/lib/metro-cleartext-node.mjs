@@ -9,7 +9,7 @@
  * Development-client binaries load the JS bundle from Metro over plaintext
  * HTTP (`:8081`). Caddy TLS is `:8443` — Metro never speaks HTTPS, so
  * `https://host:8081` always fails. iOS App Transport Security still blocks
- * `http://studio.lan:8081` unless Info.plist allows it: `.lan` is not a Bonjour
+ * `http://dev-workstation.example.lan:8081` unless Info.plist allows it: `.lan` is not a Bonjour
  * `.local` name, so `NSAllowsLocalNetworking` alone is not enough.
  */
 

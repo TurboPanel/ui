@@ -3,7 +3,10 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedUserRecord } from '@/lib/managed-services'
 import {
-  BACKUP_LOGIN_HELP,
+  backupLoginHelp,
+  BACKUP_LOGIN_HELP_MARIADB,
+  BACKUP_LOGIN_HELP_MYSQL,
+  BACKUP_LOGIN_HELP_POSTGRES,
   BACKUP_LOGIN_LOAD_ERROR,
   BACKUP_PLACES_HELP,
   describeBackupPlaces,
@@ -128,12 +131,57 @@ describe('backup login places', () => {
   })
 })
 
+describe('backup login help', () => {
+  it('names the MySQL grants, the lock and why the password is admin-like', () => {
+    const text = backupLoginHelp('mysql')
+    for (const word of [
+      'SELECT',
+      'SHOW VIEW',
+      'TRIGGER',
+      'EVENT',
+      'SHOW_ROUTINE',
+      'FLUSH_TABLES',
+      'mysql.user',
+    ]) {
+      expect(text).toContain(word)
+    }
+    expect(text).toContain('in every database')
+    expect(text).toContain('global read lock')
+    expect(text).toContain('like an admin one')
+    expect(text).not.toContain('pg_read_all_data')
+  })
+
+  it('names the MariaDB grants without the MySQL-only FLUSH_TABLES', () => {
+    const text = backupLoginHelp('mariadb')
+    expect(text).toBe(BACKUP_LOGIN_HELP_MARIADB)
+    expect(text).toContain('LOCK TABLES')
+    expect(text).toContain('SHOW CREATE ROUTINE')
+    expect(text).not.toContain('FLUSH_TABLES')
+  })
+
+  it('names the Postgres grants and nothing MySQL-only', () => {
+    const text = backupLoginHelp('postgres')
+    expect(text).toBe(BACKUP_LOGIN_HELP_POSTGRES)
+    expect(text).toContain('pg_read_all_data')
+    expect(text).toContain('BYPASSRLS')
+    for (const word of ['TRIGGER', 'EVENT', 'SHOW_ROUTINE', 'FLUSH_TABLES', 'mysql.user']) {
+      expect(text).not.toContain(word)
+    }
+  })
+
+  it('says nothing engine-specific for an engine it has no grants for', () => {
+    expect(backupLoginHelp(null)).not.toMatch(/TRIGGER|pg_read_all_data/)
+    expect(backupLoginHelp('redis')).not.toMatch(/TRIGGER|pg_read_all_data/)
+  })
+})
+
 describe('managed backup login panel', () => {
   it('adds the login with its places and shows the password once', async () => {
     const shown = ['pw', '1'].join('-')
     const onCreate = vi.fn().mockResolvedValue({ password: shown, appliedUsername: 'backup' })
     render(
       <ManagedBackupLoginPanel
+        engine="mysql"
         login={null}
         canManage
         busy={false}
@@ -142,7 +190,7 @@ describe('managed backup login panel', () => {
       />
     )
     expect(screen.getByText('Backup Login')).toBeTruthy()
-    expect(screen.getByText(BACKUP_LOGIN_HELP)).toBeTruthy()
+    expect(screen.getByText(BACKUP_LOGIN_HELP_MYSQL)).toBeTruthy()
     fireEvent.change(screen.getByLabelText('Connects From'), {
       target: { value: 'internal, address:10.0.0.5' },
     })
@@ -158,6 +206,7 @@ describe('managed backup login panel', () => {
     const onCreate = vi.fn()
     render(
       <ManagedBackupLoginPanel
+        engine="mysql"
         login={null}
         canManage
         busy={false}
@@ -183,6 +232,7 @@ describe('managed backup login panel', () => {
       )
     render(
       <ManagedBackupLoginPanel
+        engine="mysql"
         login={null}
         canManage
         busy={false}
@@ -204,6 +254,7 @@ describe('managed backup login panel', () => {
     const onDelete = vi.fn().mockResolvedValue(undefined)
     render(
       <ManagedBackupLoginPanel
+        engine="mysql"
         login={BACKUP}
         canManage
         busy={false}
@@ -221,6 +272,7 @@ describe('managed backup login panel', () => {
     const onDelete = vi.fn()
     render(
       <ManagedBackupLoginPanel
+        engine="mysql"
         login={BACKUP}
         canManage
         busy={false}
@@ -237,6 +289,7 @@ describe('managed backup login panel', () => {
   it('offers nothing to change without manage rights', () => {
     render(
       <ManagedBackupLoginPanel
+        engine="mysql"
         login={null}
         canManage={false}
         busy={false}
@@ -279,6 +332,7 @@ describe('managed backup login section', () => {
     mockHooks(null, true)
     const { container } = render(
       <ManagedBackupLoginSection
+        engine="mysql"
         orgId="o"
         environmentId="e"
         canManage
@@ -293,6 +347,7 @@ describe('managed backup login section', () => {
     mockHooks(null, false, { data: null })
     const { container } = render(
       <ManagedBackupLoginSection
+        engine="mysql"
         orgId="o"
         environmentId="e"
         canManage
@@ -308,6 +363,7 @@ describe('managed backup login section', () => {
     mockHooks(null, false, { isError: true, data: undefined })
     render(
       <ManagedBackupLoginSection
+        engine="mysql"
         orgId="o"
         environmentId="e"
         canManage
@@ -324,6 +380,7 @@ describe('managed backup login section', () => {
     const registerCommand = vi.fn()
     render(
       <ManagedBackupLoginSection
+        engine="mysql"
         orgId="o"
         environmentId="e"
         canManage
@@ -343,6 +400,7 @@ describe('managed backup login section', () => {
     run.mockResolvedValueOnce({ ok: false, error: 'Update the server, then try again.' })
     render(
       <ManagedBackupLoginSection
+        engine="mysql"
         orgId="o"
         environmentId="e"
         canManage
@@ -359,6 +417,7 @@ describe('managed backup login section', () => {
     const registerCommand = vi.fn()
     render(
       <ManagedBackupLoginSection
+        engine="mysql"
         orgId="o"
         environmentId="e"
         canManage

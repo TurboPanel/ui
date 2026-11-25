@@ -1,5 +1,38 @@
 import type { EmailDeliveryStatus, EmailSettingSource } from '@/lib/instance-api'
 
+export type SmtpEncryption = 'auto' | 'tls' | 'starttls' | 'none'
+
+/** Choices for the SMTP Encryption dropdown, in display order. */
+export const SMTP_ENCRYPTION_OPTIONS: readonly Readonly<{
+  value: SmtpEncryption
+  label: string
+  detail: string
+}>[] = [
+  { value: 'auto', label: 'Auto', detail: 'TLS on port 465, otherwise STARTTLS' },
+  { value: 'tls', label: 'TLS', detail: 'Encrypted from the first byte' },
+  { value: 'starttls', label: 'STARTTLS', detail: 'Connect, then require an upgrade' },
+  { value: 'none', label: 'None', detail: 'Plain text, no encryption' },
+]
+
+export const SMTP_ENCRYPTION_HELP =
+  'Auto uses TLS on port 465 and requires STARTTLS on any other port. Certificates are always checked.'
+
+export const SMTP_ENCRYPTION_NONE_WARNING =
+  'With None, the SMTP password and every message travel unencrypted. Use it only for a local or trusted relay.'
+
+/** The mode for a stored value. A missing value (an older control plane, or never set) is Auto. */
+export function smtpEncryptionValue(value: string | null | undefined): SmtpEncryption {
+  const normalized = value?.trim().toLowerCase()
+  const match = SMTP_ENCRYPTION_OPTIONS.find((option) => option.value === normalized)
+  return match ? match.value : 'auto'
+}
+
+/** Label for a locked (environment-set) Encryption value. */
+export function smtpEncryptionLabel(value: string | null | undefined): string {
+  const mode = smtpEncryptionValue(value)
+  return SMTP_ENCRYPTION_OPTIONS.find((option) => option.value === mode)?.label ?? 'Auto'
+}
+
 /** Which segment of the provider picker is selected: Workers can only send via Mailgun. */
 export function emailProviderSegmentValue(
   isWorkers: boolean,

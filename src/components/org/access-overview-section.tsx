@@ -32,6 +32,11 @@ import {
   useTeams,
 } from '@/lib/queries/access'
 import { getAccessManagementPermissionKey, useCan } from '@/lib/query-client'
+import {
+  PERMISSIONS_BY_SCOPE,
+  grantPermissionLabel,
+  permissionTitle,
+} from '@/lib/access-permissions'
 import { orEmptyArray } from '@/lib/or-empty-array'
 import { chrome, colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -48,11 +53,6 @@ const SUBJECT_KIND_OPTIONS = [
   { value: 'team', label: 'team' },
   { value: 'organization', label: 'organization' },
 ] as const
-
-const PERMISSIONS_BY_SCOPE: Record<AccessScopeKind, PermissionKey[]> = {
-  organization: ['organization:own', 'organization:manage'],
-  team: ['team:own', 'team:manage'],
-}
 
 type ScopeItem = {
   id: string
@@ -256,7 +256,9 @@ function AccessGrantCard({
           <View style={styles.badgeRow}>
             {/* Deny grants are not supported — every grant is an allow grant. */}
             <Badge label={grant.effect} tone="ok" />
-            <Text style={panelStyles.detailLine}>permission: {grant.permissionKey}</Text>
+            <Text style={panelStyles.detailLine}>
+              permission: {grantPermissionLabel(grant.permissionKey)}
+            </Text>
           </View>
         </View>
         {canManage ? (
@@ -384,7 +386,9 @@ function AddGrantForm({
                 style={[styles.pickerRow, selected && styles.pickerRowSelected]}
                 onPress={() => onPermissionSelect(permission.key)}
               >
-                <Text style={styles.pickerTitle}>{permission.displayName}</Text>
+                <Text style={styles.pickerTitle}>
+                  {permissionTitle(permission.key, permission.displayName)}
+                </Text>
                 <Text style={styles.pickerMeta}>{permission.key}</Text>
               </Pressable>
             )
@@ -497,8 +501,8 @@ export function AccessOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
     }
     setActionError(null)
     revokeGrantMutation.mutate(grantId, {
-      onError: () => {
-        setActionError(revokeGrantMutation.actionError ?? 'Failed to revoke access grant')
+      onError: (err) => {
+        setActionError(userErrorMessage(err, 'Failed to revoke access grant'))
       },
     })
   }
@@ -532,8 +536,8 @@ export function AccessOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         setSubjectId('')
         setSelectedPermissionKey(null)
       },
-      onError: () => {
-        setSubmitError(createGrantMutation.actionError ?? 'Failed to create access grant')
+      onError: (err) => {
+        setSubmitError(userErrorMessage(err, 'Failed to create access grant'))
       },
     })
   }
@@ -555,8 +559,8 @@ export function AccessOverviewSection({ orgId }: Readonly<{ orgId: string }>) {
         onSuccess: () => {
           setInviteEmail('')
         },
-        onError: () => {
-          setInviteError(createInvitationMutation.actionError ?? 'Failed to send invitation')
+        onError: (err) => {
+          setInviteError(userErrorMessage(err, 'Failed to send invitation'))
         },
       }
     )

@@ -169,19 +169,11 @@ export function defaultWwwMode(hostname: string): HostingWwwMode {
   return typedIsWww ? 'root-to-www' : 'www-to-root'
 }
 
-/**
- * The mode stored on a hosting's options. A hosting saved before the choice
- * existed may still carry `wwwRedirect: true`, read the way the control plane
- * reads it (the name as typed stays the site).
- */
+/** The mode stored on a hosting's options; off when unset or unknown. */
 export function readWwwMode(options: unknown): HostingWwwMode {
   if (!options || typeof options !== 'object' || Array.isArray(options)) return 'off'
-  const record = options as Record<string, unknown>
-  if (isHostingWwwMode(record.www)) return record.www
-  if (record.wwwRedirect !== true) return 'off'
-  const hostnames = Array.isArray(record.hostnames) ? record.hostnames : []
-  const first = typeof hostnames[0] === 'string' ? hostnames[0] : ''
-  return first.startsWith(WWW_PREFIX) ? 'root-to-www' : 'www-to-root'
+  const { www } = options as Record<string, unknown>
+  return isHostingWwwMode(www) ? www : 'off'
 }
 
 /**

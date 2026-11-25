@@ -9,10 +9,18 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type ViewInstance,
+} from 'react-native'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useRouter, type Href } from 'expo-router'
-import { LogTranscriptView } from '@/components/org/logs/log-transcript-view'
+import { LogViewer } from '@/components/logs/log-viewer'
 import { DeployProgressRail } from '@/components/org/project/deploy-progress-rail'
 import { useDeployLogProgress } from '@/components/org/project/use-deploy-log-progress'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -27,7 +35,13 @@ import {
   type PreviewDeploymentPurpose,
 } from '@/components/org/project/preview-deployment-modal'
 import { environmentStatusTone, hasHostDeployedContainers } from '@/lib/container-status'
-import { deployPreviewFailureMessage, deployRefusalMessage } from '@/lib/deploy-error-message'
+import {
+  deployPreviewFailureMessage,
+  deployRefusalMessage,
+  networkSharesRefusalServers,
+} from '@/lib/deploy-error-message'
+import { NetworkSharesRefusalLinks } from '@/components/org/network-shares-refusal-links'
+import { useCan } from '@/lib/query-client'
 import {
   type CommandProgress,
   type CommandStatus,
@@ -53,7 +67,8 @@ import {
   type TrackedCommandEntry,
 } from '@/lib/queries'
 import { mergeComposeOverlay } from '@/lib/compose'
-import { progressChipLabel } from '@/lib/deploy-progress'
+import { progressChipLabel, stepsOf } from '@/lib/deploy-progress'
+import { liveState, nextLivePaused } from '@/lib/log-viewer'
 import { unownedPrincipalRequiredServices } from '@/lib/compose/principal-required'
 import {
   environmentConfirmName,
@@ -71,7 +86,6 @@ import {
 } from '@/lib/environment-menu'
 import {
   projectEnvironmentBindingsHref,
-  projectEnvironmentDeploymentHref,
   projectEnvironmentHostingHref,
   projectEnvironmentSettingsHref,
   projectOverviewHref,
@@ -80,7 +94,7 @@ import { resolveEffectiveServerId } from '@/lib/project-options'
 import { resolveServerLabel } from '@/lib/resource-labels'
 import { queryKeys } from '@/lib/query-keys'
 import { chrome, colors, layout, spacing, webPointer } from '@/lib/theme'
-import { userErrorMessage } from '@/lib/user-error'
+import { failedRunMessage, userErrorMessage } from '@/lib/user-error'
 
 type TrackedCommand = {
   environmentId: string
@@ -230,8 +244,8 @@ function useEnvironmentActionHandlers(
   const { orgId, projectId, selectedEnvironment } = useProjectContext()
   const environmentId = selectedEnvironment?.id ?? ''
   return {
-    'preview-merged': () => model.openComposeInspect('merged'),
-    'preview-prepared': () => model.openComposeInspect('prepared'),
+    'preview-merged': () => model.openComposeInspect('compose'),
+    'preview-prepared': () => model.openComposeInspect('summary'),
     cacheless: () => model.openDeployConfirm('cacheless'),
     stop: () => ignorePromise(model.handleStop()),
     refresh: () => {
@@ -259,7 +273,7 @@ function EnvironmentActionsMenu({ model }: Readonly<{ model: OverviewEnvironment
   const { width } = useWindowDimensions()
   const isCompact = width < layout.desktopBreakpoint
   const [menuOpen, setMenuOpen] = useState(false)
-  const buttonRef = useRef<View>(null)
+  const buttonRef = useRef<ViewInstance>(null)
   const [menuPosition, setMenuPosition] = useState({ top: 56, left: 16 })
   const remove = useOverviewEnvironmentDelete(() => ignorePromise(model.handleStop()))
   const handlers = useEnvironmentActionHandlers(model, remove.arm)
@@ -551,18 +565,8 @@ function DeployLogSection({
   const log = useCommandLog(orgId, openLog.serverId, openLog.commandId, {
     enabled: !collapsed,
   })
-  const { projectId } = useProjectContext()
-  const router = useRouter()
-  const openFullLog = () =>
-    router.push(
-      projectEnvironmentDeploymentHref(
-        orgId,
-        projectId,
-        openLog.environmentId,
-        openLog.commandId
-      ) as Href
-    )
-
+  const [paused, setPaused] = useState(false)
+  const plan = useMemo(() => stepsOf(progress), [progress])
   return (
     <View style={styles.logSection}>
       <View style={styles.logSectionHeader}>
@@ -572,12 +576,6 @@ function DeployLogSection({
             : `${openLog.label} output`}
         </Text>
         <View style={styles.barSpacer} />
-        <QuietButton
-          label="Open full log"
-          accessibilityLabel="Open the full deploy log"
-          tone="primary"
-          onPress={openFullLog}
-        />
         <QuietButton
           label={collapsed ? 'Show output' : 'Hide output'}
           accessibilityLabel={collapsed ? 'Show deploy output' : 'Hide deploy output'}
@@ -590,9 +588,14 @@ function DeployLogSection({
       <DeployProgressRail progress={progress} />
       <DeployOutcomeBanner status={status} error={error} />
       {collapsed ? null : (
-        <LogTranscriptView
+        <LogViewer
           lines={log.snapshot.lines}
           state={log.state}
+          plan={plan.length > 0 ? plan : null}
+          commandStatus={status}
+          live={liveState(!isTerminalCommandStatus(status) && !log.snapshot.sealed, paused)}
+          onLiveToggle={() => setPaused((current) => nextLivePaused(current, 'toggle'))}
+          onScrolledAway={() => setPaused((current) => nextLivePaused(current, 'scrolled-away'))}
           downloadFileName={`deploy-${openLog.commandId}.log`}
         />
       )}
@@ -774,6 +777,8 @@ type OverviewEnvironmentsPanelModel = Readonly<{
   destroyData: DestroyDataState
   containerError: string | null
   actionError: string | null
+  /** Servers to link to after a refused network share (Allow Network Shares off). */
+  shareRefusalServers: { id: string; name: string }[]
   commandError: string | null
   previewOpen: PreviewOpenState | null
   deployConfirmBusy: boolean
@@ -845,7 +850,6 @@ function useDestroyDataState(
     expectedName,
     // Never confirm against a list that is still being refreshed.
     volumesLoaded: query.isSuccess && !query.isFetching,
-    outdatedServerCount: query.data?.outdatedServers.length ?? 0,
   })
   return {
     available,
@@ -894,6 +898,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
   const [trackedEntries, setTrackedEntries] = useState<readonly TrackedCommandEntry[]>([])
   const [commandMeta, setCommandMeta] = useState<Record<string, TrackedCommand>>({})
   const [actionError, setActionError] = useState<string | null>(null)
+  const [shareRefusalServers, setShareRefusalServers] = useState<{ id: string; name: string }[]>([])
   const [containerError, setContainerError] = useState<string | null>(null)
   const [destroyArmed, setDestroyArmed] = useState(false)
   const [previewOpen, setPreviewOpen] = useState<PreviewOpenState | null>(null)
@@ -1043,7 +1048,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     try {
       const result = await lifecycleMutation.run(action)
       if (!result.ok) {
-        setActionError(lifecycleMutation.actionError ?? `Failed to ${action}`)
+        setActionError(failedRunMessage(result, `Failed to ${action}`))
         return
       }
       trackEnqueue(
@@ -1066,7 +1071,8 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
 
   const openDeployConfirm = (confirm: DeployConfirmMode) => {
     setActionError(null)
-    setPreviewOpen({ purpose: 'confirm', mode: 'prepared', confirm })
+    setShareRefusalServers([])
+    setPreviewOpen({ purpose: 'confirm', mode: 'summary', confirm })
   }
 
   const runDeployFromPreview = async () => {
@@ -1080,6 +1086,9 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
       )
       if (!result.ok) {
         // `actionError` still holds the previous render's value here; the refusal itself is `cause`.
+        // A refused network share closes the preview so the reason is what the person sees next.
+        if (result.cause && deployPreviewFailureMessage(result.cause)) setPreviewOpen(null)
+        setShareRefusalServers(networkSharesRefusalServers(result.cause))
         setActionError(
           result.cause ? deployRefusalMessage(result.cause) : (result.error ?? 'Failed to deploy')
         )
@@ -1096,6 +1105,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
       const previewMessage = deployPreviewFailureMessage(err)
       if (previewMessage) {
         setPreviewOpen(null)
+        setShareRefusalServers(networkSharesRefusalServers(err))
         setActionError(previewMessage)
         return
       }
@@ -1110,9 +1120,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     setActionError(null)
     const result = await lifecycleMutation.run('stop')
     if (!result.ok) {
-      if (lifecycleMutation.actionError) {
-        setActionError(lifecycleMutation.actionError)
-      }
+      setActionError(failedRunMessage(result, 'Could not stop the environment.'))
       return
     }
     trackEnqueue(
@@ -1128,11 +1136,9 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     setActionError(null)
     const result = await stopEnvironmentMutation.run(destroyData.options)
     if (!result.ok) {
-      // A refused data delete (changed list, older daemon) shows the list afresh.
+      // A refused data delete (changed list) shows the list afresh.
       if (destroyData.options) destroyData.refetch()
-      if (stopEnvironmentMutation.actionError) {
-        setActionError(stopEnvironmentMutation.actionError)
-      }
+      setActionError(failedRunMessage(result, 'Could not delete the environment.'))
       return
     }
     trackEnqueue(
@@ -1218,6 +1224,7 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
     destroyData,
     containerError,
     actionError,
+    shareRefusalServers,
     commandError,
     previewOpen,
     deployConfirmBusy,
@@ -1257,12 +1264,23 @@ function useOverviewEnvironmentsPanelModel(): OverviewEnvironmentsPanelModel {
 function LifecycleErrorMessages({
   containerError,
   actionError,
+  shareRefusalServers,
   commandError,
-}: Pick<OverviewEnvironmentsPanelModel, 'containerError' | 'actionError' | 'commandError'>) {
+  orgId,
+}: Pick<
+  OverviewEnvironmentsPanelModel,
+  'containerError' | 'actionError' | 'shareRefusalServers' | 'commandError'
+> & { orgId: string }) {
+  const canManage = useCan('organization', orgId, 'organization:manage')
   return (
     <>
       {containerError ? <Text style={panelStyles.error}>{containerError}</Text> : null}
       {actionError ? <Text style={panelStyles.error}>{actionError}</Text> : null}
+      <NetworkSharesRefusalLinks
+        orgId={orgId}
+        servers={shareRefusalServers}
+        canManage={canManage}
+      />
       {commandError ? <Text style={panelStyles.error}>{commandError}</Text> : null}
     </>
   )
@@ -1318,11 +1336,41 @@ export function EnvironmentLifecycleActions() {
 }
 
 /**
- * What a lifecycle action says back: errors, the destroy warning, the live
- * deploy output and the preview / confirm sheet. Rendered once, under the
- * header, so it shows on every tab.
+ * The running deploy's live progress and output. Only the Deployments tab
+ * (and a platform project's one panel) draws it; it goes away when the deploy
+ * ends, because the finished deploy is then the newest row of the history list.
  */
-export function EnvironmentLifecycleNotices() {
+export function RunningDeploySection() {
+  const model = useEnvironmentLifecycle()
+  if (!model.openDeployLog || !model.selectedEnvironment) return null
+  // Another environment's deploy belongs on that environment's own tab.
+  if (model.openDeployLog.environmentId !== model.selectedEnvironment.id) return null
+  if (isTerminalCommandStatus(model.deployLogStatus)) return null
+  return (
+    <DeployLogSection
+      orgId={model.orgId}
+      openLog={model.openDeployLog}
+      environmentLabel={model.deployLogEnvironmentLabel}
+      status={model.deployLogStatus}
+      error={model.deployLogError}
+      progress={model.deployLogProgress}
+      collapsed={model.deployLogCollapsed}
+      onToggle={model.toggleDeployLog}
+      onDismiss={model.dismissDeployLog}
+    />
+  )
+}
+
+/**
+ * What a lifecycle action says back: errors, the destroy warning and the
+ * preview / confirm sheet. Rendered once, under the header, so it shows on
+ * every tab. The live deploy output is not here: it belongs to the Deployments
+ * tab (`RunningDeploySection`); `withDeployLog` is for a platform project's
+ * one panel.
+ */
+export function EnvironmentLifecycleNotices({
+  withDeployLog = false,
+}: Readonly<{ withDeployLog?: boolean }> = {}) {
   const model = useEnvironmentLifecycle()
   const {
     orgId,
@@ -1357,22 +1405,12 @@ export function EnvironmentLifecycleNotices() {
       <LifecycleErrorMessages
         containerError={model.containerError}
         actionError={model.actionError}
+        shareRefusalServers={model.shareRefusalServers}
         commandError={model.commandError}
+        orgId={model.orgId}
       />
 
-      {model.openDeployLog ? (
-        <DeployLogSection
-          orgId={orgId}
-          openLog={model.openDeployLog}
-          environmentLabel={model.deployLogEnvironmentLabel}
-          status={model.deployLogStatus}
-          error={model.deployLogError}
-          progress={model.deployLogProgress}
-          collapsed={model.deployLogCollapsed}
-          onToggle={model.toggleDeployLog}
-          onDismiss={model.dismissDeployLog}
-        />
-      ) : null}
+      {withDeployLog ? <RunningDeploySection /> : null}
 
       <PreviewDeploymentModal
         visible={previewOpen != null}
@@ -1386,7 +1424,7 @@ export function EnvironmentLifecycleNotices() {
         environmentCompose={selectedEnvironment.options?.compose}
         deploying={deployConfirmBusy}
         purpose={previewOpen?.purpose ?? 'inspect'}
-        initialMode={previewOpen?.mode ?? 'merged'}
+        initialMode={previewOpen?.mode ?? 'compose'}
         confirmLabel={
           previewOpen?.purpose === 'confirm' && previewOpen.confirm
             ? deployModeLabel(previewOpen.confirm)
@@ -1457,7 +1495,7 @@ function SystemEnvironmentPanelBody() {
           }}
         />
       </View>
-      <EnvironmentLifecycleNotices />
+      <EnvironmentLifecycleNotices withDeployLog />
       <EnvironmentGitSourceSection />
       <EnvironmentDeploymentHistoryPanel
         orgId={model.orgId}

@@ -20,6 +20,7 @@ import type {
   HostingRecord,
 } from '@/lib/instance-api'
 import { describeCertificate, type CertificateTone } from '@/lib/hosting-certificate'
+import { tunnelOnlyCertificateSummary, tunnelOnlyOf } from '@/lib/hosting-tunnel'
 import { onlyChangesLabel, relationText, sourceLabel, valueText } from './change-labels'
 import { accessText, RUNS_IN_CONTAINER, type RunsAs } from './linux-users'
 import { isDataStoreContainer, serviceKindLabel } from './service-roles'
@@ -349,7 +350,15 @@ function hostnamesOf(record: HostingRecord): string[] {
   return raw.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
 }
 
-function certificateOf(record: HostingRecord): DomainRowModel['certificate'] {
+function certificateOf(record: HostingRecord, host: string): DomainRowModel['certificate'] {
+  // A name that is also served directly keeps its Let's Encrypt state.
+  if (tunnelOnlyOf([host], new Map(), record) !== null) {
+    // The name's own choice: origin certificate, pinned, Let's Encrypt or internal.
+    const lower = host.trim().toLowerCase()
+    return tunnelOnlyCertificateSummary(
+      record.names?.find((name) => name.hostname.trim().toLowerCase() === lower)
+    )
+  }
   if (!record.certificate) return null
   const view = describeCertificate(record.certificate)
   return { label: view.label, tone: view.tone }
@@ -371,8 +380,8 @@ export function withHostingHostnames(
   for (const app of model.apps) {
     if (app.serviceId === null) continue
     for (const record of hostingsByService[app.serviceId] ?? []) {
-      const certificate = certificateOf(record)
       for (const host of hostnamesOf(record)) {
+        const certificate = certificateOf(record, host)
         const existing = rows.get(host.toLowerCase())
         rows.set(
           host.toLowerCase(),

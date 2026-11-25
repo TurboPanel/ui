@@ -183,7 +183,7 @@ describe('ingress queries', () => {
       api.updateHostnameIngress.mockResolvedValueOnce({
         ok: false,
         error: 'held',
-        waiting: [{ id: 's1', name: 'kappa', organizationId: null, pinnedBy: null }],
+        waiting: [{ id: 's1', name: 'server-c', organizationId: null, pinnedBy: null }],
       })
       await result.current.update.run({ id: 'h1', patch: { mode: 'cloudflare-tunnel' } })
       await result.current.preflight.run('h1')
@@ -205,5 +205,20 @@ describe('ingress queries', () => {
         queryKeys.admin.panelDnsCertificate('h1'),
       ])
     )
+  })
+})
+
+describe('the add-account mutation', () => {
+  it('keeps nothing in the mutation cache once it settles', async () => {
+    const { client, wrapper } = setup()
+    api.addIngressAccount.mockResolvedValue({ ok: true })
+    const { result, unmount } = renderHook(() => useAddIngressAccount(), { wrapper })
+    await act(async () => {
+      await result.current.run({ provider: 'cloudflare', label: 'Main', token: 'fake-token' })
+    })
+    expect(client.getMutationCache().getAll()[0]?.gcTime).toBe(0)
+    // Once the form is gone, the token it sent is gone from the cache too.
+    unmount()
+    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0))
   })
 })

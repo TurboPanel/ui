@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button'
 import { CopyButton } from '@/components/ui/copy-button'
 import { TextField } from '@/components/ui/form-field'
 import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Select, type SelectOption } from '@/components/ui/select'
 import { StatusDot, type StatusTone } from '@/components/ui/status-dot'
 import { Toggle } from '@/components/ui/toggle'
 import { panelStyles } from '@/components/ui/panel-styles'
@@ -646,6 +647,11 @@ type LogControlsModel = Readonly<{
   setMode: (mode: LogFilterMode) => void
   errorsOnly: boolean
   setErrorsOnly: (on: boolean) => void
+  /** One entry per step for the step picker; empty when there is nothing to pick. */
+  stepOptions: readonly SelectOption[]
+  /** The step the log is limited to, or null for All Steps. */
+  stepFilter: string | null
+  setStepFilter: (id: string | null) => void
   wrap: boolean
   setWrap: (on: boolean) => void
   timestamps: boolean
@@ -693,6 +699,24 @@ function SearchFieldFor({ c }: Readonly<{ c: LogControlsModel }>) {
   )
 }
 
+/** "All Steps" or one step: limits the log to that step. */
+function StepFilterFor({ c }: Readonly<{ c: LogControlsModel }>) {
+  if (c.stepOptions.length < 2) return null
+  return (
+    <View style={styles.stepPicker}>
+      <Select
+        value={c.stepFilter}
+        options={c.stepOptions}
+        noneLabel="All Steps"
+        placeholder="All Steps"
+        searchPlaceholder="Find a step"
+        accessibilityLabel="Show one step or all steps"
+        onChange={c.setStepFilter}
+      />
+    </View>
+  )
+}
+
 function ModeControlFor({ c }: Readonly<{ c: LogControlsModel }>) {
   if (c.query.trim().length === 0) return null
   return <FilterModeControl mode={c.mode} onChange={c.setMode} />
@@ -728,9 +752,10 @@ function LogControlsTop({ c }: Readonly<{ c: LogControlsModel }>) {
       <View style={styles.tools}>
         <SearchFieldFor c={c} />
         <ModeControlFor c={c} />
+        <StepFilterFor c={c} />
       </View>
       <View style={styles.tools}>
-        <ToolToggle label="Errors and warnings" value={c.errorsOnly} onChange={c.setErrorsOnly} />
+        <ToolToggle label="Errors Only" value={c.errorsOnly} onChange={c.setErrorsOnly} />
         {c.live ? <LiveToggle control={c.live} /> : null}
         <ViewTogglesFor c={c} />
       </View>
@@ -745,10 +770,11 @@ function LogControlsPhoneBar({ c }: Readonly<{ c: LogControlsModel }>) {
     <PhoneLogBar
       live={c.live}
       onJumpToError={c.onJumpToError}
-      filterActive={c.errorsOnly || c.mode === 'only'}
+      filterActive={c.errorsOnly || c.mode === 'only' || c.stepFilter !== null}
       filterPanel={
         <>
-          <ToolToggle label="Errors and warnings" value={c.errorsOnly} onChange={c.setErrorsOnly} />
+          <StepFilterFor c={c} />
+          <ToolToggle label="Errors Only" value={c.errorsOnly} onChange={c.setErrorsOnly} />
           <ModeControlFor c={c} />
         </>
       }
@@ -832,15 +858,30 @@ export function LogViewer({
     [lines, plan, commandStatus]
   )
   const openSteps = useOpenSteps(steps)
+  const [pickedStep, setPickedStep] = useState<string | null>(null)
+  // A picked step that is no longer in the log (a new run) falls back to All Steps.
+  const stepFilter = grouped && steps.some((step) => step.id === pickedStep) ? pickedStep : null
+  const stepOptions = useMemo<SelectOption[]>(
+    () => (grouped ? steps.map((step) => ({ value: step.id, label: step.label })) : []),
+    [steps, grouped]
+  )
+  const shownSteps = useMemo(
+    () => (stepFilter ? steps.filter((step) => step.id === stepFilter) : steps),
+    [steps, stepFilter]
+  )
+  const shownOpenIds = useMemo(
+    () => (stepFilter ? new Set([...openSteps.openIds, stepFilter]) : openSteps.openIds),
+    [openSteps.openIds, stepFilter]
+  )
   const model = useMemo(
     () =>
-      buildLogViewerModel(steps, {
+      buildLogViewerModel(shownSteps, {
         filter,
-        openIds: openSteps.openIds,
+        openIds: shownOpenIds,
         noiseShownIds,
         grouped,
       }),
-    [steps, filter, openSteps.openIds, noiseShownIds, grouped]
+    [shownSteps, filter, shownOpenIds, noiseShownIds, grouped]
   )
   const scrollTo = useScrollToItem(listRef, model.items)
   const errorStep = firstErrorStepId(steps)
@@ -854,6 +895,7 @@ export function LogViewer({
     (id: string) => {
       resetSearch()
       setErrorsOnly(false)
+      setPickedStep(null)
       openSteps.open(id)
       scrollTo({ key: `step:${id}` })
     },
@@ -861,6 +903,7 @@ export function LogViewer({
   )
   const jumpToError = useCallback(() => {
     if (!errorStep) return
+    setPickedStep(null)
     resetSearch()
     openSteps.open(errorStep)
     scrollTo({ firstError: true })
@@ -907,6 +950,9 @@ export function LogViewer({
     setMode,
     errorsOnly,
     setErrorsOnly,
+    stepOptions,
+    stepFilter,
+    setStepFilter: setPickedStep,
     wrap,
     setWrap: setWrapChoice,
     timestamps,
@@ -973,6 +1019,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'flex-end',
     gap: spacing.sm,
+  },
+  stepPicker: {
+    width: 220,
+    maxWidth: '100%',
   },
   search: {
     width: 320,

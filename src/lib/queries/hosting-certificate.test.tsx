@@ -6,7 +6,6 @@ import { createAppQueryClient } from '@/lib/query-client'
 import {
   useHostingCertificate,
   useHostingDnsCheck,
-  useRequestLetsEncrypt,
   useUseLetsEncrypt,
 } from '@/lib/queries/hosting-certificate'
 
@@ -45,6 +44,46 @@ describe('hosting certificate queries', () => {
     expect(fetchHosting).toHaveBeenCalledWith('h1')
   })
 
+  it('keeps reading the hosting while a name waits for its origin certificate', async () => {
+    const waiting = { hostname: 'a.example.net', certificate: 'cloudflare_origin', tlsId: null }
+    fetchHosting.mockResolvedValue({ hosting: { id: 'h1', certificate: null, names: [waiting] } })
+    const client = createAppQueryClient()
+    const { result } = renderHook(() => useHostingCertificate('org-1', 'h1'), {
+      wrapper: createWrapper(client),
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    const interval = (names: unknown[]) => {
+      const found = client
+        .getQueryCache()
+        .find({ queryKey: ['org', 'org-1', 'hostings', 'detail', 'h1'] })
+      const options = (found?.options as { refetchInterval?: unknown } | undefined)
+        ?.refetchInterval as ((query: never) => unknown) | number | false | undefined
+      return typeof options === 'function'
+        ? options({ state: { data: { hosting: { certificate: null, names } } } } as never)
+        : options
+    }
+    expect(interval([waiting])).toBe(30_000)
+    expect(interval([{ ...waiting, tlsId: 'tls-1' }])).toBe(false)
+    expect(interval([])).toBe(false)
+    const issue = (code: string) => ({
+      code,
+      message: 'm',
+      failedAt: '2030-01-02T03:04:05.000Z',
+      attempts: 1,
+      nextTryAt: null,
+    })
+    for (const code of ['unsupported_provider', 'no_badge', 'zone_not_covered']) {
+      expect(interval([{ ...waiting, originCertificateIssue: issue(code) }])).toBe(false)
+    }
+    for (const code of ['provider_error', 'origin_certificate_limit', 'queued', 'brand_new_code']) {
+      expect(interval([{ ...waiting, originCertificateIssue: issue(code) }])).toBe(30_000)
+    }
+    // One blocked name does not stop the poll for another that can still be issued.
+    expect(interval([{ ...waiting, originCertificateIssue: issue('no_badge') }, waiting])).toBe(
+      30_000
+    )
+  })
+
   it('use Let’s Encrypt asks for the hosting and refreshes the hosting lists', async () => {
     requestLetsEncryptForHosting.mockResolvedValue({ needsDeploy: true })
     const client = createAppQueryClient()
@@ -56,20 +95,6 @@ describe('hosting certificate queries', () => {
       await result.current.run()
     })
     expect(requestLetsEncryptForHosting).toHaveBeenCalledWith('h1')
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'hostings'] })
-  })
-
-  it('asks for a certificate for a hosting that was just saved, by the id given at call time', async () => {
-    requestLetsEncryptForHosting.mockResolvedValue({ needsDeploy: true })
-    const client = createAppQueryClient()
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
-    const { result } = renderHook(() => useRequestLetsEncrypt('org-1'), {
-      wrapper: createWrapper(client),
-    })
-    await act(async () => {
-      await result.current.run('new-hosting')
-    })
-    expect(requestLetsEncryptForHosting).toHaveBeenCalledWith('new-hosting')
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['org', 'org-1', 'hostings'] })
   })
 

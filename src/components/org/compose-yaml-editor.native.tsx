@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react'
-import { StyleSheet, Text, TextInput, View } from 'react-native'
+import { StyleSheet, Text, TextInput, View, type TextInputInstance } from 'react-native'
 import type { ComposeLintIssue } from '@/lib/compose'
 import { splitYamlLineHighlight } from '@/lib/compose/yaml-highlight'
 import { colors, spacing } from '@/lib/theme'
@@ -23,7 +23,7 @@ function yamlEditorHeight(value: string, minLines: number): number {
 
 /** 1-based line → worst lint level on that line. */
 function lintLevelByLine(
-  issues: readonly ComposeLintIssue[],
+  issues: readonly ComposeLintIssue[]
 ): ReadonlyMap<number, ComposeLintIssue['level']> {
   const levels = new Map<number, ComposeLintIssue['level']>()
   for (const issue of issues) {
@@ -65,14 +65,12 @@ function YamlLintGutter({
       <View key={`gutter-${index}`} style={styles.yamlGutterRow}>
         {level ? (
           <Text
-            style={
-              level === 'error' ? styles.yamlGutterIconError : styles.yamlGutterIconWarning
-            }
+            style={level === 'error' ? styles.yamlGutterIconError : styles.yamlGutterIconWarning}
           >
             {level === 'error' ? '●' : '▲'}
           </Text>
         ) : null}
-      </View>,
+      </View>
     )
   }
   return <View style={styles.yamlGutter}>{rows}</View>
@@ -97,9 +95,7 @@ function YamlHighlightLayer({
               <Text
                 key={`${segment.kind}:${segment.text}`}
                 style={
-                  segment.kind === 'comment'
-                    ? styles.yamlComment
-                    : codeStyleForLint(lintLevel)
+                  segment.kind === 'comment' ? styles.yamlComment : codeStyleForLint(lintLevel)
                 }
               >
                 {segment.text}
@@ -130,9 +126,9 @@ export const ComposeYamlEditor = forwardRef<ComposeYamlEditorHandle, ComposeYaml
       onSelectionChange,
       embedded = false,
     },
-    ref,
+    ref
   ) {
-    const inputRef = useRef<TextInput>(null)
+    const inputRef = useRef<TextInputInstance>(null)
     const selectionRef = useRef<TextSelection>({ start: 0, end: 0 })
 
     useImperativeHandle(
@@ -146,23 +142,19 @@ export const ComposeYamlEditor = forwardRef<ComposeYamlEditorHandle, ComposeYaml
           return selectionRef.current
         },
       }),
-      [],
+      []
     )
 
     const height = yamlEditorHeight(value, minLines)
     const lineCount = value.split('\n').length
     const lineLevels = useMemo(
       () => (lintIssues && lintIssues.length > 0 ? lintLevelByLine(lintIssues) : undefined),
-      [lintIssues],
+      [lintIssues]
     )
 
     return (
       <View
-        style={[
-          styles.yamlEditor,
-          embedded && styles.yamlEditorEmbedded,
-          { minHeight: height },
-        ]}
+        style={[styles.yamlEditor, embedded && styles.yamlEditorEmbedded, { minHeight: height }]}
       >
         <YamlLintGutter lineCount={lineCount} lineLevels={lineLevels} />
         <YamlHighlightLayer value={value} lineLevels={lineLevels} />
@@ -185,7 +177,7 @@ export const ComposeYamlEditor = forwardRef<ComposeYamlEditorHandle, ComposeYaml
         />
       </View>
     )
-  },
+  }
 )
 
 const styles = StyleSheet.create({

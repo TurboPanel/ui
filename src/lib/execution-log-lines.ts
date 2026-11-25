@@ -60,6 +60,7 @@ const DOCKER_PROGRESS_STATUSES = [
   'Downloading',
   'Restarting',
   'Recreating',
+  'Recreate',
   'Extracting',
   'Recreated',
   'Uploading',
@@ -383,14 +384,18 @@ export function plainTextTranscriptLines(text: string): LogTranscriptLine[] {
 const DOCKER_TIMESTAMP_RE =
   /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))\s(.*)$/
 
+/** Docker ends an entry with a line feed; a carriage return (or CRLF) also ends one. */
+const DOCKER_ENTRY_BREAK = /\r\n|\r|\n/
+
 /**
- * Adapt a `docker container logs --timestamps` snapshot to transcript rows.
+ * Adapt a `docker container logs --timestamps` snapshot to transcript rows,
+ * one row per entry with its timestamp kept.
  * Lines without a leading RFC3339 stamp degrade like {@link plainTextTranscriptLines}.
  */
 export function dockerTimestampTranscriptLines(text: string): LogTranscriptLine[] {
   const rows: LogTranscriptLine[] = []
   let seq = 0
-  for (const raw of text.split('\n')) {
+  for (const raw of text.split(DOCKER_ENTRY_BREAK)) {
     const stripped = stripAnsi(raw)
     if (stripped.trim().length === 0) continue
     seq += 1

@@ -11,7 +11,7 @@ import {
   useOriginCertificates,
   useRemoveTunnelHostname,
   useSetServerTunnelCarrying,
-  useSetTunnelVerifyOrigin,
+  useSetTunnelHostnameReach,
   useTunnelHostnames,
   useTunnels,
   useUpdateTunnelPlacement,
@@ -26,7 +26,7 @@ const api = vi.hoisted(() => ({
   addTunnelHostname: vi.fn(),
   removeTunnelHostname: vi.fn(),
   setServerTunnelCarrying: vi.fn(),
-  setTunnelVerifyOrigin: vi.fn(),
+  setTunnelHostnameReach: vi.fn(),
   fetchOriginCertificates: vi.fn(),
   fetchExistingOriginCertificates: vi.fn(),
 }))
@@ -70,11 +70,45 @@ describe('tunnel queries', () => {
     api.fetchTunnels.mockRejectedValueOnce(new Error('/x failed: HTTP 403: forbidden'))
     const refused = renderHook(() => useTunnels(orgId), { wrapper: createWrapper() })
     await waitFor(() => expect(refused.result.current.isSuccess).toBe(true))
-    expect(refused.result.current.data).toEqual({ tunnels: [] })
+    expect(refused.result.current.data).toEqual({ tunnels: [], forbidden: true })
 
     api.fetchTunnels.mockRejectedValueOnce(new Error('boom'))
     const broken = renderHook(() => useTunnels(orgId), { wrapper: createWrapper() })
     await waitFor(() => expect(broken.result.current.isError).toBe(true))
+  })
+
+  it('stops refreshing the list after a refusal and keeps the half-minute pace otherwise', async () => {
+    const interval = (client: ReturnType<typeof createAppQueryClient>) => {
+      const query = client.getQueryCache().find({ queryKey: queryKeys.org(orgId).tunnels })!
+      const option = (query.observers[0]?.options as { refetchInterval?: unknown }).refetchInterval
+      return typeof option === 'function' ? option(query) : option
+    }
+    api.fetchTunnels.mockRejectedValueOnce(new Error('/x failed: HTTP 403: forbidden'))
+    const refusedClient = createAppQueryClient()
+    const refused = renderHook(() => useTunnels(orgId), { wrapper: createWrapper(refusedClient) })
+    await waitFor(() => expect(refused.result.current.isSuccess).toBe(true))
+    expect(interval(refusedClient)).toBe(false)
+
+    api.fetchTunnels.mockResolvedValueOnce({ tunnels: [] })
+    const okClient = createAppQueryClient()
+    const ok = renderHook(() => useTunnels(orgId), { wrapper: createWrapper(okClient) })
+    await waitFor(() => expect(ok.result.current.isSuccess).toBe(true))
+    expect(interval(okClient)).toBe(30_000)
+  })
+
+  it('reads the list again at once when the role is granted after a refusal', async () => {
+    api.fetchTunnels.mockRejectedValueOnce(new Error('/x failed: HTTP 403: forbidden'))
+    api.fetchTunnels.mockResolvedValueOnce({ tunnels: [{ id: 't1', name: 'Edge' }] })
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useTunnels(orgId, { enabled }),
+      { wrapper: createWrapper(), initialProps: { enabled: true } }
+    )
+    await waitFor(() => expect(result.current.data).toEqual({ tunnels: [], forbidden: true }))
+    rerender({ enabled: false })
+    rerender({ enabled: true })
+    await waitFor(() => expect(result.current.data?.tunnels).toHaveLength(1))
+    expect(api.fetchTunnels).toHaveBeenCalledTimes(2)
+    expect(result.current.data).not.toHaveProperty('forbidden')
   })
 
   it('loads one tunnel’s hostnames only when asked', async () => {
@@ -132,8 +166,10 @@ describe('tunnel queries', () => {
       hostname: 'app.example.com',
     })
     expect(api.removeTunnelHostname).toHaveBeenCalledWith(orgId, 't1', 'h1')
-    expect(spy).toHaveBeenCalledTimes(5)
+    // Adding a name also refreshes the sites, whose certificate options follow the tunnels.
+    expect(spy).toHaveBeenCalledTimes(6)
     expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnels })
+    expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).hostings.all })
   })
 
   it('changing a server also refreshes the server list', async () => {
@@ -151,20 +187,22 @@ describe('tunnel queries', () => {
     expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnels })
   })
 
-  it('turning the verified connection on or off refreshes the tunnels', async () => {
+  it('changing how a name is reached refreshes the names and the tunnels', async () => {
     const client = createAppQueryClient()
     const spy = vi.spyOn(client, 'invalidateQueries')
-    api.setTunnelVerifyOrigin.mockResolvedValue({ needsDeploy: false })
-    const { result } = renderHook(() => useSetTunnelVerifyOrigin(orgId, 't1'), {
+    api.setTunnelHostnameReach.mockResolvedValue({
+      hostname: {},
+      certificateChangedNames: [],
+      needsDeploy: false,
+    })
+    const { result } = renderHook(() => useSetTunnelHostnameReach(orgId, 't1'), {
       wrapper: createWrapper(client),
     })
     await act(async () => {
-      await result.current.run({ enabled: true, wildcard: true })
+      await result.current.run({ doorwayId: 'h1', isLocalOnly: false })
     })
-    expect(api.setTunnelVerifyOrigin).toHaveBeenCalledWith(orgId, 't1', {
-      enabled: true,
-      wildcard: true,
-    })
+    expect(api.setTunnelHostnameReach).toHaveBeenCalledWith(orgId, 't1', 'h1', false)
+    expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnelHostnames('t1') })
     expect(spy).toHaveBeenCalledWith({ queryKey: queryKeys.org(orgId).tunnels })
   })
 

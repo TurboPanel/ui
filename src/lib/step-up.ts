@@ -44,7 +44,6 @@ const ACTION_LABELS: Readonly<Record<string, string>> = {
   'member.remove': 'remove this member',
   'panel.identity_next.set': "change the control plane's next key",
   'panel.key.change': "change the control plane's key or the passkeys that approve it",
-  'server.sealing_key.clear': "clear this server's sealing key",
   'instance.tunnel_token.set': 'change the tunnel token',
   'instance.ingress_account.added': 'connect a Cloudflare account',
   'instance.ingress_account.removed': 'remove a Cloudflare account',
@@ -128,17 +127,26 @@ export type StepUpBroker = Readonly<{
   subscribe: (listener: (challenge: StepUpChallenge | null) => void) => () => void
   /** Called by the sheet when the person proved themselves (`true`) or gave up (`false`). */
   settle: (proved: boolean) => void
+  /** True while a prompt is open (a request is waiting on the person, not on the network). */
+  isOpen: () => boolean
+  /** Any number of watchers (screens that must not look busy while the prompt is open); returns the unsubscribe. */
+  watch: (watcher: () => void) => () => void
 }>
 
 export function createStepUpBroker(): StepUpBroker {
   let listener: ((challenge: StepUpChallenge | null) => void) | null = null
   let pending: { promise: Promise<boolean>; settle: Settle } | null = null
+  const watchers = new Set<() => void>()
+  const notify = () => {
+    for (const watcher of watchers) watcher()
+  }
 
   const settle: Settle = (proved) => {
     const current = pending
     pending = null
     listener?.(null)
     current?.settle(proved)
+    if (current) notify()
   }
 
   return {
@@ -151,6 +159,7 @@ export function createStepUpBroker(): StepUpBroker {
       })
       pending = { promise, settle: resolve }
       listener(challenge)
+      notify()
       return promise
     },
     subscribe(next) {
@@ -163,6 +172,13 @@ export function createStepUpBroker(): StepUpBroker {
       }
     },
     settle,
+    isOpen: () => pending !== null,
+    watch(watcher) {
+      watchers.add(watcher)
+      return () => {
+        watchers.delete(watcher)
+      }
+    },
   }
 }
 

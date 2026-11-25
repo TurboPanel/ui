@@ -59,8 +59,8 @@ export function SignupSettingsSection() {
               if (!settings) return
               setError(null)
               mutation.mutate(next, {
-                onError: () => {
-                  setError(mutation.actionError ?? 'Failed to update sign-up setting')
+                onError: (err) => {
+                  setError(userErrorMessage(err, 'Failed to update sign-up setting'))
                 },
               })
             }}

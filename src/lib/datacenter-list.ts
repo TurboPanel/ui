@@ -320,6 +320,17 @@ export function mergeDatacenterOptions(
   }
 }
 
+/**
+ * Options body for a PATCH. The instance replaces `options` and reads an
+ * omitted `trusted` as false, so the current effective value is always sent.
+ */
+export function mergeDatacenterOptionsForSave(
+  datacenter: Readonly<{ options: DatacenterOptions | null | undefined; trusted: boolean }>,
+  patch: DatacenterOptions
+): DatacenterOptions {
+  return mergeDatacenterOptions(datacenter.options, { trusted: datacenter.trusted, ...patch })
+}
+
 /** Servers with zero datacenter memberships. */
 export function listServersWithoutMembership<
   T extends Readonly<{

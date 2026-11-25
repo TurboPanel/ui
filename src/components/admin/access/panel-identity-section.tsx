@@ -2,9 +2,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { panelStyles } from '@/components/ui/panel-styles'
 import { InlineNotice, LoadingState, SectionPanel } from '@/components/ui'
 import { FingerprintLine } from '@/components/ui/fingerprint-line'
-import { SealedSecretsPanel } from '@/components/admin/access/sealed-secrets-panel'
 import { SuperadminOnly } from '@/components/admin/access/superadmin-only'
-import { isSuperadminSession, useAuth } from '@/lib/auth-context'
 import { KeyRotationPanel } from '@/components/admin/access/key-rotation-panel'
 import type { InstanceIdentity, KeysetChangeRequest } from '@/lib/instance-api'
 import {
@@ -36,7 +34,6 @@ function IdentityDetails({ identity }: Readonly<{ identity: InstanceIdentity }>)
 export function PanelIdentitySection({
   linkRequest = null,
 }: Readonly<{ linkRequest?: KeysetChangeRequest | null }> = {}) {
-  const { session } = useAuth()
   const query = useInstanceIdentity()
   const identity = query.data
   const otherKey = identity ? serversPinnedToAnotherKey(identity.servers ?? []) : []
@@ -77,7 +74,6 @@ export function PanelIdentitySection({
               notRotatable={serversNotRotatable(identity.servers ?? [])}
             />
           </SuperadminOnly>
-          {isSuperadminSession(session) ? <SealedSecretsPanel /> : null}
         </>
       ) : null}
     </View>

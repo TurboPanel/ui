@@ -16,6 +16,7 @@ import {
   type CertificateView,
   type LetsEncryptRefusal,
 } from '@/lib/hosting-certificate'
+import { hostingHostnames } from '@/lib/environment-status'
 import type { HostingDnsReport } from '@/lib/instance-api'
 import {
   useHostingCertificate,
@@ -23,6 +24,8 @@ import {
   useUseLetsEncrypt,
 } from '@/lib/queries/hosting-certificate'
 import { isComposeAutomaticTlsHosting } from '@/lib/hosting-compose-owner'
+import { readWwwMode, wwwCertificateNames } from '@/lib/hosting-www'
+import { tunnelOnlyCertificateView, tunnelOnlyOf, type TunnelOnly } from '@/lib/hosting-tunnel'
 import { orgSettingsTabHref } from '@/lib/org-navigation'
 import { colors, spacing } from '@/lib/theme'
 import { userErrorMessage } from '@/lib/user-error'
@@ -156,6 +159,8 @@ function DnsResult({ dns }: Readonly<{ dns: HostingDnsReport }>) {
 }
 
 /** The actions the server offers for this certificate, plus Deploy now when one is due. */
+const USE_LETS_ENCRYPT_NOTE = 'Applies Let’s Encrypt to every name on this site.'
+
 function CertificateButtons({
   view,
   composeOwned,
@@ -180,44 +185,47 @@ function CertificateButtons({
 }>) {
   const canRequest = view.actions.includes('use_lets_encrypt') && !composeOwned
   return (
-    <ButtonRow>
-      {view.actions.includes('deploy') && deploy ? (
-        <DeployNowButton deploy={deploy} disabled={disabled} />
-      ) : null}
-      {canRequest ? (
-        <Button
-          label="Use Let’s Encrypt"
-          busyLabel="Checking DNS…"
-          size="sm"
-          variant="primary"
-          busy={requesting}
-          disabled={disabled}
-          onPress={onRequest}
-        />
-      ) : null}
-      {view.actions.includes('check_dns') ? (
-        <Button
-          label="Check DNS"
-          busyLabel="Checking…"
-          size="sm"
-          variant="secondary"
-          busy={checkingDns}
-          disabled={disabled}
-          onPress={onCheckDns}
-        />
-      ) : null}
-      {view.actions.includes('try_again') && (!composeOwned || composeAutomatic) ? (
-        <Button
-          label="Try again"
-          busyLabel="Trying…"
-          size="sm"
-          variant="secondary"
-          busy={requesting}
-          disabled={disabled}
-          onPress={onRequest}
-        />
-      ) : null}
-    </ButtonRow>
+    <>
+      {canRequest ? <Text style={styles.hint}>{USE_LETS_ENCRYPT_NOTE}</Text> : null}
+      <ButtonRow>
+        {view.actions.includes('deploy') && deploy ? (
+          <DeployNowButton deploy={deploy} disabled={disabled} />
+        ) : null}
+        {canRequest ? (
+          <Button
+            label="Use Let’s Encrypt"
+            busyLabel="Checking DNS…"
+            size="sm"
+            variant="primary"
+            busy={requesting}
+            disabled={disabled}
+            onPress={onRequest}
+          />
+        ) : null}
+        {view.actions.includes('check_dns') ? (
+          <Button
+            label="Check DNS"
+            busyLabel="Checking…"
+            size="sm"
+            variant="secondary"
+            busy={checkingDns}
+            disabled={disabled}
+            onPress={onCheckDns}
+          />
+        ) : null}
+        {view.actions.includes('try_again') && (!composeOwned || composeAutomatic) ? (
+          <Button
+            label="Try again"
+            busyLabel="Trying…"
+            size="sm"
+            variant="secondary"
+            busy={requesting}
+            disabled={disabled}
+            onPress={onRequest}
+          />
+        ) : null}
+      </ButtonRow>
+    </>
   )
 }
 
@@ -231,24 +239,39 @@ export function HostingCertificatePanel({
   hostingId,
   composeOwned,
   disabled,
+  tunnelOnly,
 }: Readonly<{
   orgId: string
   hostingId: string
   composeOwned: boolean
   disabled: boolean
+  /** Reached only through a tunnel (from the row); the panel reads the hosting's own paths when absent. */
+  tunnelOnly?: TunnelOnly | null
 }>) {
   const query = useHostingCertificate(orgId, hostingId)
   const letsEncrypt = useUseLetsEncrypt(orgId, hostingId)
   const dnsCheck = useHostingDnsCheck(hostingId)
   const { deploy, refusal, onRefusal } = useScreenCertificateActions(hostingId, letsEncrypt.error)
-  const certificate = query.data?.hosting.certificate ?? null
-  const composeAutomatic = isComposeAutomaticTlsHosting(query.data?.hosting.metadata)
-  const note = composeNote(composeOwned, composeAutomatic)
+  const hosting = query.data?.hosting
+  const certificate = hosting?.certificate ?? null
+  // undefined: no row told us, read the saved hosting; null: the row says it is not tunnel-only.
+  const savedTunnel = hosting
+    ? tunnelOnlyOf(
+        wwwCertificateNames(hostingHostnames(hosting), readWwwMode(hosting.options)),
+        new Map(),
+        hosting
+      )
+    : null
+  const tunnel = tunnelOnly === undefined ? savedTunnel : tunnelOnly
+  const composeAutomatic = isComposeAutomaticTlsHosting(hosting?.metadata)
+  const note = tunnel ? null : composeNote(composeOwned, composeAutomatic)
   if (!certificate) {
     return refusal ? <RefusalNote orgId={orgId} refusal={refusal} /> : null
   }
 
-  const view = describeCertificate(certificate)
+  const view = tunnel
+    ? tunnelOnlyCertificateView(tunnel, hosting?.names)
+    : describeCertificate(certificate)
   const dnsError = dnsCheck.error ? userErrorMessage(dnsCheck.error, 'Could not check DNS.') : null
   const dns = dnsCheck.data?.dns ?? null
   const request = () => {

@@ -12,6 +12,7 @@ import {
   applyFeedback,
   ConnectionModeCell,
   modeChangePatch,
+  MODES_LOAD_ERROR,
   MODES_UNAVAILABLE,
   PASTED_TOKEN_HINT,
   SAVE_FIRST_HINT,
@@ -70,8 +71,8 @@ const MODES = [
 const CLOSED: EdgeGate = {
   open: false,
   reason:
-    "1 server still needs to re-learn this control plane's key before an edge mode can be used: kappa.",
-  waiting: [{ id: 's1', name: 'kappa', organizationId: 'o1', pinnedBy: null }],
+    "1 server still needs to re-learn this control plane's key before an edge mode can be used: server-c.",
+  waiting: [{ id: 's1', name: 'server-c', organizationId: 'o1', pinnedBy: null }],
   remoteServers: 1,
   forcedClosed: false,
 }
@@ -146,6 +147,37 @@ describe('ConnectionModeCell', () => {
     )
     expect(screen.getByText(MODES_UNAVAILABLE)).toBeTruthy()
     expect(screen.queryByRole('combobox')).toBeNull()
+  })
+
+  it('says nothing about modes while they load', () => {
+    render(
+      <ConnectionModeCell
+        record={RECORD}
+        modes={[]}
+        modesPending
+        gate={null}
+        accounts={[]}
+        lockedReason={null}
+        busy={false}
+      />
+    )
+    expect(screen.queryByText(MODES_UNAVAILABLE)).toBeNull()
+  })
+
+  it('says plainly that the modes could not be loaded', () => {
+    render(
+      <ConnectionModeCell
+        record={RECORD}
+        modes={[]}
+        modesFailed
+        gate={null}
+        accounts={[]}
+        lockedReason={null}
+        busy={false}
+      />
+    )
+    expect(screen.getByText(MODES_LOAD_ERROR)).toBeTruthy()
+    expect(screen.queryByText(MODES_UNAVAILABLE)).toBeNull()
   })
 
   it('locks an unsaved row and says to save first', () => {
@@ -275,6 +307,35 @@ describe('modeChangePatch', () => {
       ingressId: null,
       publicPort: 8443,
     })
+  })
+})
+
+describe('modeChangePatch between two Cloudflare modes', () => {
+  const account = (id: string) => ({
+    id,
+    provider: 'cloudflare' as const,
+    label: id,
+    accountId: id,
+    zoneIds: [],
+    scopes: null,
+    lastVerifiedAt: null,
+    lastError: null,
+    createdAt: '2026-11-01T00:00:00Z',
+  })
+
+  it('keeps the chosen account when several are connected', () => {
+    const patch = modeChangePatch('cloudflare-proxy', { publicPort: 443, ingressId: 'a2' }, MODES, [
+      account('a1'),
+      account('a2'),
+    ])
+    expect(patch.ingressId).toBe('a2')
+  })
+
+  it('still clears an account that belongs to another provider', () => {
+    const patch = modeChangePatch('direct', { publicPort: 443, ingressId: 'a2' }, MODES, [
+      account('a2'),
+    ])
+    expect(patch.ingressId).toBeNull()
   })
 })
 

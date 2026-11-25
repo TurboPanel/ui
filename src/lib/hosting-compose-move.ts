@@ -48,7 +48,6 @@ export function withoutComposeHostingRoute(
 
 export type MovedRouteCertificate = Readonly<{
   tlsId: string | null
-  getLetsEncrypt: boolean
   /**
    * The certificate the file names when the library does not have it. The move
    * stops and says so rather than quietly falling back to self-signed.
@@ -59,20 +58,21 @@ export type MovedRouteCertificate = Readonly<{
 /**
  * The certificate a hostname keeps when it moves to the panel before any
  * deploy made its hosting: the same library certificate (named by id or name
- * in the file), or a Let's Encrypt request right after the save.
+ * in the file). A route that asked for automatic certificates gets the panel's
+ * default for each name when it is saved.
  */
 export function panelCertificateForMovedRoute(
   entry: Pick<ComposeHostingExtensionEntry, 'tls'>,
   library: readonly TlsRecord[]
 ): MovedRouteCertificate {
   const mode = entry.tls?.mode
-  if (mode === 'automatic') return { tlsId: null, getLetsEncrypt: true, missingRef: null }
+  if (mode === 'automatic') return { tlsId: null, missingRef: null }
   if (mode === 'certificate') {
     const ref = entry.tls?.certificateRef ?? ''
     const row = resolveCertificateRef(ref, library)
-    return { tlsId: row?.id ?? null, getLetsEncrypt: false, missingRef: row ? null : ref }
+    return { tlsId: row?.id ?? null, missingRef: row ? null : ref }
   }
-  return { tlsId: null, getLetsEncrypt: false, missingRef: null }
+  return { tlsId: null, missingRef: null }
 }
 
 /** The steps a move to the panel runs; each says why itself when it fails. */
@@ -202,4 +202,32 @@ export function declaredHostingByService(document: ComposeDocument): DeclaredSer
       entries: readComposeHostingEntries(document, composeServiceName),
     }))
     .filter((service) => service.entries.length > 0)
+}
+
+/**
+ * Whether Remove hostname releases the name right after the file is saved: only
+ * a row the last deploy made from the file (`deployed`, or `adopted` from the
+ * panel, which is handed back). A panel row on the same route stays, and with
+ * nothing deployed there is no row to release.
+ */
+export function releasesAtOnce(state: ConfiguredHostingState): boolean {
+  return state === 'deployed' || state === 'adopted'
+}
+
+/**
+ * Remove hostname: save the file without the entry, then release the row.
+ * Answers `not_saved` when the file save failed (nothing is released then),
+ * `skipped` when there is no row to release, else `released`.
+ */
+export async function removeHostnameThenRelease(
+  input: Readonly<{ hostingId: string | null; state: ConfiguredHostingState }>,
+  steps: Readonly<{
+    saveFile: () => Promise<boolean>
+    release: (hostingId: string) => Promise<void>
+  }>
+): Promise<'not_saved' | 'skipped' | 'released'> {
+  if (!(await steps.saveFile())) return 'not_saved'
+  if (!input.hostingId || !releasesAtOnce(input.state)) return 'skipped'
+  await steps.release(input.hostingId)
+  return 'released'
 }

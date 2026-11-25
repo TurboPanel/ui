@@ -3,9 +3,24 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveHostingServiceContext } from '@/lib/compose/hosting-service-context'
 import { normalizeCompose } from '@/lib/compose'
-import { PENDING_REMOVAL_CERTIFICATE_HINT, pendingRemovalNote } from '@/lib/hosting-plain-words'
+import {
+  NEW_HOSTING_CERTIFICATE_HINT,
+  PENDING_REMOVAL_CERTIFICATE_HINT,
+  pendingRemovalNote,
+} from '@/lib/hosting-plain-words'
 import type { HostingRecord } from '@/lib/instance-api'
 
+const tunnel = vi.hoisted(() => ({
+  only: null as { tunnelNames: string[] } | null,
+  names: [] as readonly string[],
+}))
+vi.mock('@/lib/queries/tunnel-only', () => ({
+  useHostingTunnelOnly: (_org: string, _hosting: string | null, names: readonly string[]) => {
+    tunnel.names = names
+    return tunnel.only
+  },
+  useTunnelOnlyNames: () => new Map<string, string>(),
+}))
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
 vi.mock('react-native-svg', async () => (await import('@/components/ui/v4/rn-stub')).svgStub)
 vi.mock(
@@ -13,6 +28,7 @@ vi.mock(
   async () => (await import('@/components/ui/v4/rn-stub')).themePreferenceStub
 )
 vi.mock('@/components/header-chevron', () => ({ HeaderChevron: () => null }))
+vi.mock('@/components/org/hosting-tunnel-names', () => ({ HostingTunnelNames: () => null }))
 vi.mock('@/components/org/hosting-certificate-panel', () => ({
   HostingCertificatePanel: ({ disabled }: { disabled: boolean }) => (
     <div data-testid="certificate-panel" data-disabled={String(disabled)} />
@@ -25,6 +41,9 @@ vi.mock('@/components/org/project/preview-deployment-modal', () => ({}))
 vi.mock('@/components/org/logs/container-log-tail', () => ({ ContainerLogTail: () => null }))
 vi.mock('@/components/org/managed/container-status-badge', () => ({}))
 vi.mock('@/components/org/service-settings-panel', () => ({ ServiceSettingsPanel: () => null }))
+vi.mock('@/components/org/network-shares-refusal-links', () => ({
+  NetworkSharesRefusalLinks: () => null,
+}))
 vi.mock('@/components/org/storage-section', () => ({ StorageSection: () => null }))
 vi.mock('@/components/org/variables-section', () => ({ VariablesSection: () => null }))
 vi.mock('@/components/org/removed-service-card', () => ({ RemovedServiceCard: () => null }))
@@ -112,10 +131,44 @@ function drawRow(props: Partial<Parameters<typeof HostingPanelRow>[0]> = {}) {
       onSave={vi.fn()}
       onRemoveHostname={vi.fn()}
       onManageHere={vi.fn()}
+      onReleaseNow={vi.fn()}
       {...props}
     />
   )
 }
+
+describe('HostingPanelRow for a tunnel-only name', () => {
+  afterEach(() => {
+    tunnel.only = null
+  })
+
+  it('summarises a tunnel-only name without claiming a certificate', () => {
+    tunnel.only = { tunnelNames: ['edge'] }
+    drawRow({
+      editor: { ...readHostingEditor([]), hostnames: 'testing.example' },
+    })
+    expect(screen.getByText(/testing\.example · Tunnel only/)).toBeTruthy()
+    expect(screen.queryByText('Public IP')).toBeNull()
+  })
+
+  it('counts the www name of a bare domain as a name to check', () => {
+    drawRow({ editor: { ...readHostingEditor([]), hostnames: 'example.com' } })
+    expect(tunnel.names).toEqual(['example.com', 'www.example.com'])
+    cleanup()
+    drawRow({ editor: { ...readHostingEditor([]), hostnames: 'example.com', www: 'off' } })
+    expect(tunnel.names).toEqual(['example.com'])
+  })
+
+  it('keeps showing a pinned certificate and its picker', () => {
+    tunnel.only = { tunnelNames: ['edge'] }
+    drawRow({
+      editor: { ...readHostingEditor([]), hostnames: 'testing.example', tlsId: 'cert-1' },
+    })
+    expect(screen.queryByText('Internal certificate')).toBeNull()
+    expect(screen.getByText('Certificate')).toBeTruthy()
+    expect(screen.getByText('Tunnel Only')).toBeTruthy()
+  })
+})
 
 describe('HostingPanelRow save feedback', () => {
   it('says a missing hostname under the Hostname field', () => {
@@ -145,19 +198,6 @@ describe('HostingPanelRow save feedback', () => {
     expect(message.textContent).toBe('The server is offline.')
     expect(message.previousElementSibling?.textContent).toBe('Save hosting')
     expect(screen.queryByText('Saved.')).toBeNull()
-  })
-
-  it('says the certificate is part of the save while it runs', () => {
-    drawRow({
-      saving: true,
-      editor: { ...readHostingEditor([]), hostnames: 'testing.example', getLetsEncrypt: true },
-    })
-    expect(screen.getByText('Saving and asking Let’s Encrypt…')).toBeTruthy()
-  })
-
-  it('does not claim a certificate the save will not ask for (no hostname yet)', () => {
-    drawRow({ saving: true, editor: { ...readHostingEditor([]), getLetsEncrypt: true } })
-    expect(screen.getByText('Saving…')).toBeTruthy()
   })
 })
 
@@ -194,6 +234,7 @@ describe('the hosting form around a save', () => {
         }}
         onRemoveHostname={vi.fn()}
         onManageHere={vi.fn()}
+        onReleaseNow={vi.fn()}
       />
     )
   }
@@ -284,6 +325,23 @@ describe('a hostname removed from the configuration file, before the next deploy
     expect(screen.getByTestId('certificate-panel').dataset.disabled).toBe('true')
   })
 
+  it('offers Release now, which frees the name without waiting for the deploy', () => {
+    const onReleaseNow = vi.fn()
+    drawRow({
+      hostingId: 'h1',
+      composeEditable: false,
+      removalNote: pendingRemovalNote(false),
+      onReleaseNow,
+    })
+    fireEvent.click(screen.getByText('Release now'))
+    expect(onReleaseNow).toHaveBeenCalledTimes(1)
+  })
+
+  it('has no Release now on a hostname that is still in the file', () => {
+    drawRow()
+    expect(screen.queryByText('Release now')).toBeNull()
+  })
+
   it('has no note on an ordinary hostname', () => {
     drawRow()
     expect(screen.queryByText(/removed on the next deploy/)).toBeNull()
@@ -291,15 +349,9 @@ describe('a hostname removed from the configuration file, before the next deploy
   })
 })
 
-describe('the certificate hint of a hostname managed on this screen', () => {
-  it('mentions the Let’s Encrypt box only while the box is there', () => {
+describe('the certificate hint of a site that is not saved yet', () => {
+  it('says each name gets a certificate when it is saved', () => {
     drawRow()
-    expect(
-      screen.getByText(/tick the box below to get a free Let’s Encrypt certificate/)
-    ).toBeTruthy()
-    cleanup()
-    drawRow({ editor: { ...readHostingEditor([]), hostnames: '' } })
-    expect(screen.queryByText(/tick the box below/)).toBeNull()
-    expect(screen.getByText(/enter a hostname and keep Self-signed picked/)).toBeTruthy()
+    expect(screen.getByText(NEW_HOSTING_CERTIFICATE_HINT)).toBeTruthy()
   })
 })

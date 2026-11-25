@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   deployErrorMessage,
+  deployRefusalClosesPreview,
+  networkSharesRefusalServers,
   deployRefusalMessage,
   isHostingAccountRefusal,
 } from '@/lib/deploy-error-message'
 import {
   DeployHealthCheckMissingError,
+  DeployNetworkSharesRefusedError,
   DeployResourceLimitExceededError,
   DeployTunnelRefusedError,
 } from '@/lib/instance-api'
@@ -97,13 +100,6 @@ describe('tunnel deploy refusals', () => {
       "A tunnel-only name cannot use a public certificate (a.example.com). Choose Self-signed for this site's certificate, then deploy again."
     )
     expect(deployErrorMessage(cert)).toBe(deployRefusalMessage(cert))
-    const old = new DeployTunnelRefusedError('tunnel_daemon_too_old', [
-      'a.example.com',
-      'b.example.com',
-    ])
-    expect(deployRefusalMessage(old)).toMatch(
-      /Update this server .*\(a\.example\.com, b\.example\.com\)/
-    )
   })
   it('still reads a coded message that lost its type', () => {
     expect(
@@ -111,9 +107,68 @@ describe('tunnel deploy refusals', () => {
         new Error('/environments/e1/deploy failed: HTTP 409: tunnel_name_public_certificate')
       )
     ).toMatch(/cannot use a public certificate\. Choose Self-signed/)
-    expect(deployErrorMessage(new Error('HTTP 409: tunnel_daemon_too_old'))).toMatch(
-      /Update this server/
+  })
+})
+
+describe('network share refusals', () => {
+  const servers = [
+    { id: 's1', name: 'web-1' },
+    { id: 's2', name: 'web-2' },
+  ]
+
+  it('names the servers and the switch when a server does not allow shares', () => {
+    const err = new DeployNetworkSharesRefusedError('server_setting', ['media'], servers)
+    const message = deployRefusalMessage(err)
+    expect(message).toContain('("media")')
+    expect(message).toContain('"web-1", "web-2"')
+    expect(message).toContain('"Allow Network Shares"')
+    expect(deployErrorMessage(err)).toBe(message)
+    expect(networkSharesRefusalServers(err)).toEqual(servers)
+  })
+
+  it('says who can grant a missing permission', () => {
+    const err = new DeployNetworkSharesRefusedError('permission', [], [])
+    const message = deployRefusalMessage(err)
+    expect(message).toContain('Deploy network shares permission')
+    expect(message).toContain('organization owner or manager')
+    expect(message).toContain('an owner can grant you')
+    expect(networkSharesRefusalServers(err)).toEqual([])
+  })
+
+  it('says a manual deploy must approve the shares for an automated deploy', () => {
+    const err = new DeployNetworkSharesRefusedError('approval', ['media'], [])
+    const message = deployRefusalMessage(err)
+    expect(message).toContain('automated deploy')
+    expect(message).toContain('manual deploy must approve these shares first')
+    expect(message).not.toContain('turned off and on again')
+    expect(networkSharesRefusalServers(err)).toEqual([])
+  })
+
+  it('names the servers whose switch was turned off and on again', () => {
+    const err = new DeployNetworkSharesRefusedError('approval', ['media'], servers)
+    expect(deployRefusalMessage(err)).toContain(
+      'turned off and on again on "web-1", "web-2" since the last approval'
     )
+    expect(networkSharesRefusalServers(err)).toEqual(servers)
+  })
+
+  it('closes the deploy preview for a share refusal and no other error', () => {
+    expect(
+      deployRefusalClosesPreview(new DeployNetworkSharesRefusedError('permission', [], []))
+    ).toBe(true)
+    expect(deployRefusalClosesPreview(new Error('x'))).toBe(false)
+  })
+
+  it('falls back to the server sentence, then to plain words, for an untyped refusal', () => {
+    expect(
+      deployErrorMessage(
+        wrapped('compose_network_shares_refused', 'Allow Network Shares is off on web-1.')
+      )
+    ).toBe('Allow Network Shares is off on web-1.')
+    expect(
+      deployErrorMessage(new Error('deploy failed: HTTP 403: compose_network_shares_refused'))
+    ).toContain('network share')
+    expect(networkSharesRefusalServers(new Error('x'))).toEqual([])
   })
 })
 

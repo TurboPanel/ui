@@ -52,6 +52,12 @@ vi.mock('react-native-reanimated', async () => {
   }
 })
 
+beforeEach(() => {
+  // The running step's time counts from its start; a fixed clock keeps it exact (00:30).
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-12T10:03:30.000Z'))
+})
+
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
@@ -130,12 +136,12 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
   })
 
   it.each([
-    ['Set Up the Web Gateway, already on this server', 'path', 'ok', 'okLine'],
-    ['Step 1 of 5, Install Docker, done', 'path', 'ok', 'ok'],
-    ['Step 2 of 5, Install Node 22, in progress', 'path', 'busy', 'busyLine'],
-    ['Step 3 of 5, Fetch the Source Code, not started', null, 'sepStrong', null],
-    ['Step 4 of 5, Build, failed', 'path', 'bad', 'bad'],
-    ['Step 5 of 5, Start the App, skipped', 'circle', 'sep', null],
+    ['Step 1 of 6, Set Up the Web Gateway, already on this server', 'path', 'ok', 'okLine'],
+    ['Step 2 of 6, Install Docker, done', 'path', 'ok', 'ok'],
+    ['Step 3 of 6, Install Node 22, in progress, 00:30', 'path', 'busy', 'busyLine'],
+    ['Step 4 of 6, Fetch the Source Code, not started', null, 'sepStrong', null],
+    ['Step 5 of 6, Build, failed', 'path', 'bad', 'bad'],
+    ['Step 6 of 6, Start the App, skipped', 'circle', 'sep', null],
   ] as const)(
     'reads %s to a screen reader, with its glyph, node tone and segment fill',
     (name, shape, border, fill) => {
@@ -163,7 +169,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     expect(styleOf(track).width).toBe('100%')
     const segments = screen.getAllByRole('listitem')
     expect(segments).toHaveLength(6)
-    expect(segments[1]?.getAttribute('aria-label')).toBe('Step 1 of 5, Install Docker, done')
+    expect(segments[1]?.getAttribute('aria-label')).toBe('Step 2 of 6, Install Docker, done')
     for (const segment of segments) expect(segment.parentElement).toBe(track)
     for (const segment of segments.slice(0, -1)) expect(styleOf(segment).flex).toBe(1)
     const last = segments.at(-1) as HTMLElement
@@ -174,13 +180,13 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
 
   it('shows the counter in mono small caps, the step name in the body face and the task in mono with a caret', () => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
-    const counter = screen.getByText('Step 02 / 05')
+    const counter = screen.getByText('Step 3 of 6')
     expect(styleOf(counter).fontFamily).toBe(fontFamily('monoSemibold', scenario.os === 'web'))
     expect(styleOf(counter).textTransform).toBe('uppercase')
     expect(styleOf(counter).letterSpacing).toBe(0.5)
     expect(styleOf(counter).fontVariant).toEqual(['tabular-nums'])
     expect(styleOf(counter).color).toBe(token(scenario, 'busy'))
-    expect(counter.getAttribute('aria-label')).toBe('Step 2 of 5')
+    expect(counter.getAttribute('aria-label')).toBe('Step 3 of 6')
     const title = screen.getByText('Installing Node 22')
     expect(styleOf(title).fontFamily).toBe(fontFamily('bodyMedium', scenario.os === 'web'))
     const detail = screen.getByText('Unpack the archive')
@@ -195,19 +201,42 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     ).toBeTruthy()
   })
 
+  it("keeps each finished step's time under its label and none for steps already there", () => {
+    const times = (from: string, to: string) => ({
+      startedAt: `2026-10-12T${from}Z`,
+      finishedAt: `2026-10-12T${to}Z`,
+    })
+    render(
+      <DeployProgressRail
+        progress={progress([
+          step('install-gateway', 'Set Up the Web Gateway', 'ready'),
+          step('fetch', 'Fetch the Source Code', 'done', times('10:00:00', '10:00:08')),
+          step('build', 'Build', 'done', times('10:00:08', '10:01:20')),
+          step('start', 'Start the App', 'done'),
+        ])}
+      />
+    )
+    expect(screen.getByText('00:08')).toBeTruthy()
+    expect(screen.getByText('01:12')).toBeTruthy()
+    expect(screen.getAllByText(/^\d\d:\d\d$/)).toHaveLength(2)
+    expect(screen.getAllByRole('listitem')[2]?.getAttribute('aria-label')).toBe(
+      'Step 3 of 4, Build, done, 01:12'
+    )
+  })
+
   it('labels every node under the track on a wide screen', () => {
     render(<DeployProgressRail progress={EVERY_STATE} />)
     expect(screen.getByText('Build · failed')).toBeTruthy()
     expect(screen.getByText('Start the App · skipped')).toBeTruthy()
     expect(screen.getByText('Install Docker')).toBeTruthy()
-    expect(screen.queryByText('in progress')).toBeNull()
+    expect(screen.queryByText('00:30 · in progress')).toBeNull()
   })
 
   it('lists the steps as a checklist with the state word at phone width', () => {
     env.width = 390
     render(<DeployProgressRail progress={EVERY_STATE} />)
     expect(styleOf(screen.getByRole('list')).width).toBe('100%')
-    expect(screen.getByText('in progress')).toBeTruthy()
+    expect(screen.getByText('00:30 · in progress')).toBeTruthy()
     expect(styleOf(screen.getByText('Install Node 22')).flexShrink).toBe(1)
     expect(screen.getByText('already on this server')).toBeTruthy()
     expect(screen.getByText('not started')).toBeTruthy()
@@ -235,8 +264,9 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     const fills = animated(reduced.container).fills
     expect(fills.length).toBeGreaterThan(0)
     for (const fill of fills) expect(styleOf(fill).width).toBe('100%')
-    const runningFill = animated(screen.getByLabelText('Step 2 of 5, Install Node 22, in progress'))
-      .fills[0]
+    const runningFill = animated(
+      screen.getByLabelText('Step 3 of 6, Install Node 22, in progress, 00:30')
+    ).fills[0]
     expect(styleOf(runningFill).backgroundColor).toBe(token(scenario, 'busy'))
     const caret = screen.getByText('Unpack the archive').nextElementSibling as HTMLElement
     expect(styleOf(caret).opacity).toBe(1)
@@ -246,14 +276,16 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-10-12T10:03:07.000Z'))
     const { rerender } = render(<DeployProgressRail progress={EVERY_STATE} />)
-    expect(screen.getByText('00:07')).toBeTruthy()
-    expect(styleOf(screen.getByText('00:07')).fontFamily).toBe(
+    expect(screen.getByLabelText('00:07 on this step')).toBeTruthy()
+    expect(styleOf(screen.getByLabelText('00:07 on this step')).fontFamily).toBe(
       fontFamily('monoMedium', scenario.os === 'web')
     )
     act(() => {
       vi.advanceTimersByTime(60_000)
     })
-    expect(screen.getByText('01:07')).toBeTruthy()
+    expect(screen.getByLabelText('01:07 on this step')).toBeTruthy()
+    // The running step's own entry in the rail counts the same seconds.
+    expect(screen.getAllByText(/01:07/).length).toBeGreaterThan(1)
     rerender(
       <DeployProgressRail progress={progress([step('build', 'Build', 'running')], 'build')} />
     )
@@ -279,7 +311,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
         ])}
       />
     )
-    const counter = screen.getByText('Step -- / 02')
+    const counter = screen.getByText('Step -- of 2')
     expect(counter.getAttribute('aria-label')).toBe('Getting Ready, 2 steps')
     expect(screen.getByText('Getting Ready')).toBeTruthy()
     expect(screen.queryByText(/00 \//)).toBeNull()
@@ -301,7 +333,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
       />
     )
     expect(screen.getByText('All 2 Steps Done · 03:12')).toBeTruthy()
-    expect(styleOf(screen.getByText('Step 02 / 02')).color).toBe(token(scenario, 'ok'))
+    expect(styleOf(screen.getByText('Step 2 of 2')).color).toBe(token(scenario, 'ok'))
     for (const fill of animated(container).fills)
       expect(styleOf(fill).backgroundColor).toBe(token(scenario, 'ok'))
     const last = screen.getByRole('list').lastElementChild as HTMLElement
@@ -320,7 +352,7 @@ describe.each(SCENARIOS)('DeployProgressRail ($name)', (scenario) => {
       />
     )
     expect(screen.getByText('Failed at Step 2 of 3 · Build')).toBeTruthy()
-    expect(styleOf(screen.getByText('Step 02 / 03')).color).toBe(token(scenario, 'bad'))
+    expect(styleOf(screen.getByText('Step 2 of 3')).color).toBe(token(scenario, 'bad'))
     const failed = screen.getByLabelText('Step 2 of 3, Build, failed')
     expect(styleOf(nodeOf(failed)).borderColor).toBe(token(scenario, 'bad'))
     expect(styleOf(animated(failed).fills[0]).backgroundColor).toBe(token(scenario, 'bad'))

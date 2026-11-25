@@ -33,14 +33,33 @@ describe('daemon update labels', () => {
     expect(channelLabel(null)).toBe('Target')
   })
 
-  it('daemonUnsupportedLabel names both numbers', () => {
+  it('daemonUnsupportedLabel shows the control plane reason without its code', () => {
+    expect(
+      daemonUnsupportedLabel({
+        status: 'unsupported',
+        version: '0.0.9',
+        minVersion: '0.1.0',
+        reason:
+          'daemon_update_required: daemon version 0.0.9 is below the supported minimum 0.1.0 and does not list 1 required feature: x — update the daemon',
+      })
+    ).toBe(
+      'Daemon version 0.0.9 is below the supported minimum 0.1.0 and does not list 1 required feature: x. It stays connected but gets no commands until it is updated.'
+    )
+  })
+
+  it('daemonUnsupportedLabel still works when the reason is missing', () => {
+    const plain =
+      'This daemon is out of date. It stays connected but gets no commands until it is updated.'
     expect(
       daemonUnsupportedLabel({ status: 'unsupported', version: '0.0.9', minVersion: '0.1.0' })
-    ).toBe(
-      'Daemon 0.0.9 is below the supported minimum 0.1.0: it stays connected but receives no commands until it is updated.'
-    )
+    ).toBe(plain)
     expect(
-      daemonUnsupportedLabel({ status: 'unknown', version: null, minVersion: '0.1.0' })
-    ).toContain('Daemon unknown is below')
+      daemonUnsupportedLabel({
+        status: 'unsupported',
+        version: null,
+        minVersion: '0.1.0',
+        reason: '  ',
+      })
+    ).toBe(plain)
   })
 })

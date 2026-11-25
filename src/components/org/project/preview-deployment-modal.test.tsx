@@ -47,7 +47,20 @@ vi.mock('@/components/org/deploy-preview-panel', () => ({
 vi.mock('@/components/org/readonly-yaml-block', () => ({
   ReadOnlyYamlBlock: ({ value }: Readonly<{ value: string }>) => <pre>{value}</pre>,
 }))
-vi.mock('@/lib/compose', () => ({ composePreviewMergedYaml: () => 'services: {}' }))
+vi.mock('@/components/org/deploy-preview-summary-panel', () => ({
+  DeploySummaryView: () => <div>summary body</div>,
+}))
+vi.mock('@/lib/compose', () => ({
+  composePreviewMergedDocument: () => ({ version: 1, data: {}, presentation: {} }),
+  composeDocumentToYaml: () => 'services: {}',
+}))
+vi.mock('@/lib/deploy-preview-summary', () => ({
+  buildDeploySummary: () => ({ services: [], variableGroups: [], serviceVariables: [] }),
+}))
+vi.mock('@/lib/queries', () => ({
+  useServices: () => ({ data: undefined }),
+  useHostingsByServices: () => ({ hostingsByService: {} }),
+}))
 
 afterEach(() => {
   cleanup()
@@ -122,31 +135,26 @@ describe('deploy confirm dialog', () => {
     coarsePointer(false)
   })
 
-  it('folds what will run away until asked, and fetches nothing before', () => {
+  it('opens on the Summary with no disclosure step, and asks for the preview at once', () => {
     render(<PreviewDeploymentModal {...base} onCancel={vi.fn()} onConfirm={vi.fn()} />)
-    const disclosure = screen.getByRole('button', { name: 'Show what will run' })
-    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText('prepared compose')).toBeNull()
-    expect(preparedFetchEnabled()).toBe(false)
-    fireEvent.click(disclosure)
-    expect(
-      screen.getByRole('button', { name: 'Hide what will run' }).getAttribute('aria-expanded')
-    ).toBe('true')
-    expect(screen.getByText('prepared compose')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Show what will run' })).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByText('summary body')).toBeTruthy()
     expect(preparedFetchEnabled()).toBe(true)
   })
 
-  it('folds the detail again when the dialog closes', () => {
+  it('keeps the technical details folded again when the dialog closes', () => {
     const { rerender } = render(
       <PreviewDeploymentModal {...base} onCancel={vi.fn()} onConfirm={vi.fn()} />
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Show what will run' }))
+    const label = 'Technical Details (files sent to the server)'
+    fireEvent.click(screen.getByRole('button', { name: label }))
+    expect(screen.getByText('prepared compose')).toBeTruthy()
     rerender(
       <PreviewDeploymentModal {...base} visible={false} onCancel={vi.fn()} onConfirm={vi.fn()} />
     )
     rerender(<PreviewDeploymentModal {...base} onCancel={vi.fn()} onConfirm={vi.fn()} />)
-    expect(screen.getByRole('button', { name: 'Show what will run' })).toBeTruthy()
-    expect(preparedFetchEnabled()).toBe(false)
+    expect(screen.queryByText('prepared compose')).toBeNull()
   })
 
   it('confirms and cancels', () => {
@@ -197,22 +205,39 @@ describe('deploy confirm dialog', () => {
     expect(buttons.map((b) => b.textContent)).toEqual(['Cancel', 'Deploy'])
   })
 
-  it('switches between the merged and prepared views', () => {
-    render(
-      <PreviewDeploymentModal {...base} purpose="inspect" initialMode="merged" onCancel={vi.fn()} />
-    )
-    expect(screen.getByRole('tab', { name: 'Merged' }).getAttribute('aria-selected')).toBe('true')
-    fireEvent.click(screen.getByRole('tab', { name: 'Prepared' }))
-    expect(screen.getByRole('tab', { name: 'Prepared' }).getAttribute('aria-selected')).toBe('true')
+  it('opens on the Summary and switches to the Compose tab', () => {
+    render(<PreviewDeploymentModal {...base} purpose="inspect" onCancel={vi.fn()} />)
+    expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.queryByRole('tab', { name: 'Merged' })).toBeNull()
+    expect(screen.queryByRole('tab', { name: 'Prepared' })).toBeNull()
+    expect(screen.getByText('summary body')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Compose' }))
+    expect(screen.getByRole('tab', { name: 'Compose' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByText('services: {}')).toBeTruthy()
+    expect(preparedFetchEnabled()).toBe(false)
+  })
+
+  it('keeps the technical details folded until asked', () => {
+    render(<PreviewDeploymentModal {...base} purpose="inspect" onCancel={vi.fn()} />)
+    const toggle = screen.getByRole('button', {
+      name: 'Technical Details (files sent to the server)',
+    })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText('prepared compose')).toBeNull()
+    fireEvent.click(toggle)
     expect(screen.getByText('prepared compose')).toBeTruthy()
   })
 
   it('keeps the inspect view open with no disclosure and a Close button', () => {
     render(
-      <PreviewDeploymentModal {...base} purpose="inspect" initialMode="merged" onCancel={vi.fn()} />
+      <PreviewDeploymentModal
+        {...base}
+        purpose="inspect"
+        initialMode="compose"
+        onCancel={vi.fn()}
+      />
     )
-    expect(screen.getByRole('dialog', { name: 'Compose Preview' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Show what will run' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Deploy Preview' })).toBeTruthy()
     expect(screen.getByText('services: {}')).toBeTruthy()
     expect(screen.getByText('Target server · web-1')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Close preview' }).textContent).toBe('Close')

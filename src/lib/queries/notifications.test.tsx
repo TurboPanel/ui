@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import React from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { renderHook, waitFor } from '@testing-library/react'
+import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAppQueryClient } from '@/lib/query-client'
 import {
@@ -9,9 +9,11 @@ import {
   useMarkNotificationsRead,
   useNotificationChannelsQuery,
   useNotificationsQuery,
+  UNREAD_POLL_MS,
   useUnreadNotificationsQuery,
 } from '@/lib/queries/notifications'
 import { useUnreadNotificationCount } from '@/lib/notifications'
+import { queryKeys } from '@/lib/query-keys'
 
 const {
   fetchNotifications,
@@ -74,7 +76,9 @@ describe('notification hooks', () => {
       notifications: [{ id: 'n-1', title: 'Server db-1 went offline', readAt: null }],
       unread: 1,
     })
-    const { result } = renderHook(() => useNotificationsQuery({ limit: 10 }), { wrapper: createWrapper() })
+    const { result } = renderHook(() => useNotificationsQuery({ limit: 10 }), {
+      wrapper: createWrapper(),
+    })
     await waitFor(() => expect(result.current.data?.unread).toBe(1))
     expect(fetchNotifications).toHaveBeenCalledWith({ limit: 10 })
   })
@@ -118,8 +122,99 @@ describe('notification hooks', () => {
         address: 'https://hooks.slack.com/x',
         rules: [{ event: '*', minSeverity: 'warning' }],
       },
-      undefined,
+      undefined
     )
     await waitFor(() => expect(fetchNotificationChannels).toHaveBeenCalledTimes(2))
+  })
+})
+
+describe('unread count polling', () => {
+  function setVisibility(state: 'visible' | 'hidden') {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state })
+    window.dispatchEvent(new Event('visibilitychange'))
+  }
+
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+    setVisibility('visible')
+  })
+
+  it('polls every 180 s, not every 60 s', async () => {
+    vi.useFakeTimers()
+    fetchUnreadNotificationCount.mockResolvedValue(1)
+    renderHook(() => useUnreadNotificationsQuery(), { wrapper: createWrapper() })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(UNREAD_POLL_MS - 1000)
+    expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(2)
+    expect(UNREAD_POLL_MS).toBe(180_000)
+  })
+
+  it('does not poll while the tab is hidden, and refreshes once when it is visible again', async () => {
+    vi.useFakeTimers()
+    fetchUnreadNotificationCount.mockResolvedValue(1)
+    renderHook(() => useUnreadNotificationsQuery(), { wrapper: createWrapper() })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(1)
+
+    setVisibility('hidden')
+    await vi.advanceTimersByTimeAsync(UNREAD_POLL_MS * 5)
+    expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(1)
+
+    setVisibility('visible')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not refetch on becoming visible when the last poll is younger than the interval', async () => {
+    vi.useFakeTimers()
+    fetchUnreadNotificationCount.mockResolvedValue(1)
+    renderHook(() => useUnreadNotificationsQuery(), { wrapper: createWrapper() })
+    await vi.advanceTimersByTimeAsync(0)
+    setVisibility('hidden')
+    await vi.advanceTimersByTimeAsync(30_000)
+    setVisibility('visible')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(1)
+  })
+
+  it('loading the inbox updates the badge count without another unread request', async () => {
+    fetchUnreadNotificationCount.mockResolvedValue(0)
+    fetchNotifications.mockResolvedValue({ notifications: [], unread: 4 })
+    const wrapper = createWrapper()
+    const badge = renderHook(() => useUnreadNotificationCount(), { wrapper })
+    await waitFor(() => expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(1))
+    renderHook(() => useNotificationsQuery(), { wrapper })
+    await waitFor(() => expect(badge.result.current).toBe(4))
+    expect(fetchUnreadNotificationCount).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not copy an older cached inbox total over a newer badge count', async () => {
+    const client = createAppQueryClient()
+    const wrapper = createWrapper(client)
+    client.setQueryData(
+      [...queryKeys.notifications.inbox, 20],
+      { notifications: [], unread: 0 },
+      { updatedAt: 1_000 }
+    )
+    client.setQueryData(queryKeys.notifications.unread, 2, { updatedAt: 5_000 })
+    fetchNotifications.mockImplementation(() => new Promise(() => {}))
+    renderHook(() => useNotificationsQuery({ limit: 20 }), { wrapper })
+    await vi.waitFor(() => expect(fetchNotifications).toHaveBeenCalledTimes(1))
+    expect(client.getQueryData(queryKeys.notifications.unread)).toBe(2)
+  })
+
+  it('reopening the bell fetches the inbox again even when the cached one is fresh', async () => {
+    fetchNotifications.mockResolvedValue({ notifications: [], unread: 3 })
+    const client = createAppQueryClient()
+    const wrapper = createWrapper(client)
+    const first = renderHook(() => useNotificationsQuery({ limit: 20 }), { wrapper })
+    await waitFor(() => expect(first.result.current.data?.unread).toBe(3))
+    first.unmount()
+    renderHook(() => useNotificationsQuery({ limit: 20 }), { wrapper })
+    await waitFor(() => expect(fetchNotifications).toHaveBeenCalledTimes(2))
   })
 })

@@ -33,7 +33,10 @@ import { ServerLabelsEditor } from '@/components/org/server-labels-editor'
 import { ServerMachineClassPanel } from '@/components/org/server-machine-class-panel'
 import { ServerTierPlacementPanel } from '@/components/org/server-tier-placement-panel'
 import { ServerMetricsSensorsPanel } from '@/components/org/server-metrics-sensors-panel'
+import { ServerBuildLimitsPanel } from '@/components/org/server-build-limits-panel'
 import { ServerSshPortPanel } from '@/components/org/server-ssh-port-panel'
+import { ServerNetworkSharesPanel } from '@/components/org/server-network-shares-panel'
+import { ServerTerminalPanel } from '@/components/org/server-terminal-panel'
 import { ServerWebServerPanel } from '@/components/org/server-web-server-panel'
 import { LocationEditorPanel } from '@/components/org/location-editor-panel'
 import { ServerSystemComponentPanel } from '@/components/org/server-system-component-panel'
@@ -615,7 +618,7 @@ export function ServerDetailSection({
   const processedCommandIdsRef = useRef<Set<string>>(new Set())
 
   const invalidateServer = useCallback(() => {
-    queryClient.invalidateQueries({
+    void queryClient.invalidateQueries({
       queryKey: queryKeys.org(orgId).servers.detail(serverId),
     })
   }, [queryClient, orgId, serverId])
@@ -823,12 +826,12 @@ export function ServerDetailSection({
             setDeleteBlocked(blocked)
             setDeleteError(formatServerDeleteBlockedError(err))
             if (blocked) {
-              queryClient.invalidateQueries({
+              void queryClient.invalidateQueries({
                 queryKey: queryKeys.org(orgId).servers.deletePreview(serverId),
               })
             }
             if (err instanceof ServerPrincipalChoiceRefusedError) {
-              queryClient.invalidateQueries({
+              void queryClient.invalidateQueries({
                 queryKey: queryKeys.org(orgId).servers.principalRemovalPlan(serverId),
               })
             }
@@ -1085,8 +1088,13 @@ function ServerOverviewTab({
       <ServerTierPlacementPanel orgId={orgId} server={server} />
 
       <ServerSshPortPanel orgId={orgId} server={server} canManage={canManage} />
+      <ServerBuildLimitsPanel orgId={orgId} server={server} canManage={canManage} />
 
       <ServerWebServerPanel orgId={orgId} server={server} canManage={canManage} />
+
+      <ServerNetworkSharesPanel orgId={orgId} server={server} canManage={canManage} />
+
+      <ServerTerminalPanel orgId={orgId} server={server} canManage={canManage} />
 
       <ServerMachineClassPanel orgId={orgId} server={server} canManage={canManage} />
 

@@ -6,14 +6,16 @@
 import type {
   OrgServerRecord,
   TunnelCarrier,
+  TunnelHostnameReachResult,
   TunnelHostnameRecord,
   OriginCertificateRecord,
   TunnelPlacement,
   TunnelPlacementBody,
+  TunnelPeerHop,
+  TunnelStatusPorts,
   TunnelPortal,
   TunnelRecord,
   TunnelRunTokenRotation,
-  VerifyOriginState,
 } from '@/lib/instance-api'
 import type { BadgeTone } from '@/components/ui/badge'
 
@@ -239,47 +241,67 @@ export function tunnelHealth(tunnel: Pick<TunnelRecord, 'status' | 'portals'>): 
   return { label: 'Setting Up', tone: 'pending' }
 }
 
-/** What an older panel, which sends no verified-connection field, means: off. */
-export const VERIFY_ORIGIN_OFF: VerifyOriginState = {
-  enabled: false,
-  active: false,
-  pendingNames: [],
+/**
+ * Whether the connector checks the certificate a name carries on its server.
+ * The panel decides per name (`verifiedNames` on the tunnel): a name is
+ * verified once its certificate is in place and a deploy carried it; every
+ * other name skips the check, so a site that is not set up yet can never make
+ * a name unreachable. An older panel sends no list, which reads as none.
+ */
+export function nameVerification(
+  verifiedNames: readonly string[] | undefined,
+  hostname: string
+): { verified: boolean; label: string; tone: BadgeTone; line: string } {
+  const wanted = hostname.trim().toLowerCase()
+  const verified = (verifiedNames ?? []).some((name) => name.toLowerCase() === wanted)
+  if (verified) {
+    return {
+      verified,
+      label: 'Verified',
+      tone: 'ok',
+      line: 'The connector checks the certificate of your web server for this name.',
+    }
+  }
+  return {
+    verified,
+    label: 'Not Verified',
+    tone: 'muted',
+    line: 'The connector accepts the certificate of your web server without checking it. It starts checking once this name has an origin certificate or a ready Let’s Encrypt certificate and a deploy carried it.',
+  }
 }
 
-/**
- * The verified connection, as a badge and a sentence. "Waiting" is the safe
- * state: the choice is made but a name has no site or certificate yet, so the
- * connector keeps skipping verification for the whole tunnel until it is
- * applied again.
- */
-export function verifyOriginSummary(given?: VerifyOriginState | null): {
+/** How a tunnel name is reached: through the tunnel only, or also directly on the datacenter address. */
+export function hostnameReach(record: Pick<TunnelHostnameRecord, 'isLocalOnly'>): {
   label: string
-  tone: BadgeTone
   line: string
+  actionLabel: string
 } {
-  const state = given ?? VERIFY_ORIGIN_OFF
-  if (!state.enabled) {
+  if (record.isLocalOnly) {
     return {
-      label: 'Off',
-      tone: 'muted',
-      line: 'The connector does not check the certificate of your web server.',
+      label: 'Tunnel Only',
+      line: 'Only the tunnel and the servers that carry it reach this name.',
+      actionLabel: 'Also Reach Directly',
     }
   }
-  if (state.active) {
-    return {
-      label: 'On',
-      tone: 'ok',
-      line: 'The connector checks the certificate of your web server for every hostname.',
-    }
+  return {
+    label: 'Tunnel and Direct',
+    line: 'Visitors also reach this name directly on the site’s datacenter address.',
+    actionLabel: 'Tunnel Only',
   }
-  const count = state.pendingNames.length
-  const names = state.pendingNames.join(', ')
-  const until = count === 1 ? 'it has a site and a certificate' : 'they have sites and certificates'
-  const line =
-    count === 0
-      ? 'Add a hostname to start checking the certificate of your web server.'
-      : `Waiting for ${names}. Until ${until}, the connector does not check the certificate for any hostname of this tunnel.`
-  return { label: 'Waiting', tone: 'pending', line }
+}
+
+/** The sentence after a reach change was saved. */
+export function reachChangeNote(
+  result: Pick<TunnelHostnameReachResult, 'certificateChangedNames' | 'needsDeploy'>
+): string {
+  const parts: string[] = []
+  if (result.certificateChangedNames.length > 0) {
+    parts.push(
+      `${result.certificateChangedNames.join(', ')} moved to the default certificate for a name reached both ways.`
+    )
+  }
+  if (result.needsDeploy) parts.push('Deploy the site so its servers pick up the change.')
+  return parts.length > 0 ? parts.join(' ') : 'Saved.'
 }
 
 /** The sentence under an origin certificate TurboPanel issued: replaced, renewing soon, or nothing to say. */
@@ -314,6 +336,54 @@ export function portalState(portal: Pick<TunnelPortal, 'wanted' | 'reported'>): 
   }
 }
 
+/** A server's status port lock in plain words. Null is never shown as locked. */
+export function statusPortsState(ports: Pick<TunnelStatusPorts, 'locked' | 'reason'>): {
+  label: string
+  open: boolean
+} {
+  if (ports.locked === true) return { label: 'Status ports locked', open: false }
+  if (ports.locked === false) {
+    return {
+      label: ports.reason ? `Status ports open: ${ports.reason}` : 'Status ports open',
+      open: true,
+    }
+  }
+  return { label: 'Not reported yet', open: false }
+}
+
+/** A server's peer hop mode, as a badge, with a plain line saying what it means. */
+export function peerHopState(hop: Pick<TunnelPeerHop, 'mode' | 'downgraded'>): {
+  label: string
+  tone: BadgeTone
+  note: string
+} {
+  if (hop.mode === 'none') {
+    return {
+      label: 'No Mode Reported',
+      tone: 'pending',
+      note: 'This server has not reported a mode yet. It reports one once it holds a forwarding table for this tunnel’s hostnames.',
+    }
+  }
+  if (hop.mode === 'verify') {
+    return hop.downgraded
+      ? {
+          label: 'Downgraded',
+          tone: 'danger',
+          note: 'Client certificates were asked for, but this server also admits servers without one, because their certificate cannot be used as a client certificate.',
+        }
+      : {
+          label: 'Verify',
+          tone: 'info',
+          note: 'Checks a client certificate when one is shown, and admits a server without one.',
+        }
+  }
+  return {
+    label: 'Require',
+    tone: 'ok',
+    note: 'Only servers that show a client certificate are admitted.',
+  }
+}
+
 /** "Connector 2026.5.2", or a plain note before the server has reported one. */
 export function connectorLine(portal: Pick<TunnelPortal, 'connectorVersion'>): string {
   return portal.connectorVersion
@@ -327,6 +397,14 @@ export function seenLabel(iso: string | null): string {
   const when = new Date(iso)
   if (Number.isNaN(when.getTime())) return 'Not seen yet'
   return `Seen ${when.toLocaleString()}`
+}
+
+/** "Reported 3 Nov 2026, 14:05", or null when the time is missing (a mode recorded before times were kept). */
+export function reportedLabel(iso: string | null): string | null {
+  if (!iso) return null
+  const when = new Date(iso)
+  if (Number.isNaN(when.getTime())) return null
+  return `Reported ${when.toLocaleString()}`
 }
 
 /** Where a tunnel runs, in a sentence, for the card's header. */
@@ -458,7 +536,7 @@ function nameOf(id: string, names: ReadonlyMap<string, string>): string {
 
 /**
  * One line on where a running rotation is, for example
- * `Rotating run token: juliet moved, panvm next (about 10 min)`.
+ * `Rotating run token: server-b moved, server-h next (about 10 min)`.
  */
 export function rotationProgressLine(
   rotation: TunnelRunTokenRotation,
@@ -507,8 +585,6 @@ export function rotationBlockedReason(
   const servers = ids.map((id) => nameOf(id, names)).join(', ')
   const one = ids.length === 1
   switch (block.code) {
-    case 'tunnel_daemon_too_old':
-      return `Update the daemon on ${servers} first: ${one ? 'it cannot move its connector' : 'they cannot move their connectors'} to a new run token.`
     case 'server_not_ready':
       return `${servers} cannot be reached right now. Try again once ${one ? 'it is' : 'they are'} back.`
     case 'tunnel_not_ready':

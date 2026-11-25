@@ -13,7 +13,9 @@ type Props = Readonly<Record<string, unknown> & { children?: ReactNode }>
 type AddResult = { ok: true; value: unknown } | { ok: false; cause: unknown }
 
 const state = vi.hoisted(() => ({
+  hostnames: [] as unknown[],
   add: vi.fn(async (_body: unknown): Promise<AddResult> => ({ ok: false, cause: null })),
+  reach: vi.fn(async (_body: unknown): Promise<AddResult> => ({ ok: false, cause: null })),
 }))
 
 vi.mock('react-native', async () => (await import('@/components/ui/v4/rn-stub')).reactNativeStub)
@@ -26,6 +28,7 @@ vi.mock('@/components/ui', () => ({
     </button>
   ),
   ButtonRow: ({ children }: Props) => <div>{children}</div>,
+  InlineNotice: ({ title }: Props) => <p role="note">{title as string}</p>,
   ConfirmButton: ({ label, onConfirm }: Props) => (
     <button type="button" onClick={onConfirm as () => void}>
       {label as string}
@@ -43,8 +46,13 @@ vi.mock('@/components/ui', () => ({
   TypeNameDeleteButton: () => null,
 }))
 vi.mock('@/lib/queries/tunnel-routes', () => ({
-  useTunnelHostnames: () => ({ data: { hostnames: [] }, isError: false, isLoading: false }),
+  useTunnelHostnames: () => ({
+    data: { hostnames: state.hostnames },
+    isError: false,
+    isLoading: false,
+  }),
   useAddTunnelHostname: () => ({ run: state.add, isPending: false }),
+  useSetTunnelHostnameReach: () => ({ run: state.reach, isPending: false }),
   useRemoveTunnelHostname: () => ({ run: vi.fn(), isPending: false }),
 }))
 
@@ -77,7 +85,9 @@ async function press(name: string) {
 }
 
 beforeEach(() => {
+  state.hostnames = []
   state.add.mockReset()
+  state.reach.mockReset()
 })
 afterEach(cleanup)
 
@@ -156,5 +166,78 @@ describe('replacing the DNS records that hold a tunnel hostname', () => {
     await press('Replace Records')
     expect(screen.getByText('Only partly replaced.')).toBeTruthy()
     expect(screen.queryByText('DNS Records Removed')).toBeNull()
+  })
+})
+
+describe('the routing note on a hostname', () => {
+  const record = (extra: Record<string, unknown>) => ({
+    id: 'h1',
+    tunnelId: 't1',
+    hostname: 'app.example.com',
+    hostingId: null,
+    isLocalOnly: true,
+    status: 'live',
+    dns: 'created',
+    createdAt: '2026-11-01T00:00:00Z',
+    ...extra,
+  })
+
+  it('shows why the name is not forwarded', () => {
+    state.hostnames = [record({ routingNote: 'The site runs on no server yet.' })]
+    render(<NetworkTunnelHostnames orgId="o1" tunnelId="t1" />)
+    expect(screen.getByRole('note').textContent).toBe('The site runs on no server yet.')
+  })
+
+  it('shows nothing when the note is null or an older panel omits it', () => {
+    state.hostnames = [record({ routingNote: null }), record({ id: 'h2' })]
+    render(<NetworkTunnelHostnames orgId="o1" tunnelId="t1" />)
+    expect(screen.queryByRole('note')).toBeNull()
+  })
+})
+
+describe('per-name verification and reach', () => {
+  const row = (extra: Record<string, unknown> = {}) => ({
+    id: 'd1',
+    tunnelId: 't1',
+    hostname: 'app.example.com',
+    hostingId: 'h1',
+    isLocalOnly: true,
+    status: 'live',
+    dns: 'created',
+    createdAt: '2026-10-28T00:00:00Z',
+    ...extra,
+  })
+
+  it('shows whether this name is verified, from the tunnel list', () => {
+    state.hostnames = [row()]
+    render(<NetworkTunnelHostnames orgId="o1" tunnelId="t1" verifiedNames={['App.example.com']} />)
+    expect(screen.getByText('Verified')).toBeTruthy()
+    expect(screen.getByText('Tunnel Only')).toBeTruthy()
+    cleanup()
+    render(<NetworkTunnelHostnames orgId="o1" tunnelId="t1" verifiedNames={[]} />)
+    expect(screen.getByText('Not Verified')).toBeTruthy()
+  })
+
+  it('opens the name for direct visitors and says what moved', async () => {
+    state.hostnames = [row()]
+    state.reach.mockResolvedValueOnce({
+      ok: true,
+      value: { certificateChangedNames: ['app.example.com'], needsDeploy: true },
+    })
+    render(<NetworkTunnelHostnames orgId="o1" tunnelId="t1" verifiedNames={[]} />)
+    await press('Also Reach Directly')
+    expect(state.reach).toHaveBeenCalledWith({ doorwayId: 'd1', isLocalOnly: false })
+    expect(screen.getByText(/moved to the default certificate/)).toBeTruthy()
+  })
+
+  it('shows the refusal when the site is not on a datacenter network', async () => {
+    state.hostnames = [row()]
+    state.reach.mockResolvedValueOnce({
+      ok: false,
+      cause: new Error('HTTP 409: doorway_bind_not_datacenter'),
+    })
+    render(<NetworkTunnelHostnames orgId="o1" tunnelId="t1" verifiedNames={[]} />)
+    await press('Also Reach Directly')
+    expect(screen.getByText(/datacenter network/)).toBeTruthy()
   })
 })

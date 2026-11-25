@@ -210,6 +210,39 @@ describe('ProjectPrincipalsSection add Hosting Account', () => {
     expect(state.run).toHaveBeenCalledWith({ username: 'ftp', nameScheme: undefined })
   })
 
+  it('shows a refused Base declaration in plain words', async () => {
+    state.environments = [
+      {
+        id: 'env-1',
+        name: 'production',
+        options: {
+          compose: {
+            version: 1,
+            data: {
+              services: {
+                web: {
+                  'x-turbopanel': {
+                    serviceKind: 'node',
+                    source: { sourceId: '11111111-1111-4111-8111-111111111111' },
+                  },
+                },
+              },
+            },
+            presentation: { keyOrder: ['services'], comments: {} },
+          },
+        },
+      },
+    ]
+    const cause = new Error(
+      '/projects/p failed: HTTP 409: base_tracks_repository \u2014 The Base cannot be edited here.'
+    )
+    state.persist.mockResolvedValue({ ok: false, error: cause.message, cause })
+    render(<ProjectPrincipalsSection orgId="org-1" projectId="proj-1" canManage />)
+    fireEvent.click(screen.getByRole('button', { name: 'Add Hosting Account' }))
+    await waitFor(() => expect(screen.getByText(/cannot be edited here/)).toBeTruthy())
+    expect(screen.queryByText(/HTTP 409/)).toBeNull()
+  })
+
   describe('linking a Hosting Account to a service', () => {
     const row = (serviceIds: string[], metadata: unknown = null) => ({
       id: 'p-1',

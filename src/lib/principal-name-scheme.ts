@@ -54,13 +54,10 @@ export type PrincipalNameDefaults = Readonly<{
   nameScheme?: NameScheme | null
   effectiveNameScheme?: NameScheme
   schemeLocked?: boolean
-  randomizedUsernames?: boolean | null
-  effectiveRandomizedUsernames?: boolean
 }>
 
 /**
- * The scheme new principals get when nobody picks one. Falls back to the legacy
- * randomized-usernames flag when the control plane predates schemes.
+ * The scheme new principals get when nobody picks one.
  */
 export function effectiveNameScheme(
   defaults: PrincipalNameDefaults | null | undefined
@@ -68,7 +65,6 @@ export function effectiveNameScheme(
   if (defaults?.effectiveNameScheme && isNameScheme(defaults.effectiveNameScheme)) {
     return defaults.effectiveNameScheme
   }
-  if (defaults?.effectiveRandomizedUsernames === false) return 'plain'
   return 'partial'
 }
 

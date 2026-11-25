@@ -40,6 +40,8 @@ vi.mock('@/lib/queries/admin', () => ({
 vi.mock('@/lib/update-status', () => ({
   readDismissedUpdateBanner: () => null,
   writeDismissedUpdateBanner: writeDismissed,
+  runToShow: () => ({ run: null, finished: false }),
+  failedStepTitleOf: () => null,
   updateOffered: () => true,
   showsUpdateBanner: () => true,
   updateBanner: () => ({

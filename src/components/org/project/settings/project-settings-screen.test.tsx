@@ -228,12 +228,11 @@ describe('ProjectSettingsScreen', () => {
   })
 
   it('keeps the form and shows the refusal when the save fails', async () => {
-    h.run.mockResolvedValue({ ok: false })
-    h.actionError = 'Name already in use'
+    h.run.mockResolvedValue({ ok: false, error: 'Name already in use' })
     render(<ProjectSettingsScreen />)
     await press(() => h.view.general.onName('Store'))
     await press(() => h.view.general.onSave())
-    expect(h.setError).toHaveBeenLastCalledWith('Name already in use')
+    expect(h.setError).toHaveBeenLastCalledWith('Name already in use', { reload: false })
     expect(h.view.general.dirty).toBe(true)
   })
 
@@ -257,6 +256,32 @@ describe('ProjectSettingsScreen', () => {
       options: { containerNaming: 'uuid', defaultServerId: 's1' },
       target: 'base',
     })
+  })
+
+  it('saves container naming while the project follows its repository', async () => {
+    setup({
+      project: {
+        ...(h.ctx.project as object),
+        options: {
+          containerNaming: 'uuid',
+          composeSource: { mode: 'track', path: 'compose.yaml' },
+        },
+      },
+    })
+    render(<ProjectSettingsScreen />)
+    await press(() => h.view.onKeepOriginalNames(true))
+    expect(h.run).toHaveBeenCalledTimes(1)
+    expect(h.setError).not.toHaveBeenCalledWith(expect.stringContaining('Stop following'))
+  })
+
+  it('shows the control plane words and offers a reload when the Base changed since loading', async () => {
+    const cause = new Error(
+      '/projects/p failed: HTTP 409: base_tracks_repository \u2014 Reload and save again.'
+    )
+    h.run.mockResolvedValue({ ok: false, error: cause.message, cause })
+    render(<ProjectSettingsScreen />)
+    await press(() => h.view.onKeepOriginalNames(true))
+    expect(h.setError).toHaveBeenLastCalledWith('Reload and save again.', { reload: true })
   })
 
   it('reads the repository for a repository project and opens the linked pages', async () => {

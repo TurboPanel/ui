@@ -26,7 +26,6 @@ const COLUMNS: readonly DataTableColumn[] = [
 const MODE_COLUMNS: readonly DataTableColumn[] = [
   { key: 'mode', header: 'Connection Mode', flex: 1, minWidth: 160 },
   { key: 'visitorIp', header: 'Visitor Address', flex: 2, minWidth: 240 },
-  { key: 'refresh', header: 'Last Refresh', flex: 1, minWidth: 180 },
 ]
 
 const REPLACEMENT_WARNING =
@@ -39,7 +38,7 @@ export function TrustedProxiesSection() {
       <View style={styles.root}>
         <Text style={panelStyles.pageTitle}>Trusted Proxies</Text>
         <InlineNotice
-          title="Not applicable on this runtime"
+          title="Not Applicable on This Runtime"
           body="TurboPanel High Availability reads the client's real address from Cloudflare's own CF-Connecting-IP header — there is no local proxy in front of it, so this setting has no effect here."
         />
       </View>
@@ -99,7 +98,7 @@ function PerModePanel() {
       title="Per Connection Mode"
       hint="Edge modes trust their own header, whatever the list above says"
     >
-      <DataTable columns={MODE_COLUMNS} minWidth={580}>
+      <DataTable columns={MODE_COLUMNS} minWidth={400}>
         {modes.length === 0 ? (
           <DataTableEmpty>No hostname uses an edge connection mode.</DataTableEmpty>
         ) : (
@@ -129,9 +128,6 @@ function ModeRow({
       </DataTableCell>
       <DataTableCell column={MODE_COLUMNS[1]}>
         <Text style={styles.text}>{visitorIpSourceText(capability)}</Text>
-      </DataTableCell>
-      <DataTableCell column={MODE_COLUMNS[2]}>
-        <Text style={styles.muted}>Managed in a later release</Text>
       </DataTableCell>
     </DataTableRow>
   )
@@ -164,7 +160,6 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   text: { color: colors.text, fontSize: 13 },
-  muted: { color: colors.textMuted, fontSize: 12 },
   mono: {
     color: colors.stdout,
     fontFamily: 'monospace',
